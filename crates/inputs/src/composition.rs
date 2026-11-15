@@ -75,6 +75,224 @@ pub fn find_composition_input<R: CompositionInputRows>(rows: &R, expected: &str)
     None
 }
 
+pub enum CompositionImportError<'a> {
+    Unregistered(&'a str),
+    Blob(String),
+    Admission(&'a str, String),
+}
+
+pub open spec fn composition_import_error_parts(error: CompositionImportError, endpoint: Seq<char>,
+    parts: [&str; 6]) -> bool
+{
+    parts@[0]@ == "E_COMPOSE_INPUT: "@ && parts@[1]@ == endpoint && match error {
+        CompositionImportError::Unregistered(id) => parts@[2]@ == " unregistered "@
+            && parts@[3]@ == id@ && parts@[4]@ == ""@ && parts@[5]@ == ""@,
+        CompositionImportError::Blob(_) => false,
+        CompositionImportError::Admission(id, error) => parts@[2]@ == " "@
+            && parts@[3]@ == error@ && parts@[4]@ == " "@ && parts@[5]@ == id@,
+    }
+}
+
+impl<'a> CompositionImportError<'a> {
+    pub fn render<F>(self, endpoint: &str, render: &F) -> (out: String)
+        where F: Fn([&str; 6]) -> String,
+        requires forall|parts: [&str; 6]| composition_import_error_parts(self, endpoint@, parts)
+            ==> #[trigger] render.requires((parts,)),
+        ensures match self {
+            Self::Blob(error) => out == error,
+            _ => exists|parts: [&str; 6]| composition_import_error_parts(self, endpoint@, parts)
+                && #[trigger] render.ensures((parts,), out),
+        },
+    {
+        let ghost initial = self;
+        match self {
+            Self::Unregistered(id) => {
+                let parts = ["E_COMPOSE_INPUT: ", endpoint, " unregistered ", id, "", ""];
+                assert(composition_import_error_parts(initial, endpoint@, parts));
+                render(parts)
+            },
+            Self::Blob(error) => error,
+            Self::Admission(id, error) => {
+                let detail = error.as_str();
+                let parts = ["E_COMPOSE_INPUT: ", endpoint, " ", detail, " ", id];
+                assert(composition_import_error_parts(initial, endpoint@, parts));
+                render(parts)
+            },
+        }
+    }
+}
+
+#[verifier::opaque]
+pub open spec fn composition_import_file_result<'a, S, V: 'a, D, O, L, I, A, W>(
+    initial: S, id: &'a str, value: &'a V, lookup: &L, import: &I, admit: &A, write: &W,
+    out: (S, Result<(), CompositionImportError<'a>>)) -> bool
+    where L: Fn(S, &'a str) -> (S, Option<D>),
+        I: Fn(S, &'a V) -> (S, Result<O, String>),
+        A: Fn(S, D, &O) -> (S, Result<(), String>),
+        W: Fn(S, &'a str, O) -> S,
+{
+    exists|located: S, declaration: Option<D>|
+        #[trigger] lookup.ensures((initial, id), (located, declaration))
+        && match declaration {
+            None => out.0 == located
+                && out.1 == Err::<(), CompositionImportError<'a>>(CompositionImportError::Unregistered(id)),
+            Some(declared) => exists|loaded: S, importing: Result<O, String>|
+                #[trigger] import.ensures((located, value), (loaded, importing))
+                && match importing {
+                    Err(error) => out.0 == loaded
+                        && out.1 == Err::<(), CompositionImportError<'a>>(CompositionImportError::Blob(error)),
+                    Ok(observed) => exists|admitted: S, decision: Result<(), String>|
+                        #[trigger] admit.ensures((loaded, declared, &observed), (admitted, decision))
+                        && match decision {
+                            Err(error) => out.0 == admitted
+                                && out.1 == Err::<(), CompositionImportError<'a>>(
+                                    CompositionImportError::Admission(id, error)),
+                            Ok(()) => out.1 == Ok::<(), CompositionImportError<'a>>(())
+                                && write.ensures((admitted, id, observed), out.0),
+                        },
+                },
+        }
+}
+
+/// 查声明、导入、准入后才写入；每个失败保留该阶段状态与原错误。
+pub fn import_composition_file<'a, S, V: 'a, D, O, L, I, A, W>(
+    initial: S, id: &'a str, value: &'a V, lookup: &L, import: &I, admit: &A, write: &W,
+) -> (out: (S, Result<(), CompositionImportError<'a>>))
+    where L: Fn(S, &'a str) -> (S, Option<D>),
+        I: Fn(S, &'a V) -> (S, Result<O, String>),
+        A: Fn(S, D, &O) -> (S, Result<(), String>),
+        W: Fn(S, &'a str, O) -> S,
+    requires forall|state: S, id: &'a str| lookup.requires((state, id)),
+        forall|state: S, value: &'a V| import.requires((state, value)),
+        forall|state: S, declared: D, observed: &O| admit.requires((state, declared, observed)),
+        forall|state: S, id: &'a str, observed: O| write.requires((state, id, observed)),
+    ensures composition_import_file_result(initial, id, value, lookup, import, admit, write, out),
+{
+    reveal(composition_import_file_result);
+    let ghost start = initial;
+    let (state, declaration) = lookup(initial, id);
+    let ghost located = state;
+    let ghost locating = declaration;
+    assert(lookup.ensures((start, id), (located, locating)));
+    let declared = match declaration {
+        None => return (state, Err(CompositionImportError::Unregistered(id))),
+        Some(declared) => declared,
+    };
+    let (state, importing) = import(state, value);
+    let ghost loaded = state;
+    let ghost loading = importing;
+    assert(import.ensures((located, value), (loaded, loading)));
+    let observed = match importing {
+        Err(error) => return (state, Err(CompositionImportError::Blob(error))),
+        Ok(observed) => observed,
+    };
+    let ghost observation = observed;
+    let (state, decision) = admit(state, declared, &observed);
+    let ghost admitted = state;
+    let ghost admitting = decision;
+    assert(admit.ensures((loaded, declared, &observation), (admitted, admitting)));
+    match decision {
+        Err(error) => (state, Err(CompositionImportError::Admission(id, error))),
+        Ok(()) => {
+            let next = write(state, id, observed);
+            assert(write.ensures((admitted, id, observation), next));
+            (next, Ok(()))
+        },
+    }
+}
+
+pub open spec fn composition_import_files_prefix<'a, S, V: 'a, D, O, L, I, A, W>(
+    initial: S, rows: Seq<(&'a str, &'a V)>, states: Seq<S>,
+    lookup: &L, import: &I, admit: &A, write: &W) -> bool
+    where L: Fn(S, &'a str) -> (S, Option<D>),
+        I: Fn(S, &'a V) -> (S, Result<O, String>),
+        A: Fn(S, D, &O) -> (S, Result<(), String>),
+        W: Fn(S, &'a str, O) -> S,
+{
+    0 < states.len() <= rows.len() + 1 && states[0] == initial
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] composition_import_file_result(states[i], rows[i].0, rows[i].1,
+                lookup, import, admit, write, (states[i + 1], Ok::<(), CompositionImportError<'a>>(())))
+}
+
+/// 保留原文件顺序及成功前缀；首错后不再处理或写入后续项。
+pub fn import_composition_files<'a, S, V: 'a, D, O, L, I, A, W>(
+    initial: S, rows: &[(&'a str, &'a V)], lookup: &L, import: &I, admit: &A, write: &W,
+) -> (out: (S, Result<(), CompositionImportError<'a>>))
+    where L: Fn(S, &'a str) -> (S, Option<D>),
+        I: Fn(S, &'a V) -> (S, Result<O, String>),
+        A: Fn(S, D, &O) -> (S, Result<(), String>),
+        W: Fn(S, &'a str, O) -> S,
+    requires forall|state: S, id: &'a str| lookup.requires((state, id)),
+        forall|state: S, value: &'a V| import.requires((state, value)),
+        forall|state: S, declared: D, observed: &O| admit.requires((state, declared, observed)),
+        forall|state: S, id: &'a str, observed: O| write.requires((state, id, observed)),
+    ensures exists|states: Seq<S>|
+        #[trigger] composition_import_files_prefix(initial, rows@, states, lookup, import, admit, write)
+        && match out.1 {
+            Ok(()) => states.len() == rows.len() + 1 && out.0 == states.last(),
+            Err(error) => states.len() <= rows.len()
+                && composition_import_file_result(states.last(), rows@[states.len() - 1].0,
+                    rows@[states.len() - 1].1, lookup, import, admit, write,
+                    (out.0, Err::<(), CompositionImportError<'a>>(error))),
+        },
+{
+    let ghost start = initial;
+    let mut current = initial;
+    let ghost states = seq![start];
+    let mut i = 0usize;
+    while i < rows.len()
+        invariant start == initial, i <= rows.len(), states.len() == i + 1,
+            states.last() == current,
+            composition_import_files_prefix(start, rows@, states, lookup, import, admit, write),
+            forall|state: S, id: &'a str| lookup.requires((state, id)),
+            forall|state: S, value: &'a V| import.requires((state, value)),
+            forall|state: S, declared: D, observed: &O| admit.requires((state, declared, observed)),
+            forall|state: S, id: &'a str, observed: O| write.requires((state, id, observed)),
+        decreases rows.len() - i,
+    {
+        let ghost before = current;
+        let (id, value) = rows[i];
+        let (next, result) = import_composition_file(current, id, value, lookup, import, admit, write);
+        let ghost outcome = result;
+        assert(composition_import_file_result(before, id, value, lookup, import, admit, write,
+            (next, outcome)));
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(states.len() <= rows.len());
+                assert(composition_import_files_prefix(initial, rows@, states, lookup, import, admit, write));
+                assert(composition_import_file_result(states.last(), rows@[states.len() - 1].0,
+                    rows@[states.len() - 1].1, lookup, import, admit, write,
+                    (out.0, Err::<(), CompositionImportError<'a>>(error))));
+                return out;
+            },
+            Ok(unit) => {
+                assert(unit == ());
+                assert(outcome == Ok::<(), CompositionImportError<'a>>(()));
+                assert(before == states.last());
+                proof {
+                    let previous = states;
+                    states = states.push(next);
+                    assert forall|j: int| 0 <= j < states.len() - 1 implies
+                        #[trigger] composition_import_file_result(states[j], rows@[j].0, rows@[j].1,
+                            lookup, import, admit, write,
+                            (states[j + 1], Ok::<(), CompositionImportError<'a>>(()))) by {
+                        if j < previous.len() - 1 {
+                            assert(composition_import_file_result(previous[j], rows@[j].0, rows@[j].1,
+                                lookup, import, admit, write,
+                                (previous[j + 1], Ok::<(), CompositionImportError<'a>>(()))));
+                        }
+                    }
+                }
+                current = next;
+            },
+        }
+        i += 1;
+    }
+    (current, Ok(()))
+}
+
 pub enum CompositionMergeError<'a> {
     Environment(CompositionEndpoint),
     Files(String),
@@ -775,20 +993,40 @@ fn import_source(
         .map_err(|error| format!("E_COMPOSE_HEADER: {name} {error}"))?;
         chrono_judge_registration::inputs::environment(r.config(), &snapshot["environment"])?;
         pair[name] = snapshot.clone();
-        for (id, file) in snapshot["files"].as_object().ok_or("snapshot files")? {
-            let inputs = r.config()["environment"]["inputs"].as_array().unwrap();
-            let declared = find_composition_input(inputs, id)
-                .map(|index| &inputs[index])
-                .ok_or_else(|| format!("E_COMPOSE_INPUT: {name} unregistered {id}"))?;
-            let observed = import_blob(root, file, source)?;
-            admit_imported_input(
-                observed["absent"] == true,
-                declared["presence"].as_str(),
-                observed["sha256"] == declared["sha256"],
-            )
-            .map_err(|error| format!("E_COMPOSE_INPUT: {name} {error} {id}"))?;
-            pair[name]["files"][id] = observed;
-        }
+        let files: Vec<_> = snapshot["files"]
+            .as_object()
+            .ok_or("snapshot files")?
+            .iter()
+            .map(|(id, file)| (id.as_str(), file))
+            .collect();
+        let (next, imported) = import_composition_files(
+            pair,
+            files.as_slice(),
+            &|state, id| {
+                let inputs = r.config()["environment"]["inputs"].as_array().unwrap();
+                (
+                    state,
+                    find_composition_input(inputs, id).map(|index| &inputs[index]),
+                )
+            },
+            &|state, file| (state, import_blob(root, file, source)),
+            &|state, declared: &Value, observed: &Value| {
+                (
+                    state,
+                    admit_imported_input(
+                        observed["absent"] == true,
+                        declared["presence"].as_str(),
+                        observed["sha256"] == declared["sha256"],
+                    ),
+                )
+            },
+            &|mut state: Value, id, observed| {
+                state[name]["files"][id] = observed;
+                state
+            },
+        );
+        pair = next;
+        imported.map_err(|error| error.render(name, &|parts: [&str; 6]| parts.concat()))?;
     }
     Ok((pair, original))
 }
