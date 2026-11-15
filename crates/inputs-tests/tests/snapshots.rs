@@ -3,17 +3,17 @@
 #[path = "../../inputs/src/lib.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as composition_text;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 #[cfg(not(verus_keep_ghost))]
 use chrono_inputs as policy;
 #[cfg(verus_keep_ghost)]
+use policy::identifiers as composition_text;
+#[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
-#[cfg(verus_keep_ghost)]
-use policy::identifiers as composition_text;
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::verified_identifiers as composition_text;
 
 verus! {
 fn composition_result(result: Result<(), String>, success: bool, expected: &str)
