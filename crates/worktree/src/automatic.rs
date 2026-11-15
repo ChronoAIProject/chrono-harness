@@ -2537,7 +2537,7 @@ impl Manager {
             &self.inputs.policy.coordinator_root,
         )?;
         let Some(inventory) = inventory else {
-            return write_json(&path, &self.ledger, false);
+            return write_json(&path, &self.ledger, false).map(|_| ());
         };
         let previous: Ledger = decode(&fs::read(&path).map_err(|e| e.to_string())?)?;
         let previous = self.original_paths(&previous)?;
@@ -2553,7 +2553,7 @@ impl Manager {
                 let result = inventory.reference_paths(&role, &paths.into_iter().collect::<Vec<_>>());
                 ((), result)
             },
-            |()| ((), write_json(&path, &self.ledger, false)),
+            |()| ((), write_json(&path, &self.ledger, false).map(|_| ())),
             |()| {
                 let result = inventory.reference_paths(&role, &next.iter().cloned().collect::<Vec<_>>());
                 ((), result)
