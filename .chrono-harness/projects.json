@@ -5318,6 +5318,8 @@
             "formatter_write",
             "--test",
             "serde_lossy",
+            "--test",
+            "serde_expected",
             "--",
             "--test-threads=1"
           ]

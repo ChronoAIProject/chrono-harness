@@ -214,5 +214,19 @@ DepTracker 写入 Cargo 环境依赖，变更会失效原指纹；同址依赖�
 **外部接口合同与宿主回归登记同时修改。** 成本仍未知，复用当前源码、下载及编译缓存，
 没有完整根、原派生、实际输入绑定或正式采用豁免。先核三项原失败，再实现接口并重建。
 
+## Serde Expected 的外部 trait
+
+完整 workflow 根的九个实际派生实现使用 `serde::de::Expected`。固定依赖的该 trait
+仅有 `fmt(&self, &mut Formatter) -> fmt::Result`，没有额外 supertrait 或结果保证。
+`serde-expected.patch` 由同一外部工具所有者维护，顺序应用在 `serde-lossy.patch` 后。
+先登记四项独立 Rust／Verus 预期：泛型外部调用与正确的仓内实现可接受，无依据的
+成功及失败断言均拒绝，仓内 trait 实现中的错误断言也必须拒绝。
+负例必须收到实际 `assertion failed`，trait 未声明或方法未支持不算预期拒绝。
+
+同一完整回归入口新增 `serde_expected` 库存，复用相同 Serde、vstd、线程、严格参数
+和缓存；不放行仓内 impl，不授予完整 Serde、编译输入或正式工具资格。
+**外部 trait 合同与宿主验证登记同时修改。** 新增构建、证明与回归成本未知，
+先核原失败，再实现合同并重建同源 vstd，最后核真实完整根及全部保留回归。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。
