@@ -3475,7 +3475,9 @@ impl Manager {
             let e = self.ledger.entries[i].clone();
             let cache =
                 e.status == "active" && e.ownership.as_ref().is_some_and(|o| o.cache_pending);
-            let age = if matches!(e.status.as_str(), "active" | "retained" | "terminal")
+            // Finish has already supplied its own terminal authority. Consume
+            // that handoff before considering a later age-based reuse pass.
+            let age = if matches!(e.status.as_str(), "active" | "retained")
                 && e.enrollment["age_retirement"].is_null()
             {
                 match self.age_eligible(&e, false) {
