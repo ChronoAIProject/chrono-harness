@@ -178,10 +178,10 @@
         ".github/workflows/chrono-release.yml",
         ".chrono-harness/release/native.sh",
         ".chrono-harness/release/consume.sh",
-        ".chrono-harness/release/native/src/execution.rs",
-        ".chrono-harness/release/native/src/recipe.rs",
-        ".chrono-harness/release/native/src/receipt.rs",
-        ".chrono-harness/release/native/src/frontend.rs"
+        "crates/host-release/src/execution.rs",
+        "crates/host-release/src/recipe.rs",
+        "crates/host-release/src/receipt.rs",
+        "crates/host-release/src/frontend.rs"
       ],
       "tests": [
         "distribution-tests"

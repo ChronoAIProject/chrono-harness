@@ -18,6 +18,32 @@ pub mod result_types;
 pub use chrono_harness::verified_status as result_types;
 use result_types::{CheckResult, Status};
 
+#[cfg(verus_keep_ghost)]
+#[path = "lib.rs"]
+mod continuity_pipeline;
+#[cfg(verus_keep_ghost)]
+#[path = "../../judge-routes/src/lib.rs"]
+mod continuity_plan;
+#[cfg(verus_keep_ghost)]
+#[path = "../../runner/src/verified_verifier.rs"]
+pub mod source_verifier;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::with_source_continuity;
+#[cfg(not(verus_keep_ghost))]
+pub use chrono_judge_routes::validate_source_plan;
+#[cfg(verus_keep_ghost)]
+pub use continuity_pipeline::with_source_continuity;
+#[cfg(verus_keep_ghost)]
+pub use continuity_plan::validate_source_plan;
+
+#[cfg(verus_keep_ghost)]
+#[path = "../../judge-registration/src/lib.rs"]
+mod source_registration;
+#[cfg(not(verus_keep_ghost))]
+pub use chrono_judge_registration::validate_reference_syntax;
+#[cfg(verus_keep_ghost)]
+pub use source_registration::validate_reference_syntax;
+
 verus! {
 
 /// Registered hosts admit action references only from their full configuration.

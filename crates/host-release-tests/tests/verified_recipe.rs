@@ -1,7 +1,7 @@
 //! 独立列出既有发布配方的成功、失败和边界，不以新实现计算预期。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
-#[path = "../../native/src/verified_recipe.rs"]
+#[path = "../../host-release/src/verified_recipe.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_host_release::verified_recipe as policy;
