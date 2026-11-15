@@ -2487,7 +2487,7 @@ impl Inventory {
         let mut accounting_errors = Vec::new();
         // Recover only explicit reservations; never discover unknown files by scanning.
         for index in 0..l.outputs.len() {
-            if gate.retained_dependencies().contains(&l.outputs[index].id) {
+            if !gate.maintains_output(&l.outputs[index].id) {
                 continue;
             }
             if metadata_steps
@@ -2574,7 +2574,7 @@ impl Inventory {
             .map(|n| (l.cursor + n) % l.outputs.len().max(1))
             .collect();
         for index in account_order {
-            if !gate.accounts_output(&l.outputs[index].id) {
+            if !gate.maintains_output(&l.outputs[index].id) {
                 continue;
             }
             if !self.metadata_room()

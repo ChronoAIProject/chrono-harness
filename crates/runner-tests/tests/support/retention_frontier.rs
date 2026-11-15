@@ -147,15 +147,23 @@ fn publishing_recovery_root_preserves_326_originals_with_256_descriptors() {
         assert_eq!(fs::read(&parent_record).unwrap(), before);
         // Selecting the unfinished producer still accounts its own bytes, while
         // the actual recovery root keeps publication and every dependency.
-        let own = inventory(h.path())
-            .maintain_originals(&[parent_id.clone()])
-            .unwrap();
-        assert!(
-            own["accounting_errors"].as_array().unwrap().is_empty(),
-            "{own}"
-        );
+        for _ in 0..8 {
+            let own = inventory(h.path())
+                .maintain_originals(&[parent_id.clone()])
+                .unwrap();
+            assert!(
+                own["accounting_errors"].as_array().unwrap().is_empty(),
+                "{own}"
+            );
+            let state: Value = serde_json::from_slice(&fs::read(&parent_record).unwrap()).unwrap();
+            assert_eq!(state["output"]["phase"], "sealing");
+            assert_eq!(state["output"]["outcome"]["completion"], "not-established");
+            if state["output"]["manifest"]["sealed"] == true {
+                break;
+            }
+        }
         let accounted: Value = serde_json::from_slice(&fs::read(&parent_record).unwrap()).unwrap();
-        assert_eq!(accounted["output"]["phase"], "publishing");
+        assert_eq!(accounted["output"]["phase"], "sealing");
         assert_eq!(accounted["output"]["manifest"]["sealed"], true);
         assert_eq!(
             accounted["output"]["outcome"]["completion"],

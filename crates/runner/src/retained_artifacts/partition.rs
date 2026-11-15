@@ -323,7 +323,7 @@ pub(super) struct Gate {
     partial_membership: bool,
     retiring_report: Option<String>,
     retained_dependencies: BTreeSet<String>,
-    accounting_targets: BTreeSet<String>,
+    maintenance_targets: BTreeSet<String>,
     unvisited_relations: BTreeSet<String>,
 }
 #[cfg(not(verus_keep_ghost))]
@@ -337,8 +337,8 @@ impl Gate {
     pub(super) fn retained_dependencies(&self) -> &BTreeSet<String> {
         &self.retained_dependencies
     }
-    pub(super) fn accounts_output(&self, id: &str) -> bool {
-        !self.retained_dependencies.contains(id) || self.accounting_targets.contains(id)
+    pub(super) fn maintains_output(&self, id: &str) -> bool {
+        !self.retained_dependencies.contains(id) || self.maintenance_targets.contains(id)
     }
     fn measurements(&self, max_output_bytes: u64) -> BTreeMap<String, [u64; 8]> {
         self.objects
@@ -1197,7 +1197,7 @@ impl Inventory {
             partial_membership: false,
             retiring_report: None,
             retained_dependencies: BTreeSet::new(),
-            accounting_targets: BTreeSet::new(),
+            maintenance_targets: BTreeSet::new(),
             unvisited_relations: BTreeSet::new(),
         })
     }
@@ -1758,7 +1758,7 @@ impl Inventory {
         let mut report_frontier = false;
         let mut retiring_report = None;
         let mut retained_dependencies = BTreeSet::new();
-        let mut accounting_targets = BTreeSet::new();
+        let mut maintenance_targets = BTreeSet::new();
         // Nonblocking maintenance can hold each declaration while discovering
         // its edges. A busy metadata or path lease refuses the activity, so this
         // order never waits behind an ordinary publisher holding path locks.
@@ -1827,7 +1827,7 @@ impl Inventory {
                     verified::FinalizedExpansion::RetainOnly => {
                         retained_dependencies.insert(id.clone());
                         if !finalized(record) {
-                            accounting_targets.insert(id.clone());
+                            maintenance_targets.insert(id.clone());
                         }
                     }
                     verified::FinalizedExpansion::RootFrontier => {
@@ -2123,7 +2123,7 @@ impl Inventory {
             partial_membership: maintenance,
             retiring_report,
             retained_dependencies,
-            accounting_targets,
+            maintenance_targets,
             unvisited_relations,
         })
     }
