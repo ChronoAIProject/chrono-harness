@@ -29,6 +29,75 @@ mod probe;
 
 verus! {
 
+fn original_result_case(present: bool, null: bool, has_error: bool,
+    payload: &String, raw_error: &str)
+{
+    let plan = if present { Some(payload) } else { None };
+    let error = if has_error { Some(raw_error) } else { None };
+    match policy::replay_cache_result(plan, null, error) {
+        Ok(actual) => {
+            expect_cache_true(present && !null && !has_error);
+            expect_restore_text(actual.as_str(), payload.as_str());
+        },
+        Err(actual) => {
+            expect_cache_true(!present || null || has_error);
+            let expected = if (!present || null) && has_error { raw_error }
+                else { "E_CACHE_ATTEMPT: invalid original result; no redispatch" };
+            expect_restore_text(actual.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_result_requires_exactly_one_plan_or_original_error() {
+    let payload = "plan/λ\0\n".to_string();
+    let empty = "".to_string();
+    let mut choice = 0u8;
+    while choice < 8
+        invariant choice <= 8,
+        decreases 8 - choice,
+    {
+        original_result_case(choice >= 4, choice % 4 >= 2, choice % 2 == 1,
+            &payload, "original/λ\0\n");
+        original_result_case(choice >= 4, choice % 4 >= 2, choice % 2 == 1,
+            &empty, "");
+        choice += 1;
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_diagnostic_keeps_full_original_failure_and_address_in_order() {
+    let parts = policy::cache_publication_error_fragments(
+        "attempt/λ\0\n", "publication; failed\0\n", Some("original; error/λ\0\n"));
+    expect_restore_text(parts[0], "original; error/λ\0\n");
+    expect_restore_text(parts[1], "; ");
+    expect_restore_text(parts[2], "E_CACHE_ATTEMPT: terminal publication: ");
+    expect_restore_text(parts[3], "publication; failed\0\n");
+    expect_restore_text(parts[4], "; original ");
+    expect_restore_text(parts[5], "attempt/λ\0\n");
+    expect_restore_text(parts[6], "/result.json");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_diagnostic_distinguishes_no_original_error_from_an_empty_one() {
+    let absent = policy::cache_publication_error_fragments("", "", None);
+    let empty = policy::cache_publication_error_fragments("", "", Some(""));
+    expect_restore_text(absent[0], "");
+    expect_restore_text(absent[1], "");
+    expect_restore_text(empty[0], "");
+    expect_restore_text(empty[1], "; ");
+    expect_restore_text(absent[2], "E_CACHE_ATTEMPT: terminal publication: ");
+    expect_restore_text(empty[2], "E_CACHE_ATTEMPT: terminal publication: ");
+    expect_restore_text(absent[3], "");
+    expect_restore_text(empty[3], "");
+    expect_restore_text(absent[4], "; original ");
+    expect_restore_text(empty[4], "; original ");
+    expect_restore_text(absent[5], "");
+    expect_restore_text(empty[5], "");
+    expect_restore_text(absent[6], "/result.json");
+    expect_restore_text(empty[6], "/result.json");
+}
+
 fn inventory_case(failure: u8, identity: usize, raw_error: &str)
     requires failure <= 4,
 {

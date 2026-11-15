@@ -244,13 +244,7 @@ impl std::ops::DerefMut for OutputRecord {
         Arc::make_mut(&mut self.value)
     }
 }
-#[cfg(not(verus_keep_ghost))]
-impl Serialize for OutputRecord {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        self.value.serialize(s)
-    }
-}
-#[derive(Clone, Serialize)]
+#[derive(Default)]
 #[cfg(not(verus_keep_ghost))]
 struct Ledger {
     policy_sha256: String,
@@ -258,21 +252,7 @@ struct Ledger {
     roots: BTreeMap<String, Vec<String>>,
     summaries: Vec<Value>,
     cursor: usize,
-    #[serde(default)]
     retired_leases: Vec<Node>,
-}
-#[cfg(not(verus_keep_ghost))]
-impl Default for Ledger {
-    fn default() -> Self {
-        Self {
-            policy_sha256: String::new(),
-            outputs: Vec::new(),
-            roots: BTreeMap::new(),
-            summaries: Vec::new(),
-            cursor: 0,
-            retired_leases: Vec::new(),
-        }
-    }
 }
 #[cfg(not(verus_keep_ghost))]
 thread_local! {
