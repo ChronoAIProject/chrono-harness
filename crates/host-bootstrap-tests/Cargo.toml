@@ -30,8 +30,8 @@ test = false
 bench = false
 
 [dependencies]
-chrono-harness = { path = "../../../crates/runner" }
-chrono-host-bootstrap = { path = "../native" }
+chrono-harness = { path = "../runner" }
+chrono-host-bootstrap = { path = "../host-bootstrap" }
 serde_json = "1"
 tempfile = "3"
 
@@ -51,7 +51,7 @@ bench = false
 
 [[bin]]
 name = "chrono-test-bootstrap-operation"
-path = "../../../crates/judge-projects-tests/tests/support/execution_child.rs"
+path = "../judge-projects-tests/tests/support/execution_child.rs"
 test = false
 bench = false
 
@@ -85,7 +85,7 @@ path = "tests/shared.rs"
 
 [[bin]]
 name = "chrono-test-bootstrap-native"
-path = "../native/src/main.rs"
+path = "../host-bootstrap/src/main.rs"
 test = false
 bench = false
 

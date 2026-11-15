@@ -46,7 +46,7 @@ fn fixture_with_entrypoint(
     let files = [PROFILE, entrypoint, registry_path];
     fs::write(
         h.root.join(entrypoint),
-        include_bytes!("../../../.chrono-harness/ci/native-tests/tests/support/producer.sh"),
+        include_bytes!("../../host-bootstrap-tests/tests/support/producer.sh"),
     )
     .unwrap();
     let bin = h.root.join(".chrono-harness/bin");

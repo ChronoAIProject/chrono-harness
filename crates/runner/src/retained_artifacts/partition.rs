@@ -4,9 +4,13 @@
 //! end on return even while an unrelated fork holds incidental fd copies.
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
+use super::super::contains;
+#[cfg(verus_keep_ghost)]
 use super::identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_release::contains;
 #[cfg(verus_keep_ghost)]
 use std::collections::BTreeSet;
 #[cfg(not(verus_keep_ghost))]
@@ -15,6 +19,63 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 
 verus! {
+pub open spec fn output_edge_matches(row: (&str, &[String]), source: Seq<char>,
+    target: Seq<char>) -> bool
+{
+    row.0@ == source && exists|i: int| 0 <= i < row.1@.len()
+        && (#[trigger] row.1@[i])@ == target
+}
+
+pub open spec fn output_reference_trace<'a, T, F>(outputs: &'a [T], observe: F,
+    source: Seq<char>, target: Seq<char>, found: bool,
+    trace: Seq<(&'a str, &'a [String])>) -> bool
+    where F: Fn(&'a T) -> (&'a str, &'a [String]),
+{
+    trace.len() <= outputs.len()
+        && (forall|i: int| 0 <= i < trace.len() ==>
+            #[trigger] observe.ensures((&outputs@[i],), trace[i]))
+        && if found {
+            trace.len() > 0 && output_edge_matches(trace.last(), source, target)
+                && forall|i: int| 0 <= i < trace.len() - 1 ==>
+                    !output_edge_matches(#[trigger] trace[i], source, target)
+        } else {
+            trace.len() == outputs.len() && forall|i: int| 0 <= i < trace.len() ==>
+                !output_edge_matches(#[trigger] trace[i], source, target)
+        }
+}
+
+/// 借用实际记录；只有同一来源的完整引用匹配才提前返回，不分配投影库存。
+pub fn objects_reference<'a, T, F>(outputs: &'a [T], source: &str, target: &str,
+    observe: F) -> (found: bool)
+    where F: Fn(&'a T) -> (&'a str, &'a [String]),
+    requires forall|row: &'a T| observe.requires((row,)),
+    ensures exists|trace: Seq<(&'a str, &'a [String])>| output_reference_trace(
+        outputs, observe, source@, target@, found, trace),
+{
+    let ghost mut trace: Seq<(&'a str, &'a [String])> = Seq::empty();
+    let mut index = 0;
+    while index < outputs.len()
+        invariant index <= outputs.len(), trace.len() == index,
+            forall|row: &'a T| observe.requires((row,)),
+            forall|i: int| 0 <= i < trace.len() ==>
+                #[trigger] observe.ensures((&outputs@[i],), trace[i]),
+            forall|i: int| 0 <= i < trace.len() ==>
+                !output_edge_matches(#[trigger] trace[i], source@, target@),
+        decreases outputs.len() - index,
+    {
+        let row = observe(&outputs[index]);
+        proof { trace = trace.push(row); }
+        if identifiers::equal_text(row.0, source) && contains(row.1, target) {
+            assert(output_edge_matches(row, source@, target@));
+            assert(output_reference_trace(outputs, observe, source@, target@, true, trace));
+            return true;
+        }
+        index += 1;
+    }
+    assert(output_reference_trace(outputs, observe, source@, target@, false, trace));
+    false
+}
+
 /// 选择父报告退役时，已观察的其他原件继续受保护。
 pub fn preserve_frontier_original(id: &str, retiring: &str) -> (retain: bool)
     ensures retain == (id@ != retiring@),
@@ -2212,7 +2273,9 @@ impl Inventory {
         for record in objects.values_mut() {
             record.incoming.retain(|source| {
                 !before.contains_key(source)
-                    || objects_reference(&ledger.outputs, source, &record.id)
+                    || objects_reference(&ledger.outputs, source, &record.id, |output| {
+                        (output.id.as_str(), output.references.as_slice())
+                    })
             });
             for role in roles.values() {
                 if !role.ids.contains(&record.id) {
@@ -2252,10 +2315,4 @@ fn finalized(record: &Object) -> bool {
             .as_ref()
             .map(|output| (output.manifest.sealed, output.phase.as_str())),
     )
-}
-#[cfg(not(verus_keep_ghost))]
-fn objects_reference(outputs: &[OutputRecord], source: &str, target: &str) -> bool {
-    outputs
-        .iter()
-        .any(|o| o.id == source && o.references.iter().any(|r| r == target))
 }
