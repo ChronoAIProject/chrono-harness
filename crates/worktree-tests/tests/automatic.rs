@@ -488,7 +488,9 @@ fn published_result_handoffs_recover_a_full_enrollment_without_raising_capacity(
         .unwrap();
         let receipt = value!({"path":path,"sha256":sha256(&raw)});
         fs::write(h.root.join(&path), raw).unwrap();
-        inventory
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
             .begin("lifecycle-original", &path, value!(null))
             .unwrap()
             .complete(value!({"status":"used"}))
@@ -499,7 +501,9 @@ fn published_result_handoffs_recover_a_full_enrollment_without_raising_capacity(
         }))
         .unwrap();
         fs::write(h.root.join(&parent), &raw).unwrap();
-        inventory
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
             .begin("lifecycle-original", &parent, value!(null))
             .unwrap()
             .complete(value!({"status":"used"}))

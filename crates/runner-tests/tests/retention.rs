@@ -860,7 +860,9 @@ fn durable_consumer_shrink_prunes_stale_members_without_admitting_new_outputs() 
     for n in 0..5 {
         let path = format!(".chrono-harness/state/fixtures/committed-handoff-{n}.json");
         fs::write(h.path().join(&path), n.to_string()).unwrap();
-        inventory
+        Inventory::adopted(h.path())
+            .unwrap()
+            .unwrap()
             .begin("fixture", &path, json!(null))
             .unwrap()
             .complete(json!({"exit":0}))
