@@ -80,6 +80,126 @@ fn tree(root: &Path, name: &str) -> String {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
+fn empty_report_finishes_available_path_and_resumes_after_busy_path() {
+    if !isolated_capability_test(
+        "retention_frontier::empty_report_finishes_available_path_and_resumes_after_busy_path",
+    ) {
+        return;
+    }
+    for busy in [false, true] {
+        let h = host(256, 16);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let original_path = ".chrono-harness/state/fixtures/required-original";
+            fs::write(h.path().join(original_path), b"required failure").unwrap();
+            let original = inventory(h.path())
+                .begin("fixture", original_path, json!(null))
+                .unwrap();
+            let original_id = original.id().to_owned();
+            original.complete_sealed(json!({"exit": 7})).unwrap();
+            inventory(h.path())
+                .reference("actual-recheck", &[original_id.clone()])
+                .unwrap();
+            let report_path = ".chrono-harness/state/fixtures/empty-report";
+            fs::write(h.path().join(report_path), b"obsolete report").unwrap();
+            let report = inventory(h.path())
+                .begin("fixture", report_path, json!(null))
+                .unwrap();
+            let report_id = report.id().to_owned();
+            inventory(h.path())
+                .dependencies(&report_id, &[original_id.clone()])
+                .unwrap();
+            report.complete_sealed(json!({"exit": 17})).unwrap();
+            // Fixed interrupted input: bytes were removed, but its original
+            // dependency is still attached to the durable disposing report.
+            let record_path = retention_state::object_path(h.path(), &report_id);
+            let mut record: Value =
+                serde_json::from_slice(&fs::read(&record_path).unwrap()).unwrap();
+            record["output"]["phase"] = json!("disposing");
+            record["output"]["manifest"]["entries"] = json!([]);
+            record["output"]["removed_logical_bytes"] = json!(15);
+            record["output"]["reserved_bytes"] = json!(0);
+            fs::remove_file(h.path().join(report_path)).unwrap();
+            fs::write(&record_path, serde_json::to_vec(&record).unwrap()).unwrap();
+            let mut address = h
+                .path()
+                .join(".chrono-harness/state/output-retention-v1/paths");
+            for component in report_path.split('/') {
+                address.push(chrono_harness::sha256(component.as_bytes()));
+            }
+            let before = fs::read(address.join("address.json")).unwrap();
+            let lease = busy.then(|| {
+                chrono_harness::ownership::DirectoryLease::acquire(&address, true, None)
+                    .unwrap()
+                    .unwrap()
+            });
+            let mut detached = false;
+            for _ in 0..4 {
+                let round = inventory(h.path())
+                    .maintain_originals(&[report_id.clone()])
+                    .unwrap();
+                assert!(
+                    round["accounting_errors"].as_array().unwrap().is_empty(),
+                    "{round}"
+                );
+                assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
+                let state: Value =
+                    serde_json::from_slice(&fs::read(&record_path).unwrap()).unwrap();
+                if state["output"].is_null() {
+                    assert!(!busy, "busy path must retain final retirement");
+                    detached = true;
+                    break;
+                }
+                if state["output"]["references"].as_array().unwrap().is_empty() {
+                    assert!(
+                        busy,
+                        "available path must finish within the observed component"
+                    );
+                    assert_eq!(fs::read(address.join("address.json")).unwrap(), before);
+                    detached = true;
+                    break;
+                }
+            }
+            assert!(detached);
+            drop(lease);
+            if busy {
+                for _ in 0..4 {
+                    let round = inventory(h.path())
+                        .maintain_originals(&[report_id.clone()])
+                        .unwrap();
+                    assert!(
+                        round["accounting_errors"].as_array().unwrap().is_empty(),
+                        "{round}"
+                    );
+                    let state: Value =
+                        serde_json::from_slice(&fs::read(&record_path).unwrap()).unwrap();
+                    if state["output"].is_null() {
+                        break;
+                    }
+                }
+            }
+            let state: Value = serde_json::from_slice(&fs::read(&record_path).unwrap()).unwrap();
+            assert!(state["output"].is_null());
+            assert_eq!(state["summaries"][0]["original_outcome"]["exit"], 17);
+            assert_eq!(
+                fs::read(h.path().join(original_path)).unwrap(),
+                b"required failure"
+            );
+            let original: Value = serde_json::from_slice(
+                &fs::read(retention_state::object_path(h.path(), &original_id)).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(original["incoming"], json!([]));
+            assert_eq!(original["output"]["outcome"]["exit"], 7);
+        }));
+        if let Err(failure) = result {
+            eprintln!("retained empty-report fixture: {}", h.keep().display());
+            std::panic::resume_unwind(failure);
+        }
+    }
+}
+
+#[test]
 #[cfg(all(unix, not(verus_keep_ghost)))]
 fn leaf_entry_retires_wide_parent_with_256_descriptors() {
     if isolated_capability_test(

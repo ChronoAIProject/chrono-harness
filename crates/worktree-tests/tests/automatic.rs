@@ -4181,13 +4181,15 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks() {
+fn automatic_terminal_rejects_changed_head_rewound_ref_policy_attachment_and_git_locks() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
     for fault in [
         "head",
-        "ref",
+        "rewound-ref",
+        "diverged-ref",
+        "symbolic-ref",
         "policy",
         "target-policy",
         "target-config",
@@ -4218,7 +4220,11 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
                 fs::write(target.join("payload"), "changed head").unwrap();
                 commit(&target);
             }
-            "ref" => {
+            "rewound-ref" => {
+                git(&h.root, &["update-ref", "refs/heads/dev", "HEAD^"]);
+            }
+            "diverged-ref" => {
+                git(&h.root, &["update-ref", "refs/heads/dev", "HEAD^"]);
                 git(
                     &h.root,
                     &[
@@ -4229,7 +4235,21 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
                         "commit",
                         "--allow-empty",
                         "-qm",
-                        "advanced reference",
+                        "diverged reference",
+                    ],
+                );
+            }
+            "symbolic-ref" => {
+                git(
+                    &h.root,
+                    &["update-ref", "refs/heads/retention-alias", "HEAD"],
+                );
+                git(
+                    &h.root,
+                    &[
+                        "symbolic-ref",
+                        "refs/heads/dev",
+                        "refs/heads/retention-alias",
                     ],
                 );
             }
@@ -4277,6 +4297,52 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
         assert_ne!(code, 0, "{fault}: {r} {e}");
         assert!(target.exists());
         assert!(target.join("output λ/data").exists());
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn automatic_terminal_resumes_after_ref_advance_using_the_original_saved_commit() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for retention in ["ancestor", "same-tree"] {
+        let h = Host::new("payload");
+        h.automatic("evidence-retain");
+        let mut policy = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
+        policy["retention"] = value!(retention);
+        fs::write(
+            h.root.join(AUTO_POLICY),
+            serde_json::to_vec(&policy).unwrap(),
+        )
+        .unwrap();
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        let target = h.parent.join("saved-before-advance");
+        assert_eq!(h.invoke("feature", "saved-before-advance", &target).0, 0);
+        output(&target);
+        let (code, report, error) = h.auto(
+            "finish",
+            &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+        );
+        assert_eq!(code, 0, "{report} {error}");
+        let terminal = h.ledger()["entries"][0]["terminal"].clone();
+        let original_path = h.root.join(terminal["receipt"]["path"].as_str().unwrap());
+        let original_bytes = fs::read(&original_path).unwrap();
+        let saved = terminal["retained_commit"].as_str().unwrap();
+        fs::write(h.root.join("payload"), "later independent change\n").unwrap();
+        let advanced = commit(&h.root);
+        assert_ne!(advanced, saved);
+        assert_ne!(
+            git(&h.root, &["rev-parse", &format!("{advanced}^{{tree}}")]),
+            git(&h.root, &["rev-parse", &format!("{saved}^{{tree}}")]),
+        );
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{retention}: {report} {error}");
+        assert!(!target.exists(), "the saved checkout must be reclaimed");
+        assert_eq!(git(&h.root, &["rev-parse", "dev"]), advanced);
+        assert_eq!(fs::read(&original_path).unwrap(), original_bytes);
+        assert_eq!(h.ledger()["entries"][0]["terminal"], terminal);
     }
 }
 

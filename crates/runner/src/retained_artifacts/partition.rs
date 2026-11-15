@@ -610,10 +610,7 @@ impl Inventory {
     /// One streamed explicit pass. Each declared address gets one existing
     /// bounded round, without a global cursor, admission lock or retry loop.
     pub fn maintain_explicit(&self) -> Result<Value, String> {
-        self.maintain_explicit_at(now()?)
-    }
-    pub fn maintain_explicit_at(&self, observed: u64) -> Result<Value, String> {
-        self.maintain_explicit_reporting_at(observed, None)
+        self.maintain_explicit_reporting_at(now()?, None)
     }
     /// Stream every declared member and its unabridged original round to the
     /// actual maintain report. The compact sweep's sample ceiling is unchanged.
@@ -1524,6 +1521,32 @@ impl Inventory {
             leases.extend(additional);
             path_dirs.extend(dirs);
             exclusive_paths.extend(target_paths);
+            // Metadata-only detachment must remain possible behind a busy
+            // report path. When that path is available, hold it now so the
+            // last detached edge can retire the report in this same component.
+            for record in observed.values().filter(|record| {
+                record.output.as_ref().is_some_and(|output| {
+                    metadata_only_retirement(
+                        retiring_report.as_ref() == Some(&record.id),
+                        output.phase == "disposing",
+                        output.manifest.sealed,
+                        output.manifest.entries.is_empty(),
+                        !output.references.is_empty(),
+                    )
+                })
+            }) {
+                match self.path_gates(&[record.path.clone()], false, false, false) {
+                    Ok((additional, dirs)) => {
+                        leases.extend(additional);
+                        path_dirs.extend(dirs);
+                        exclusive_paths.insert(record.path.clone());
+                    }
+                    Err(error)
+                        if error.starts_with("retention path is busy: ")
+                            || error == "retention path birth is busy" => {}
+                    Err(error) => return Err(error),
+                }
+            }
         }
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
@@ -1700,10 +1723,12 @@ impl Inventory {
                 continue;
             }
             for role in &record.roles {
+                let loaded;
                 let current = if let Some(current) = roles.get(role) {
-                    Some(current.clone())
+                    Some(current)
                 } else {
-                    self.read_role(role)?
+                    loaded = self.read_role(role)?;
+                    loaded.as_ref()
                 };
                 match current {
                     Some(current) if current.ids.contains(&record.id) => {

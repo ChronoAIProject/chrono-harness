@@ -33,6 +33,128 @@ pub fn replay_attempt(bound: bool, terminal: bool) -> (allowed: bool)
 pub fn confirmed_probe(launch_matches: bool, exit_code: i32, exit_signal: Option<i32>, owned_work_joined: bool) -> (terminal: bool)
     ensures terminal == (launch_matches && (exit_code >= 0 || exit_signal.is_some()) && owned_work_joined),
 { launch_matches && (exit_code >= 0 || exit_signal.is_some()) && owned_work_joined }
+
+pub open spec fn cache_plan_publication_result<S, T, I, V, E, P, A, C, B>(
+    initial: S, has_originals: bool, validate: V, encode: E, publish: P,
+    adopt: A, confirm: C, bind: B, out: (S, Result<bool, String>),
+) -> bool
+    where V: FnOnce(S) -> (S, Result<(), String>),
+        E: FnOnce(S) -> (S, Result<T, String>),
+        P: FnOnce(S, &T) -> (S, Result<bool, String>),
+        A: FnOnce(S) -> (S, Result<I, String>),
+        C: FnOnce(S, &I, &T) -> (S, Result<bool, String>),
+        B: FnOnce(S, I) -> (S, Result<(), String>),
+{
+    if !has_originals {
+        out == (initial, Ok::<bool, String>(false))
+    } else {
+        exists|validated: S, validation: Result<(), String>|
+            #[trigger] validate.ensures((initial,), (validated, validation))
+            && match validation {
+                Err(error) => out == (validated, Err::<bool, String>(error)),
+                Ok(()) => exists|encoded: S, encoding: Result<T, String>|
+                    #[trigger] encode.ensures((validated,), (encoded, encoding))
+                    && match encoding {
+                        Err(error) => out == (encoded, Err::<bool, String>(error)),
+                        Ok(raw) => exists|published: S, publication: Result<bool, String>|
+                            #[trigger] publish.ensures((encoded, &raw), (published, publication))
+                            && match publication {
+                                Err(error) => out == (published, Err::<bool, String>(error)),
+                                Ok(false) => out.0 == published && match out.1 {
+                                    Err(error) => error@ ==
+                                        "E_CACHE_ATTEMPT: cache-plan scope must be adopted"@,
+                                    _ => false,
+                                },
+                                Ok(true) => exists|adopted: S, adoption: Result<I, String>|
+                                    #[trigger] adopt.ensures((published,), (adopted, adoption))
+                                    && match adoption {
+                                        Err(error) => out == (adopted, Err::<bool, String>(error)),
+                                        Ok(inventory) => exists|confirmed: S, confirmation: Result<bool, String>|
+                                            #[trigger] confirm.ensures((adopted, &inventory, &raw),
+                                                (confirmed, confirmation))
+                                            && match confirmation {
+                                                Err(error) => out == (confirmed, Err::<bool, String>(error)),
+                                                Ok(false) => out.0 == confirmed && match out.1 {
+                                                    Err(error) => error@ ==
+                                                        "E_CACHE_ATTEMPT: plan publication unfinished; original attempt retained; no redispatch"@,
+                                                    _ => false,
+                                                },
+                                                Ok(true) => exists|bound: S, binding: Result<(), String>|
+                                                    #[trigger] bind.ensures((confirmed, inventory), (bound, binding))
+                                                    && out.0 == bound && match binding {
+                                                        Err(error) => out.1 == Err::<bool, String>(error),
+                                                        Ok(()) => out.1 == Ok::<bool, String>(true),
+                                                    },
+                                            },
+                                    },
+                            },
+                    },
+            }
+    }
+}
+
+/// 原件资格、编码、发布、采用、确认和依赖绑定按原顺序执行；首错保留原状态及全文。
+pub fn publish_cache_plan<S, T, I, V, E, P, A, C, B>(
+    state: S, has_originals: bool, validate: V, encode: E, publish: P,
+    adopt: A, confirm: C, bind: B,
+) -> (out: (S, Result<bool, String>))
+    where V: FnOnce(S) -> (S, Result<(), String>),
+        E: FnOnce(S) -> (S, Result<T, String>),
+        P: FnOnce(S, &T) -> (S, Result<bool, String>),
+        A: FnOnce(S) -> (S, Result<I, String>),
+        C: FnOnce(S, &I, &T) -> (S, Result<bool, String>),
+        B: FnOnce(S, I) -> (S, Result<(), String>),
+    requires forall|state: S| validate.requires((state,)),
+        forall|state: S| encode.requires((state,)),
+        forall|state: S, raw: &T| publish.requires((state, raw)),
+        forall|state: S| adopt.requires((state,)),
+        forall|state: S, inventory: &I, raw: &T| confirm.requires((state, inventory, raw)),
+        forall|state: S, inventory: I| bind.requires((state, inventory)),
+    ensures cache_plan_publication_result(state, has_originals,
+        validate, encode, publish, adopt, confirm, bind, out),
+{
+    if !has_originals { return (state, Ok(false)); }
+    let ghost initial = state;
+    let (state, validation) = validate(state);
+    let ghost validated = state;
+    let ghost validation_result = validation;
+    assert(validate.ensures((initial,), (validated, validation_result)));
+    match validation { Err(error) => return (state, Err(error)), Ok(()) => (), }
+    let (state, encoding) = encode(state);
+    let ghost encoded = state;
+    let ghost encoding_result = encoding;
+    assert(encode.ensures((validated,), (encoded, encoding_result)));
+    let raw = match encoding { Err(error) => return (state, Err(error)), Ok(raw) => raw, };
+    let (state, publication) = publish(state, &raw);
+    let ghost published = state;
+    let ghost publication_result = publication;
+    assert(publish.ensures((encoded, &raw), (published, publication_result)));
+    match publication {
+        Err(error) => return (state, Err(error)),
+        Ok(false) => return (state, Err("E_CACHE_ATTEMPT: cache-plan scope must be adopted".to_string())),
+        Ok(true) => (),
+    }
+    let (state, adoption) = adopt(state);
+    let ghost adopted = state;
+    let ghost adoption_result = adoption;
+    assert(adopt.ensures((published,), (adopted, adoption_result)));
+    let inventory = match adoption {
+        Err(error) => return (state, Err(error)), Ok(inventory) => inventory,
+    };
+    let (state, confirmation) = confirm(state, &inventory, &raw);
+    let ghost confirmed = state;
+    let ghost confirmation_result = confirmation;
+    assert(confirm.ensures((adopted, &inventory, &raw), (confirmed, confirmation_result)));
+    match confirmation {
+        Err(error) => return (state, Err(error)),
+        Ok(false) => return (state, Err(
+            "E_CACHE_ATTEMPT: plan publication unfinished; original attempt retained; no redispatch".to_string())),
+        Ok(true) => (),
+    }
+    let (state, binding) = bind(state, inventory);
+    assert(bind.ensures((confirmed, inventory), (state, binding)));
+    (state, match binding { Err(error) => Err(error), Ok(()) => Ok(true), })
+}
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -431,43 +553,53 @@ mod runtime {
                     .map(str::to_owned)
             })
             .collect::<Result<_, _>>()?;
-        if originals.is_empty() {
-            return Ok(false);
-        }
         let began = std::time::Instant::now();
-        validate(root, plan, false)?;
-        tracing::debug!(
-            event_id = "cache.plan.originals_validated",
-            elapsed_seconds = began.elapsed().as_secs_f64(),
-            "plan original qualification returned"
-        );
-        let raw = serde_json::to_vec(plan).map_err(|e| e.to_string())?;
-        if !chrono_harness::retained_artifacts::retention::publish_final_original(
-            root,
-            "cache-plan",
-            path,
-            &raw,
-            json!({"kind":"cache-plan","completion":"confirmed","plan_sha256":sha256(&raw)}),
-            true,
-        )? {
-            return Err("E_CACHE_ATTEMPT: cache-plan scope must be adopted".into());
-        }
-        tracing::debug!(
-            event_id = "cache.plan.original_published",
-            elapsed_seconds = began.elapsed().as_secs_f64(),
-            "plan original publication returned"
-        );
-        let state = inventory(root)?;
-        if !state.published_original(path, &sha256(&raw), raw.len() as u64)? {
-            return Err("E_CACHE_ATTEMPT: plan publication unfinished; original attempt retained; no redispatch".into());
-        }
-        state.dependencies_paths(path, &originals)?;
-        tracing::debug!(
-            event_id = "cache.plan.dependencies_bound",
-            elapsed_seconds = began.elapsed().as_secs_f64(),
-            "published plan dependencies were bound"
-        );
-        Ok(true)
+        decision::publish_cache_plan(
+            (),
+            !originals.is_empty(),
+            |()| {
+                let result = validate(root, plan, false).inspect(|_| {
+                    tracing::debug!(
+                        event_id = "cache.plan.originals_validated",
+                        elapsed_seconds = began.elapsed().as_secs_f64(),
+                        "plan original qualification returned"
+                    );
+                });
+                ((), result)
+            },
+            |()| ((), serde_json::to_vec(plan).map_err(|e| e.to_string())),
+            |(), raw: &Vec<u8>| {
+                ((), chrono_harness::retained_artifacts::retention::publish_final_original(
+                    root,
+                    "cache-plan",
+                    path,
+                    raw,
+                    json!({"kind":"cache-plan","completion":"confirmed","plan_sha256":sha256(raw)}),
+                    true,
+                ))
+            },
+            |()| {
+                tracing::debug!(
+                    event_id = "cache.plan.original_published",
+                    elapsed_seconds = began.elapsed().as_secs_f64(),
+                    "plan original publication returned"
+                );
+                ((), inventory(root))
+            },
+            |(), state: &Inventory, raw: &Vec<u8>| {
+                ((), state.published_original(path, &sha256(raw), raw.len() as u64))
+            },
+            |(), state: Inventory| {
+                let result = state.dependencies_paths(path, &originals).inspect(|_| {
+                    tracing::debug!(
+                        event_id = "cache.plan.dependencies_bound",
+                        elapsed_seconds = began.elapsed().as_secs_f64(),
+                        "published plan dependencies were bound"
+                    );
+                });
+                ((), result)
+            },
+        ).1
     }
 
     pub(crate) fn release_plan(root: &Path, path: &str, raw: &[u8]) -> Result<(), String> {
