@@ -343,6 +343,10 @@ fn inventory_batches_small_records_without_losing_members_or_changing_the_limit(
         "existing publication byte limit"
     );
     assert_eq!((bytes, rows), before_rejection);
+    assert!(
+        counted.0.borrow().0 > 0,
+        "large inventories must stream before completion"
+    );
     output.flush().unwrap();
     let state = counted.0.borrow();
     let actual: Vec<_> = state
@@ -359,6 +363,104 @@ fn inventory_batches_small_records_without_losing_members_or_changing_the_limit(
         "each small record still reaches the underlying writer: {} writes",
         state.0
     );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn inventory_flush_failure_preserves_partial_bytes_without_sync_or_drop_retry() {
+    use std::io::Write;
+    struct Failing(std::rc::Rc<std::cell::RefCell<(Vec<u8>, usize)>>);
+    impl Write for Failing {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            let mut state = self.0.borrow_mut();
+            state.1 += 1;
+            if !state.0.is_empty() {
+                return Err(std::io::Error::other("original flush write failure"));
+            }
+            state.0.extend_from_slice(&bytes[..7]);
+            Ok(7)
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let state = std::rc::Rc::new(std::cell::RefCell::new((Vec::new(), 0)));
+    let mut writer = chrono_worktree::inventory_writer(Failing(state.clone()));
+    writer
+        .write_all(b"preserve partial inventory original")
+        .unwrap();
+    let error = chrono_worktree::finish_inventory_writer(writer, |_| {
+        panic!("sync must not run after flush failure")
+    })
+    .unwrap_err();
+    assert_eq!(error, "inventory flush: original flush write failure");
+    assert_eq!(&state.borrow().0, b"preserv");
+    assert_eq!(state.borrow().1, 2, "Drop must not retry the failed write");
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn inventory_finishing_requires_flush_then_sync_and_preserves_either_error() {
+    use std::io::Write;
+    #[derive(Default)]
+    struct State {
+        bytes: Vec<u8>,
+        events: Vec<&'static str>,
+    }
+    struct Traced {
+        state: std::rc::Rc<std::cell::RefCell<State>>,
+        fail_flush: bool,
+    }
+    impl Write for Traced {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            let mut state = self.state.borrow_mut();
+            state.events.push("write");
+            state.bytes.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            self.state.borrow_mut().events.push("flush");
+            if self.fail_flush {
+                Err(std::io::Error::other("original flush failure"))
+            } else {
+                Ok(())
+            }
+        }
+    }
+    for (fail_flush, fail_sync) in [(false, false), (true, false), (false, true)] {
+        let state = std::rc::Rc::new(std::cell::RefCell::new(State::default()));
+        let mut writer = chrono_worktree::inventory_writer(Traced {
+            state: state.clone(),
+            fail_flush,
+        });
+        writer.write_all(b"complete original\n").unwrap();
+        assert!(state.borrow().bytes.is_empty());
+        let result = chrono_worktree::finish_inventory_writer(writer, |output| {
+            output.state.borrow_mut().events.push("sync");
+            if fail_sync {
+                Err("original sync failure".into())
+            } else {
+                Ok(())
+            }
+        });
+        let expected = if fail_flush {
+            Err("inventory flush: original flush failure".into())
+        } else if fail_sync {
+            Err("inventory sync: original sync failure".into())
+        } else {
+            Ok(())
+        };
+        assert_eq!(result, expected);
+        assert_eq!(state.borrow().bytes, b"complete original\n");
+        assert_eq!(
+            state.borrow().events,
+            if fail_flush {
+                vec!["write", "flush"]
+            } else {
+                vec!["write", "flush", "sync"]
+            }
+        );
+    }
 }
 
 #[test]

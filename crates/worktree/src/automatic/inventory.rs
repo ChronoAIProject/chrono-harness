@@ -36,8 +36,21 @@ fn timestamp() -> Result<u64, String> {
 /// Construct the output used by the complete maintenance inventory.
 #[doc(hidden)]
 #[cfg(not(verus_keep_ghost))]
-pub fn inventory_writer<W: Write>(output: W) -> W {
-    output
+pub fn inventory_writer<W: Write>(output: W) -> std::io::BufWriter<W> {
+    std::io::BufWriter::with_capacity(64 * 1024, output)
+}
+
+/// Flush before syncing, and never let Drop retry a failed buffered write.
+#[doc(hidden)]
+#[cfg(not(verus_keep_ghost))]
+pub fn finish_inventory_writer<W: Write>(
+    mut output: std::io::BufWriter<W>,
+    sync: impl FnOnce(&mut W) -> Result<(), String>,
+) -> Result<(), String> {
+    let flushed = output.flush().map_err(|e| format!("inventory flush: {e}"));
+    let (mut output, _unwritten) = output.into_parts();
+    flushed?;
+    sync(&mut output).map_err(|e| format!("inventory sync: {e}"))
 }
 
 /// The actual report write boundary; callers retain partial bytes on IO failure.
@@ -88,7 +101,7 @@ pub fn compact_retention_record(
 pub(super) struct Report {
     root: PathBuf,
     path: String,
-    output: fs::File,
+    output: std::io::BufWriter<fs::File>,
     publication: Option<Publication>,
     bytes: u64,
     rows: u64,
@@ -426,17 +439,21 @@ impl Report {
         );
         parent["complete_inventory"] = descriptor;
         parent["complete_inventory"]["rows"] = value!(self.rows);
-        if let Err(error) = self.output.sync_all() {
+        let persisted = if let Some(error) = self.io_error {
+            // Preserve the actual partial original without retrying a failed
+            // record or flushing more bytes after its write boundary failed.
+            let _ = self.output.into_parts();
+            Err(format!("inventory IO: {error}"))
+        } else {
+            finish_inventory_writer(self.output, |output| {
+                output.sync_all().map_err(|e| e.to_string())
+            })
+        };
+        if let Err(error) = persisted {
             parent["complete_inventory"]["status"] = value!("incomplete");
             parent["complete_inventory"]["member_enumeration_complete"] = value!(false);
             parent["complete_inventory"]["measurements_complete"] = value!(false);
-            return Err(format!("inventory sync: {error}"));
-        }
-        if let Some(error) = self.io_error {
-            parent["complete_inventory"]["status"] = value!("incomplete");
-            parent["complete_inventory"]["member_enumeration_complete"] = value!(false);
-            parent["complete_inventory"]["measurements_complete"] = value!(false);
-            return Err(format!("inventory IO: {error}"));
+            return Err(error);
         }
         let physical = self.root.join(&self.path);
         let (digest, length) = chrono_harness::file_identity(&physical)?;
