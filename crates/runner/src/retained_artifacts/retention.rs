@@ -3261,21 +3261,7 @@ impl Inventory {
         let disposal_finished_micros = began.elapsed().as_micros() as u64;
         self.save(&l, &gate)?;
         let saved_micros = began.elapsed().as_micros() as u64;
-        let mut measurements = [0u64; 8];
-        for output in &l.outputs {
-            for (total, value) in measurements.iter_mut().zip(retained_measurements(
-                Some(output),
-                0,
-                self.policy.max_output_bytes,
-            )) {
-                *total += value;
-            }
-        }
-        measurements[1] = l.retired_leases.len() as u64;
-        let mut result = json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_related_outputs,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"});
-        for (key, value) in RETAINED_MEASUREMENT_FIELDS.iter().zip(measurements) {
-            result[*key] = json!(value);
-        }
+        let result = json!({"nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"protected":protected,"disposed":disposed});
         // Emit after bounded work: sink IO must not consume its disposal window.
         // Every checkpoint uses the same owning round's start, including gates.
         tracing::debug!(
@@ -3937,12 +3923,6 @@ impl Publication {
         }
     }
 }
-/// Ordinary adopted owners share this entry. Unknown legacy outputs remain protected.
-#[cfg(not(verus_keep_ghost))]
-pub fn maintain_adopted(root: &Path) -> Result<Option<Value>, String> {
-    Inventory::adopted(root)?.map(|i| i.maintain()).transpose()
-}
-
 /// Enroll a real producer output in the adopted owner, recovering prior released work first.
 #[cfg(not(verus_keep_ghost))]
 pub fn begin_adopted(

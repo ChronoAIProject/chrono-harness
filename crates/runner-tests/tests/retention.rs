@@ -1661,9 +1661,7 @@ fn creation_intent_survives_no_finish_and_admission_creates_nothing() {
     assert_eq!(ledger(h.path())["outputs"][0]["phase"], "creating");
     assert_eq!(maintain_fixture_to(h.path(), 1), 1);
     drop(publication);
-    let round = retained_artifacts::retention::maintain_adopted(h.path())
-        .unwrap()
-        .unwrap();
+    let round = maintenance(h.path());
     assert_eq!(fixture_remaining(h.path(), &round), 0, "{round}");
     assert_eq!(
         ledger(h.path())["summaries"][0]["original_outcome"]["original"]["operation"],
@@ -1747,9 +1745,7 @@ fn controlled_fixture_writes_refuse_before_copy_and_keep_original_outcomes() {
     let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let mut removed = 0;
         for _ in 0..8 {
-            let round = retained_artifacts::retention::maintain_adopted(h.path())
-                .unwrap()
-                .unwrap();
+            let round = maintenance(h.path());
             assert!(round["nodes"].as_u64().unwrap() <= 3, "{round}");
             removed += round["removed_logical_bytes"].as_u64().unwrap();
             let completed = round["remaining_outputs"] == 0;
@@ -1815,9 +1811,7 @@ fn released_byte_overflow_is_accounted_and_reclaimed_under_unchanged_policy() {
     assert!(h.path().join(&path).exists());
     inventory(h.path()).reference("current", &[]).unwrap();
     for _ in 0..8 {
-        let round = retained_artifacts::retention::maintain_adopted(h.path())
-            .unwrap()
-            .unwrap();
+        let round = maintenance(h.path());
         assert!(round["nodes"].as_u64().unwrap() <= 8);
         if round["remaining_outputs"] == 0 {
             break;
@@ -2056,11 +2050,7 @@ fn killed_creation_intent_recovers_on_ordinary_entry_without_a_callback() {
     child.kill().unwrap();
     assert!(!child.wait().unwrap().success());
     for _ in 0..4 {
-        if retained_artifacts::retention::maintain_adopted(h.path())
-            .unwrap()
-            .unwrap()["remaining_outputs"]
-            == 0
-        {
+        if maintenance(h.path())["remaining_outputs"] == 0 {
             break;
         }
     }
@@ -2106,9 +2096,7 @@ fn released_manifest_overflow_makes_bounded_progress_without_policy_growth() {
     inventory(h.path()).reference("build-reader", &[]).unwrap();
     let mut removed = 0;
     for _ in 0..64 {
-        let round = retained_artifacts::retention::maintain_adopted(h.path())
-            .unwrap()
-            .unwrap();
+        let round = maintenance(h.path());
         assert!(round["nodes"].as_u64().unwrap() <= 4);
         assert!(
             round["metadata_bytes"].as_u64().unwrap()
@@ -2219,7 +2207,7 @@ fn preparation_write_refusal_leaves_owner_intent_and_ordinary_recovery() {
     assert_eq!(before["outputs"][0]["phase"], "publishing");
     let path = before["outputs"][0]["path"].as_str().unwrap();
     assert_eq!(fs::metadata(h.path().join(path)).unwrap().len(), 0);
-    retained_artifacts::retention::maintain_adopted(h.path()).unwrap();
+    maintenance(h.path());
     assert!(h.path().join(path).exists());
     assert_eq!(fs::metadata(h.path().join(path)).unwrap().len(), 0);
     assert_eq!(
@@ -2260,9 +2248,7 @@ fn ordinary_entry_reclaims_completed_nested_outputs_with_real_savings() {
     let mut removed = 0;
     let mut result = Value::Null;
     for _ in 0..8 {
-        result = retained_artifacts::retention::maintain_adopted(h.path())
-            .unwrap()
-            .unwrap();
+        result = maintenance(h.path());
         removed += result["removed_logical_bytes"].as_u64().unwrap();
         if result["remaining_outputs"] == 0 {
             break;
@@ -2311,9 +2297,7 @@ fn no_finish_preserves_live_producer_then_recovers_unknown_partial_publication()
     assert!(r["nodes"].as_u64().unwrap() <= 3, "{r}");
     assert_eq!(fixture_remaining(h.path(), &r), 1, "{r}");
     for _ in 0..8 {
-        r = retained_artifacts::retention::maintain_adopted(h.path())
-            .unwrap()
-            .unwrap();
+        r = maintenance(h.path());
         assert!(r["nodes"].as_u64().unwrap() <= 3, "{r}");
         if r["remaining_outputs"] == 0 {
             break;
@@ -2382,9 +2366,7 @@ fn current_references_protect_closure_and_released_historical_cycles_are_not_roo
         // reference makes the cycle reclaimable, without promising that all
         // manifest and disposal IO fits in a single round.
         for _ in 0..8 {
-            let round = retained_artifacts::retention::maintain_adopted(h.path())
-                .unwrap()
-                .unwrap();
+            let round = maintenance(h.path());
             assert!(round["nodes"].as_u64().unwrap() <= 3, "{round}");
             let completed = round["remaining_outputs"] == 0;
             rounds.push(round);
@@ -2453,9 +2435,7 @@ fn live_consumer_protects_references_even_after_retention_window_expires() {
         // Release ends protection; retirement still obeys the same per-round
         // bounds and may resume through subsequent ordinary entries.
         for _ in 0..8 {
-            let round = retained_artifacts::retention::maintain_adopted(h.path())
-                .unwrap()
-                .unwrap();
+            let round = maintenance(h.path());
             assert!(round["nodes"].as_u64().unwrap() <= 3, "{round}");
             let completed = round["remaining_outputs"] == 0;
             rounds.push(round);
@@ -3115,9 +3095,7 @@ fn killed_producer_is_joined_and_ordinary_entry_recovers_without_any_drop_callba
         .to_owned();
     let mut rounds = Vec::new();
     for _ in 0..8 {
-        let r = retained_artifacts::retention::maintain_adopted(h.path())
-            .unwrap()
-            .unwrap();
+        let r = maintenance(h.path());
         let completed = r["remaining_outputs"] == 0;
         rounds.push(r);
         if completed {
@@ -7493,9 +7471,7 @@ fn declared_consumer_cli_protects_existing_original_and_requires_real_release() 
     let result = consumer_call(h.path(), release.clone());
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     assert_eq!(consumer_call(h.path(), release.clone()).exit_code, 0);
-    let round = retained_artifacts::retention::maintain_adopted(h.path())
-        .unwrap()
-        .unwrap();
+    let round = maintenance(h.path());
     let rounds = maintain_fixture_rounds_to(h.path(), 0);
     assert_eq!(
         round["removed_logical_bytes"].as_u64().unwrap()
@@ -7666,7 +7642,7 @@ fn declared_consumer_survives_killed_real_reader_and_ordinary_reentry() {
     assert_eq!(maintain_fixture_to(h.path(), 1), 1);
     let release = consumer_release(h.path(), &declaration, "released");
     assert_eq!(consumer_call(h.path(), release).exit_code, 0);
-    retained_artifacts::retention::maintain_adopted(h.path()).unwrap();
+    maintenance(h.path());
     assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert!(!h.path().join(path).exists());
 }
@@ -7741,9 +7717,7 @@ fn consumer_adoption_keeps_old_inventory_expiry_and_capacity_while_future_entrie
         .unwrap()
         .complete(json!({"exit":0}))
         .unwrap();
-    let round = retained_artifacts::retention::maintain_adopted(h.path())
-        .unwrap()
-        .unwrap();
+    let round = maintenance(h.path());
     assert_eq!(fixture_remaining(h.path(), &round), 1);
     assert!(h.path().join(&path).exists());
     assert!(!h.path().join(&next).exists());
