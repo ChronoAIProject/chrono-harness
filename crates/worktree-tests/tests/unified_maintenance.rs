@@ -422,6 +422,152 @@ fn legitimate_main_and_linked_business_progress_during_full_footprint_io() {
     blocked_round_keeps_business_progress("footprint");
 }
 
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = super::bounded_cleanup::main_host_mode("noop");
+    adopt_lifecycle_retention(&h);
+    let policy_path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["retained_producers"] = value!([{"id":"progress-fixture",
+        "directory":".chrono-harness/state/progress-fixture/", "temporary":true,
+        "generated_outputs":[]}]);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let linked = h.parent.join("live-business");
+    assert_eq!(h.invoke("feature", "live-business", &linked).0, 0);
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    super::automatic::output(&h.root);
+    super::automatic::output(&linked);
+    let ledger = h.ledger();
+    let holders: Vec<_> = ledger["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            let held =
+                fs::File::open(h.root.join(entry["ownership"]["path"].as_str().unwrap())).unwrap();
+            held.lock_shared().unwrap();
+            held
+        })
+        .collect();
+    assert_eq!(holders.len(), 2);
+    let root = h.root.clone();
+    let (entered, ready) = mpsc::sync_channel(0);
+    let (release, resume) = mpsc::sync_channel(0);
+    let maintenance = std::thread::spawn(move || {
+        let mut once = false;
+        chrono_worktree::with_maintenance_observer(
+            move |kind, _| {
+                if !once && kind == "producer" {
+                    once = true;
+                    if entered.send(()).is_ok() {
+                        let _ = resume.recv();
+                    }
+                }
+            },
+            || {
+                chrono_worktree::run(&[
+                    "maintain".into(),
+                    "--host-root".into(),
+                    root.to_str().unwrap().into(),
+                    "--config".into(),
+                    POLICY.into(),
+                ])
+            },
+        )
+    });
+    // The sender is dropped if maintenance ends before this boundary. Await
+    // that actual notification instead of imposing a second readiness timer.
+    let reached = ready.recv();
+    drop(ready);
+    let business = reached.as_ref().ok().map(|_| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            for entry in h.ledger()["entries"].as_array().unwrap() {
+                assert_eq!(entry["cleanup"]["stage"], "waiting-for-consumers");
+            }
+            let state = retention_state::snapshot(&h.root);
+            let parents: Vec<_> = state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|output| output["path"].as_str())
+                .filter(|path| {
+                    path.starts_with(".chrono-harness/state/worktrees/maintain-")
+                        && path.ends_with(".json")
+                })
+                .collect();
+            assert_eq!(
+                parents.len(),
+                1,
+                "the actual unpublished round owns its report"
+            );
+            let parent = parents[0];
+            let mut address = h
+                .root
+                .join(".chrono-harness/state/output-retention-v1/paths");
+            for component in parent.split('/') {
+                address.push(sha256(component.as_bytes()));
+            }
+            // Hold the exact report path at its publication boundary. Business
+            // must finish without acquiring this unrelated publisher's gate.
+            let publishing =
+                chrono_harness::ownership::DirectoryLease::acquire_local(&address, true, None)
+                    .unwrap()
+                    .unwrap();
+            let main = h.auto("use", &["--operation", "use.consumer"]);
+            let other = h.auto(
+                "use",
+                &[
+                    "--path",
+                    linked.to_str().unwrap(),
+                    "--operation",
+                    "use.consumer",
+                ],
+            );
+            publishing.stable().unwrap();
+            drop(publishing);
+            (main, other)
+        }))
+    });
+    let released = if reached.is_ok() {
+        release.send(())
+    } else {
+        Ok(())
+    };
+    drop(release);
+    let joined = maintenance.join();
+    reached.expect("the parent must remain unpublished after both live-consumer observations");
+    released.expect("the maintenance parent remains at its original completion boundary");
+    let (main, other) = business
+        .unwrap()
+        .unwrap_or_else(|error| std::panic::resume_unwind(error));
+    for (code, report, error) in [main, other] {
+        assert_eq!(
+            code, 0,
+            "business depends on an unpublished maintenance parent: {report} {error}"
+        );
+        assert_eq!(report["status"], "used");
+        assert_eq!(report["managed_process"]["exit_code"], 0);
+        assert_eq!(report["managed_process"]["owned_work_joined"], true);
+        assert!(report["managed_use_receipt"]["sha256"].is_string());
+    }
+    let output = joined.unwrap();
+    let report = json(output.stdout.as_bytes()).unwrap();
+    assert_eq!(output.exit_code, 0, "{report}");
+    assert_eq!(report["owned_work_joined"], true);
+    assert!(report["complete_inventory"]["receipt"]["sha256"].is_string());
+    for path in [&h.root, &linked] {
+        assert!(path.join("output λ/data").is_file());
+        assert!(path.join("payload").is_file());
+    }
+    drop(holders);
+}
+
 #[cfg(unix)]
 #[cfg(not(verus_keep_ghost))]
 fn policy(idle: Option<u64>, timer: u64) -> chrono_harness::maintenance_signal::Policy {
