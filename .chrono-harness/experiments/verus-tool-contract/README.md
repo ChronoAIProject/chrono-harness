@@ -283,5 +283,19 @@ Serde Error 的真实参数包含 `&dyn Expected`。原工具的前置检查已�
 回归，保留不兼容合同、unsized blanket impl、未声明 trait 及原有安全边界；
 不改原断言、线程、严格选项或回归范围。工具判断与宿主验证登记同时修改，新增成本未知。
 
+## Serde 序列化接口
+
+真实完整根的 Serialize 派生需要 Serializer、Serialize 和七种复合状态接口。
+固定 Serde 1.0.229 的 std 配置是本实验唯一外部接口来源；保留原关联类型及相等约束、
+所有公开方法的泛型、借用、静态名称和 Result，不增加结果、消息或格式化成功保证。
+`serde-serialization.patch` 顺序应用在 `imported-dyn-traits.patch` 后，仍由真实 vstd
+的 `serde_specs` 承载外部接口，不复制 Serde 类型或为仓内实现加 external_body。
+
+先登记六项独立 Rust／Verus 预期：标量和命名参数、全部七种复合状态及原错误类型、
+正确本地实现和真实结构／枚举派生、不能无依据断言成功或失败，以及错误本地实现必须拒绝。
+负例必须实际收到 assertion failed，未声明接口不算预期拒绝。沿原完整登记回归追加库存，
+保留全部原测试、严格参数、线程和 ignored；真实完整 workflow 根继续复验。
+外部接口合同与宿主验证登记同时修改，新增证明、构建、CI 和存储成本未知。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。
