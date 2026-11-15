@@ -2,6 +2,7 @@
   "schema": "chrono-bootstrap/v1",
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.99.1",
+  "tools": {},
   "operations": [
     "investigate.verus-source.regression"
   ],
