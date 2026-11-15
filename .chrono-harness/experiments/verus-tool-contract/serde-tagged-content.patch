@@ -1,3 +1,33 @@
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -684,6 +684,26 @@
+
+ #[verifier::external_type_specification]
+ pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
++
++#[verifier::external_type_specification]
++pub struct ExContent<'de>(serde::__private229::de::Content<'de>);
++
++#[verifier::external_type_specification]
++#[verifier::reject_recursive_types(T)]
++pub struct ExTaggedContentVisitor<T>(serde::__private229::de::TaggedContentVisitor<T>);
++
++#[verifier::external_type_specification]
++#[verifier::reject_recursive_types(E)]
++pub struct ExContentDeserializer<'de, E>(serde::__private229::de::ContentDeserializer<'de, E>);
++
++pub assume_specification<T>[serde::__private229::de::TaggedContentVisitor::<T>::new](
++    name: &'static str,
++    expecting: &'static str,
++) -> serde::__private229::de::TaggedContentVisitor<T>;
++
++pub assume_specification<'de, E>[serde::__private229::de::ContentDeserializer::<'de, E>::new](
++    content: serde::__private229::de::Content<'de>,
++) -> serde::__private229::de::ContentDeserializer<'de, E>;
+
+ #[verifier::external_type_specification]
+ pub struct ExIgnoredAny(serde::de::IgnoredAny);
 diff --git a/source/rust_verify_test/tests/serde_tagged_content.rs b/source/rust_verify_test/tests/serde_tagged_content.rs
 new file mode 100644
 --- /dev/null
