@@ -666,10 +666,115 @@ pub open spec fn registry_decoded_view<V>(decoded: Result<V, String>) -> Result<
     match decoded { Ok(value) => Ok(value), Err(message) => Err(message@) }
 }
 
+/// 仅投影键的完整文字；原字节和任意值保持原实体，不要求值实现 DeepView。
+pub open spec fn registry_map<V>(map: Map<String, V>) -> Map<Seq<char>, V> {
+    Map::new(
+        map.dom().map(|key: String| key@),
+        |text: Seq<char>| map[choose|key: String| map.contains_key(key) && key@ == text],
+    )
+}
+
+pub open spec fn registry_map_unique<V>(map: Map<String, V>) -> bool {
+    forall|a: String, b: String| #![trigger map.contains_key(a), map.contains_key(b)]
+        map.contains_key(a) && map.contains_key(b) && a@ == b@ ==> a == b
+}
+
+pub proof fn registry_map_value<V>(map: Map<String, V>, key: String)
+    requires registry_map_unique(map), map.contains_key(key),
+    ensures registry_map(map).contains_key(key@), registry_map(map)[key@] == map[key],
+{
+    broadcast use Set::lemma_map_contains;
+    assert(exists|stored: String| map.contains_key(stored) && stored@ == key@);
+    let stored = choose|stored: String| map.contains_key(stored) && stored@ == key@;
+    assert(stored == key);
+}
+
+pub proof fn registry_map_ordered<V>(map: BTreeMap<String, V>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        vstd::std_specs::btree::btree_map_inv(&map),
+    ensures registry_map_unique(map@), registry_map(map@).len() == map@.len(),
+{
+    reveal(vstd::laws_cmp::obeys_cmp_ord);
+    reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+    assert(vstd::laws_cmp::obeys_cmp_deep_eq::<String>());
+    assert forall|a: String, b: String| #![trigger map@.contains_key(a), map@.contains_key(b)]
+        map@.contains_key(a) && map@.contains_key(b) && a@ == b@ implies a == b by {
+        assert(a.cmp_spec(&b) is Equal);
+    }
+    vstd::set_lib::lemma_map_size(map@.dom(), registry_map(map@).dom(), |key: String| key@);
+}
+
+proof fn registry_map_insert<V>(map: Map<String, V>, key: String, value: V)
+    requires registry_map_unique(map),
+        forall|stored: String| #[trigger] map.contains_key(stored) && stored@ == key@ ==> stored == key,
+    ensures registry_map(map.insert(key, value)) == registry_map(map).insert(key@, value),
+{
+    broadcast use Set::lemma_map_contains;
+    let next = map.insert(key, value);
+    assert(registry_map_unique(next));
+    assert forall|text: Seq<char>| registry_map(next).contains_key(text)
+        implies registry_map(map).insert(key@, value).contains_key(text) by {
+        let stored = choose|stored: String| next.contains_key(stored) && stored@ == text;
+        if stored != key { assert(map.contains_key(stored)); }
+    }
+    assert forall|text: Seq<char>| registry_map(map).insert(key@, value).contains_key(text)
+        implies registry_map(next).contains_key(text) by {
+        if text == key@ { registry_map_value(next, key); }
+        else {
+            let stored = choose|stored: String| map.contains_key(stored) && stored@ == text;
+            registry_map_value(next, stored);
+        }
+    }
+    assert forall|text: Seq<char>| #[trigger] registry_map(next).contains_key(text)
+        implies registry_map(next)[text] == registry_map(map).insert(key@, value)[text] by {
+        if text == key@ { registry_map_value(next, key); }
+        else {
+            let stored = choose|stored: String| next.contains_key(stored) && stored@ == text;
+            assert(stored != key);
+            registry_map_value(map, stored);
+            registry_map_value(next, stored);
+        }
+    }
+    assert(registry_map(next) =~= registry_map(map).insert(key@, value));
+}
+
+/// 消费标准 insert 的原合同：重复文字保留原键，文字模型仍精确替换同一项。
+proof fn registry_map_insert_ensures<V>(before: BTreeMap<String, V>, after: BTreeMap<String, V>,
+    key: String, value: V, previous: Option<V>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        vstd::std_specs::btree::btree_map_inv(&before),
+        vstd::std_specs::btree::btree_map_insert_ensures(&before, &after, key, value, previous),
+    ensures vstd::std_specs::btree::btree_map_inv(&after),
+        registry_map(after@) == registry_map(before@).insert(key@, value),
+{
+    registry_map_ordered(before);
+    reveal(vstd::laws_cmp::obeys_cmp_ord);
+    reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+    match previous {
+        Some(old_value) => {
+            let stored = choose|stored: String| before@.contains_key(stored)
+                && key.cmp_spec(&stored) is Equal && old_value == before@[stored]
+                && after@ == before@.insert(stored, value);
+            assert(stored@ == key@);
+            registry_map_insert(before@, stored, value);
+        },
+        None => {
+            assert forall|stored: String| #[trigger] before@.contains_key(stored)
+                && stored@ == key@ implies stored == key by {
+                assert(key.cmp_spec(&stored) is Equal);
+            }
+            registry_map_insert(before@, key, value);
+        },
+    }
+}
+
 pub open spec fn registry_batch_view<V>(
     result: Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>,
-) -> Result<(Map<String, Vec<u8>>, Map<String, V>), Seq<char>> {
-    match result { Ok((bytes, values)) => Ok((bytes@, values@)), Err(message) => Err(message@) }
+) -> Result<(Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), Seq<char>> {
+    match result {
+        Ok((bytes, values)) => Ok((registry_map(bytes@), registry_map(values@))),
+        Err(message) => Err(message@),
+    }
 }
 
 /// 原顺序中此前所有路径与解析都已成功，才会到达当前项。
@@ -685,9 +790,9 @@ pub open spec fn registry_batch_prefix<V>(
 /// 双 map 只在当前路径和解析均成功后一起更新，重复键采用最后一项。
 pub open spec fn registry_batch_fold<V>(
     expected: Seq<String>, rows: Seq<(String, Vec<u8>)>, at: int,
-    bytes: Map<String, Vec<u8>>, values: Map<String, V>,
+    bytes: Map<Seq<char>, Vec<u8>>, values: Map<Seq<char>, V>,
     model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>,
-) -> Result<(Map<String, Vec<u8>>, Map<String, V>), Seq<char>>
+) -> Result<(Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), Seq<char>>
     recommends expected.len() == rows.len(), 0 <= at <= rows.len(),
     decreases rows.len() - at,
 {
@@ -697,16 +802,16 @@ pub open spec fn registry_batch_fold<V>(
         match model(rows[at].1@) {
             Err(message) => Err(message),
             Ok(value) => registry_batch_fold(expected, rows, at + 1,
-                bytes.insert(rows[at].0, rows[at].1), values.insert(rows[at].0, value), model),
+                bytes.insert(rows[at].0@, rows[at].1), values.insert(rows[at].0@, value), model),
         }
     }
 }
 
 pub open spec fn registry_batch_spec<V>(
     expected: Seq<String>, rows: Seq<(String, Vec<u8>)>,
-    bytes: Map<String, Vec<u8>>, values: Map<String, V>,
+    bytes: Map<Seq<char>, Vec<u8>>, values: Map<Seq<char>, V>,
     model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>,
-) -> Result<(Map<String, Vec<u8>>, Map<String, V>), Seq<char>> {
+) -> Result<(Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), Seq<char>> {
     if expected.len() != rows.len() { Err("registry acquisition count mismatch"@) }
     else { registry_batch_fold(expected, rows, 0, bytes, values, model) }
 }
@@ -747,7 +852,7 @@ pub fn registry_parse_batch<V, P>(
         exists|model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>|
             registry_decoder_admissible(expected@, originals@, decode, model),
     ensures registry_batch_view(out) == registry_batch_spec(
-        expected@, originals@, bytes@, values@,
+        expected@, originals@, registry_map(bytes@), registry_map(values@),
         registry_parser_model(expected@, originals@, decode)),
 {
     let ghost model = registry_parser_model(expected@, originals@, decode);
@@ -770,29 +875,34 @@ pub fn registry_parse_batch_with_model<V, P>(
         vstd::laws_cmp::obeys_cmp::<String>(),
         registry_decoder_admissible(expected@, originals@, decode, model),
     ensures registry_batch_view(out)
-        == registry_batch_spec(expected@, originals@, bytes@, values@, model),
+        == registry_batch_spec(expected@, originals@, registry_map(bytes@), registry_map(values@), model),
 {
     let ghost all = originals@;
-    let ghost initial_bytes = bytes@;
-    let ghost initial_values = values@;
+    let ghost initial_bytes = registry_map(bytes@);
+    let ghost initial_values = registry_map(values@);
     let mut collected_bytes = bytes;
     let mut collected_values = values;
     match registry_acquisition_count(expected.len(), originals.len()) {
         Err(error) => { return Err(error); },
         Ok(()) => {},
     }
+    btree_map_compare_invariant(&collected_bytes);
+    btree_map_compare_invariant(&collected_values);
     let mut remaining = originals.into_iter();
     let mut index = 0usize;
     loop
         invariant
             vstd::laws_cmp::obeys_cmp::<String>(),
             all == originals@, all.len() == expected.len(),
-            initial_bytes == bytes@, initial_values == values@,
+            initial_bytes == registry_map(bytes@), initial_values == registry_map(values@),
+            vstd::std_specs::btree::btree_map_inv(&collected_bytes),
+            vstd::std_specs::btree::btree_map_inv(&collected_values),
             0 <= index <= all.len(),
             remaining.remaining() == all.subrange(index as int, all.len() as int),
             registry_batch_prefix(expected@, all, model, index as int),
             registry_batch_spec(expected@, all, initial_bytes, initial_values, model)
-                == registry_batch_fold(expected@, all, index as int, collected_bytes@, collected_values@, model),
+                == registry_batch_fold(expected@, all, index as int,
+                    registry_map(collected_bytes@), registry_map(collected_values@), model),
             forall|i: int, raw: &[u8]| 0 <= i < all.len()
                 && registry_batch_prefix(expected@, all, model, i)
                 && expected@[i]@ == all[i].0@ && raw@ == all[i].1@
@@ -808,8 +918,8 @@ pub fn registry_parse_batch_with_model<V, P>(
             None => { return Ok((collected_bytes, collected_values)); },
             Some(row) => row,
         };
-        let ghost before_bytes = collected_bytes@;
-        let ghost before_values = collected_values@;
+        let ghost before_bytes = collected_bytes;
+        let ghost before_values = collected_values;
         match registry_acquisition_path(expected[index].as_str(), path.as_str()) {
             Err(error) => { return Err(error); },
             Ok(()) => {},
@@ -822,10 +932,21 @@ pub fn registry_parse_batch_with_model<V, P>(
             Err(error) => { return Err(error); },
             Ok(value) => value,
         };
-        collected_bytes.insert(path.clone(), original);
-        collected_values.insert(path, value);
-        assert(registry_batch_fold(expected@, all, at, before_bytes, before_values, model)
-            == registry_batch_fold(expected@, all, at + 1, collected_bytes@, collected_values@, model));
+        let key_copy = path.clone();
+        let ghost key = path;
+        let ghost copied_key = key_copy;
+        let ghost raw = original;
+        let ghost parsed = value;
+        let old_bytes = collected_bytes.insert(key_copy, original);
+        let old_value = collected_values.insert(path, value);
+        proof {
+            registry_map_insert_ensures(before_bytes, collected_bytes, copied_key, raw, old_bytes);
+            registry_map_insert_ensures(before_values, collected_values, key, parsed, old_value);
+        }
+        assert(registry_batch_fold(expected@, all, at,
+            registry_map(before_bytes@), registry_map(before_values@), model)
+            == registry_batch_fold(expected@, all, at + 1,
+                registry_map(collected_bytes@), registry_map(collected_values@), model));
         index += 1;
         assert(registry_batch_prefix(expected@, all, model, at + 1)) by {
             assert forall|i: int| 0 <= i < at + 1 implies
@@ -837,8 +958,8 @@ pub fn registry_parse_batch_with_model<V, P>(
 }
 
 pub open spec fn registry_read_sequence_step<S, V, R, P>(
-    before: (S, Map<String, Vec<u8>>, Map<String, V>),
-    after: (S, Map<String, Vec<u8>>, Map<String, V>), path: String, read: R, decode: P,
+    before: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>),
+    after: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), path: String, read: R, decode: P,
 ) -> bool
     where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
 {
@@ -846,13 +967,13 @@ pub open spec fn registry_read_sequence_step<S, V, R, P>(
         argument@ == path@ && input@ == raw@
         && read.ensures((before.0, argument), (after.0, Ok::<Vec<u8>, String>(raw)))
         && decode.ensures((input,), Ok::<V, String>(value))
-        && after.1 == before.1.insert(path, raw)
-        && after.2 == before.2.insert(path, value)
+        && after.1 == before.1.insert(path@, raw)
+        && after.2 == before.2.insert(path@, value)
 }
 
 pub open spec fn registry_read_sequence_prefix<S, V, R, P>(
-    states: Seq<(S, Map<String, Vec<u8>>, Map<String, V>)>,
-    initial: (S, Map<String, Vec<u8>>, Map<String, V>), paths: Seq<String>, read: R, decode: P,
+    states: Seq<(S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>)>,
+    initial: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), paths: Seq<String>, read: R, decode: P,
 ) -> bool
     where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
 {
@@ -862,7 +983,7 @@ pub open spec fn registry_read_sequence_prefix<S, V, R, P>(
 }
 
 pub open spec fn registry_read_sequence_terminal<S, V, R, P>(
-    before: (S, Map<String, Vec<u8>>, Map<String, V>), at: int, paths: Seq<String>,
+    before: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), at: int, paths: Seq<String>,
     read: R, decode: P,
     out: (S, Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>),
 ) -> bool
@@ -870,7 +991,7 @@ pub open spec fn registry_read_sequence_terminal<S, V, R, P>(
 {
     match out.1 {
         Ok((bytes, values)) => at == paths.len() && out.0 == before.0
-            && bytes@ == before.1 && values@ == before.2,
+            && registry_map(bytes@) == before.1 && registry_map(values@) == before.2,
         Err(error) => 0 <= at < paths.len()
             && exists|argument: &str, observation: (S, Result<Vec<u8>, String>)|
                 argument@ == paths[at]@
@@ -885,12 +1006,12 @@ pub open spec fn registry_read_sequence_terminal<S, V, R, P>(
 }
 
 pub open spec fn registry_read_sequence_result<S, V, R, P>(
-    initial: (S, Map<String, Vec<u8>>, Map<String, V>), paths: Seq<String>, read: R, decode: P,
+    initial: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), paths: Seq<String>, read: R, decode: P,
     out: (S, Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>),
 ) -> bool
     where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
 {
-    exists|states: Seq<(S, Map<String, Vec<u8>>, Map<String, V>)>|
+    exists|states: Seq<(S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>)>|
         registry_read_sequence_prefix(states, initial, paths, read, decode)
         && registry_read_sequence_terminal(states.last(), states.len() - 1, paths, read, decode, out)
 }
@@ -904,21 +1025,25 @@ pub fn registry_read_sequence<S, V, R, P>(
     requires vstd::laws_cmp::obeys_cmp::<String>(),
         paths.len() > 0 ==> (forall|source: S, path: &str| #[trigger] read.requires((source, path))),
         paths.len() > 0 ==> (forall|raw: &[u8]| #[trigger] decode.requires((raw,))),
-    ensures registry_read_sequence_result((input_source, bytes@, values@), paths@, read, decode, out),
+    ensures registry_read_sequence_result((input_source, registry_map(bytes@), registry_map(values@)), paths@, read, decode, out),
 {
     let ghost all = paths@;
-    let ghost initial = (input_source, bytes@, values@);
+    let ghost initial = (input_source, registry_map(bytes@), registry_map(values@));
     let ghost states = seq![initial];
     let mut source = input_source;
     let mut collected_bytes = bytes;
     let mut collected_values = values;
+    btree_map_compare_invariant(&collected_bytes);
+    btree_map_compare_invariant(&collected_values);
     let mut remaining = paths.into_iter();
     loop
         invariant vstd::laws_cmp::obeys_cmp::<String>(),
-            all == paths@, initial == (input_source, bytes@, values@),
+            all == paths@, initial == (input_source, registry_map(bytes@), registry_map(values@)),
             1 <= states.len() <= all.len() + 1,
             remaining.remaining() == all.subrange(states.len() - 1, all.len() as int),
-            states.last() == (source, collected_bytes@, collected_values@),
+            states.last() == (source, registry_map(collected_bytes@), registry_map(collected_values@)),
+            vstd::std_specs::btree::btree_map_inv(&collected_bytes),
+            vstd::std_specs::btree::btree_map_inv(&collected_values),
             registry_read_sequence_prefix(states, initial, all, read, decode),
             all.len() > 0 ==> (forall|source: S, path: &str| #[trigger] read.requires((source, path))),
             all.len() > 0 ==> (forall|raw: &[u8]| #[trigger] decode.requires((raw,))),
@@ -965,9 +1090,17 @@ pub fn registry_read_sequence<S, V, R, P>(
         let ghost key = path;
         let ghost raw = original;
         let ghost parsed = value;
-        collected_bytes.insert(path.clone(), original);
-        collected_values.insert(path, value);
-        let ghost after = (source, collected_bytes@, collected_values@);
+        let ghost before_bytes = collected_bytes;
+        let ghost before_values = collected_values;
+        let key_copy = path.clone();
+        let ghost copied_key = key_copy;
+        let old_bytes = collected_bytes.insert(key_copy, original);
+        let old_value = collected_values.insert(path, value);
+        proof {
+            registry_map_insert_ensures(before_bytes, collected_bytes, copied_key, raw, old_bytes);
+            registry_map_insert_ensures(before_values, collected_values, key, parsed, old_value);
+        }
+        let ghost after = (source, registry_map(collected_bytes@), registry_map(collected_values@));
         assert(read.ensures((before.0, argument), (after.0, Ok::<Vec<u8>, String>(raw))));
         assert(decode.ensures((input,), Ok::<V, String>(parsed)));
         assert(registry_read_sequence_step(before, after, key, read, decode)) by {

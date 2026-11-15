@@ -65,6 +65,10 @@ native 原报告保存固定宿主提交、配置、完整操作、实际工具�
 `crates/judge-workflow/src/verified_execution.rs`，包含真实 response／status 源码及
 Serde derive；完整根、严格参数、编译和 dep-info 保留。所选 Serde 库路径来自上述
 原 Cargo 产物记录；依赖变化后须重新核实际记录和字节，不能静默选择另一个库。
+完整 workflow 根之后，`investigate.verus-source.status-tests` 沿同一 profile 验证原
+`crates/runner-tests/tests/verified_status.rs` 整 crate 独立预期；真实 Serde JSON 库路径同样
+来自前置 Cargo JSON 的产物记录，严格参数与同源工具保持。前置失败保留原错误，
+不声称后续根已经执行。
 该实验方法不登记正式 `output_contract`，普通退出成功不绕过原资格检查。
 执行复用已登记的 Cargo 和上游原 `verus` binary，显式消费同一 manifest／配置；
 保持宿主 cwd 及全部证明参数，不增加 CI 不认识的实验工具别名或另一个启动脚本。
@@ -99,6 +103,14 @@ tree、index-stage 和 checkout-change 的插入规格分别描述新键插入�
 重复 tree 路径保留原键、替换完整条目并返回原重复错误；重复 unit 值集合保持原 map
 及基数。原独立测试仍核完整路径、字段、错误、重复和失败后的状态；不改变生产插入
 流程，也不要求比较相等的两个独立分配键具有相同实体身份。
+
+登记快照的批量与逐条更新只把 ghost map 的键投影为完整文字，保留原 Vec 字节和
+泛型值实体；不为泛型值增加 DeepView 要求。原 map 的标准顺序证明文字键唯一，
+标准 insert 的原合同分别给出新键与保留原键的更新，投影证明同一文字项的精确替换。
+实际循环保留原两次插入，不增加查询、删除或库存复制；只在入口构造两个借用迭代器
+取得已有顺序合同。独立读取／解码参考结果同步使用文字键，保留完整字节、首错、
+读取次数、重复更新、无关项及 map 数量断言。完整 workflow 根与独立预期根分别验收，
+不以一种根的成功代替另一种，也不授予正式工具资格。
 
 同一固定 vstd 的 Vec 与 BTreeMap 迭代器改用 `IteratorSpec::remaining`，不再提供旧的
 位置／完整库存二元 view。真实循环以剩余序列等于原库存的未消费后缀连接完整前缀规格；

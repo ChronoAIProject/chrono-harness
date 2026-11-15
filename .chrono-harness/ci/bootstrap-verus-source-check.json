@@ -5,7 +5,8 @@
   "tools": {},
   "operations": [
     "investigate.verus-source.dependencies",
-    "investigate.verus-source.execution"
+    "investigate.verus-source.execution",
+    "investigate.verus-source.status-tests"
   ],
   "install": [],
   "participation": {
