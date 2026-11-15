@@ -246,3 +246,20 @@
 +        }
 +    } => Ok(())
 +}
+--- a/source/vir/src/prune.rs
++++ b/source/vir/src/prune.rs
+@@ -526,6 +526,14 @@
+                     }
+                     ExprX::StaticVar(name) => {
+                         reach_function(ctxt, state, name);
++                    }
++                    ExprX::Unary(crate::ast::UnaryOp::ArrayToSlice, _) => {
++                        // AST simplification introduces this call after whole-crate pruning.
++                        reach_function(
++                            ctxt,
++                            state,
++                            &crate::fun!(CrateId::Vstd => "array"; "spec_array_as_slice"),
++                        );
+                     }
+                     ExprX::Call {
+                         target: CallTarget::Fun(kind, name, _, _impl_paths, attrs),
