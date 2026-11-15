@@ -460,6 +460,81 @@ fn only_empty_retiring_reports_with_pending_edges_can_skip_path_exclusion() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn metadata_path_readiness_preserves_empty_vacuity_and_the_retirement_guard()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let empty = Vec::<String>::new();
+    let loaded = std::collections::BTreeSet::<String>::new();
+    expect_true(policy::metadata_path_ready(true, &empty, &loaded));
+    expect_true(!policy::metadata_path_ready(false, &empty, &loaded));
+    let pending = vec!["pending".to_owned()];
+    expect_true(!policy::metadata_path_ready(false, &pending, &loaded));
+    expect_true(!policy::metadata_path_ready(true, &pending, &loaded));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn metadata_path_readiness_rejects_missing_first_middle_and_last_references()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let first = "first".to_owned();
+    let middle = "middle".to_owned();
+    let last = "last".to_owned();
+    proof {
+        reveal_strlit("first"); reveal_strlit("middle"); reveal_strlit("last");
+        assert(first@.len() != middle@.len());
+        assert(first@.len() != last@.len());
+        assert(middle@.len() != last@.len());
+    }
+    let references = vec![first.clone(), middle.clone(), last.clone()];
+    let mut suffix = std::collections::BTreeSet::new();
+    suffix.insert(middle.clone());
+    suffix.insert(last.clone());
+    expect_true(!policy::metadata_path_ready(true, &references, &suffix));
+    let mut edges = std::collections::BTreeSet::new();
+    edges.insert(first.clone());
+    edges.insert(last.clone());
+    expect_true(!policy::metadata_path_ready(true, &references, &edges));
+    let mut prefix = std::collections::BTreeSet::new();
+    prefix.insert(first.clone());
+    prefix.insert(middle.clone());
+    expect_true(!policy::metadata_path_ready(true, &references, &prefix));
+    suffix.insert(first.clone());
+    expect_true(policy::metadata_path_ready(true, &references, &suffix));
+    expect_true(!policy::metadata_path_ready(false, &references, &suffix));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn metadata_path_readiness_keeps_full_text_duplicates_and_unrelated_loaded_edges()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let empty = "".to_owned();
+    let embedded = "a\0\n".to_owned();
+    let prefix = "a".to_owned();
+    let unicode = "中é".to_owned();
+    proof {
+        reveal_strlit(""); reveal_strlit("a\0\n");
+        reveal_strlit("a"); reveal_strlit("中é");
+        assert(empty@.len() == 0); assert(embedded@.len() == 3);
+        assert(prefix@.len() == 1); assert(unicode@.len() == 2);
+    }
+    let references = vec![unicode.clone(), embedded.clone(), empty.clone(),
+        embedded.clone(), prefix.clone()];
+    let mut loaded = std::collections::BTreeSet::new();
+    loaded.insert(empty.clone());
+    loaded.insert(embedded.clone());
+    loaded.insert(unicode.clone());
+    expect_true(!policy::metadata_path_ready(true, &references, &loaded));
+    loaded.insert(prefix.clone());
+    expect_true(policy::metadata_path_ready(true, &references, &loaded));
+    loaded.insert("unrelated".to_owned());
+    expect_true(policy::metadata_path_ready(true, &references, &loaded));
+    let reordered = vec![prefix.clone(), empty.clone(), unicode.clone(), embedded.clone()];
+    expect_true(policy::metadata_path_ready(true, &reordered, &loaded));
+    let repeated = vec![embedded.clone(), embedded.clone(), embedded.clone()];
+    expect_true(policy::metadata_path_ready(true, &repeated, &loaded));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_limits_keep_equal_bytes_and_reject_count_and_overflow() {
     let first = policy::terminal_budget(0, 0, 10, 1, 10);
     let full_count = policy::terminal_budget(1, 0, 1, 1, 10);

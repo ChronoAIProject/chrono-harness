@@ -4,9 +4,15 @@
 //! end on return even while an unrelated fork holds incidental fd copies.
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
+use super::super::contains;
+#[cfg(verus_keep_ghost)]
 use super::identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_release::contains;
+#[cfg(verus_keep_ghost)]
+use std::collections::BTreeSet;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -59,25 +65,10 @@ pub fn objects_reference<'a, T, F>(outputs: &'a [T], source: &str, target: &str,
     {
         let row = observe(&outputs[index]);
         proof { trace = trace.push(row); }
-        if identifiers::equal_text(row.0, source) {
-            let mut reference = 0;
-            while reference < row.1.len()
-                invariant reference <= row.1.len(), row.0@ == source@,
-                    index < outputs.len(), trace.len() == index + 1, trace.last() == row,
-                    forall|i: int| 0 <= i < trace.len() ==>
-                        #[trigger] observe.ensures((&outputs@[i],), trace[i]),
-                    forall|i: int| 0 <= i < index ==>
-                        !output_edge_matches(#[trigger] trace[i], source@, target@),
-                    forall|i: int| 0 <= i < reference ==> row.1@[i]@ != target@,
-                decreases row.1.len() - reference,
-            {
-                if identifiers::equal_text(row.1[reference].as_str(), target) {
-                    assert(output_edge_matches(row, source@, target@));
-                    assert(output_reference_trace(outputs, observe, source@, target@, true, trace));
-                    return true;
-                }
-                reference += 1;
-            }
+        if identifiers::equal_text(row.0, source) && contains(row.1, target) {
+            assert(output_edge_matches(row, source@, target@));
+            assert(output_reference_trace(outputs, observe, source@, target@, true, trace));
+            return true;
         }
         index += 1;
     }
@@ -100,6 +91,29 @@ pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
         && pending_references),
 {
     retiring && disposing && sealed && entries_empty && pending_references
+}
+
+/// 只有退役条件已满足且每个剩余引用均已载入时，才尝试共同持有物理路径。
+pub fn metadata_path_ready(metadata_only: bool, references: &[String],
+    loaded: &BTreeSet<String>) -> (ready: bool)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures ready == (metadata_only && forall|i: int| 0 <= i < references@.len()
+        ==> loaded@.contains(#[trigger] references@[i])),
+{
+    if !metadata_only { return false; }
+    let mut index = 0;
+    while index < references.len()
+        invariant
+            vstd::laws_cmp::obeys_cmp::<String>(),
+            0 <= index <= references@.len(),
+            forall|i: int| 0 <= i < index
+                ==> loaded@.contains(#[trigger] references@[i]),
+        decreases references@.len() - index,
+    {
+        if !loaded.contains(&references[index]) { return false; }
+        index += 1;
+    }
+    true
 }
 }
 
@@ -1600,16 +1614,17 @@ impl Inventory {
             // now so their detachment and final retirement share one component.
             for record in observed.values().filter(|record| {
                 record.output.as_ref().is_some_and(|output| {
-                    metadata_only_retirement(
-                        retiring_report.as_ref() == Some(&record.id),
-                        output.phase == "disposing",
-                        output.manifest.sealed,
-                        output.manifest.entries.is_empty(),
-                        !output.references.is_empty(),
-                    ) && output
-                        .references
-                        .iter()
-                        .all(|id| retained_dependencies.contains(id))
+                    metadata_path_ready(
+                        metadata_only_retirement(
+                            retiring_report.as_ref() == Some(&record.id),
+                            output.phase == "disposing",
+                            output.manifest.sealed,
+                            output.manifest.entries.is_empty(),
+                            !output.references.is_empty(),
+                        ),
+                        &output.references,
+                        &retained_dependencies,
+                    )
                 })
             }) {
                 match self.path_gates(&[record.path.clone()], false, false, false) {
