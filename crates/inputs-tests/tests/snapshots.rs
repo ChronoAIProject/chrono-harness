@@ -16,6 +16,440 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 
 verus! {
+pub struct CompositionInputFixture<'a> {
+    pub ids: &'a [Option<&'a str>],
+}
+
+impl<'a> policy::composition::CompositionInputRows for CompositionInputFixture<'a> {
+    open spec fn count(&self) -> nat { self.ids@.len() }
+    open spec fn id_at(&self, index: int) -> Option<&str> { self.ids@[index] }
+
+    fn len(&self) -> (out: usize)
+        ensures out == self.count(),
+    { self.ids.len() }
+
+    fn id(&self, index: usize) -> (out: Option<&str>)
+        ensures out == self.id_at(index as int),
+    { self.ids[index] }
+}
+
+proof fn fixture_first_input<R: policy::composition::CompositionInputRows>(
+    rows: &R, expected: Seq<char>, first: usize, actual: Option<usize>)
+    requires policy::composition::first_composition_input(rows, expected, Some(first)),
+        policy::composition::first_composition_input(rows, expected, actual),
+    ensures actual == Some(first),
+{
+    use policy::composition::*;
+    match actual {
+        None => { assert(!composition_input_matches(rows, first as int, expected)); },
+        Some(index) => {
+            if index < first { assert(!composition_input_matches(rows, index as int, expected)); }
+            else if first < index { assert(!composition_input_matches(rows, first as int, expected)); }
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_import_lookup_preserves_first_match_and_complete_id() {
+    use policy::composition::*;
+    let ids = [None, Some("input"), Some("输入\0\n"), Some("input"), Some("")];
+    let rows = CompositionInputFixture { ids: &ids };
+    let ordinary = find_composition_input(&rows, "input");
+    let unicode = find_composition_input(&rows, "输入\0\n");
+    let empty = find_composition_input(&rows, "");
+    let case = find_composition_input(&rows, "Input");
+    let prefix = find_composition_input(&rows, "输入");
+    proof {
+        reveal_strlit("input"); reveal_strlit("输入\0\n"); reveal_strlit("");
+        reveal_strlit("Input"); reveal_strlit("输入");
+        assert("input"@.len() == 5);
+        assert("输入\0\n"@.len() == 4);
+        assert(""@.len() == 0);
+        assert("input"@ != "输入\0\n"@);
+        assert("input"@ != ""@);
+        assert("输入\0\n"@ != ""@);
+        assert(composition_input_matches(&rows, 2, "输入\0\n"@));
+        assert forall|j: int| 0 <= j < 2 implies
+            !composition_input_matches(&rows, j, "输入\0\n"@) by {
+            assert(rows.id_at(j) == rows.ids@[j]);
+            if j == 0 { assert(rows.id_at(j).is_none()); }
+            else { assert(j == 1); assert(rows.id_at(j).unwrap()@ == "input"@); }
+        }
+        assert(composition_input_matches(&rows, 4, ""@));
+        assert forall|j: int| 0 <= j < 4 implies
+            !composition_input_matches(&rows, j, ""@) by {
+            assert(rows.id_at(j) == rows.ids@[j]);
+            if j == 0 { assert(rows.id_at(j).is_none()); }
+            else if j == 1 { assert(rows.id_at(j).unwrap()@ == "input"@); }
+            else if j == 2 { assert(rows.id_at(j).unwrap()@ == "输入\0\n"@); }
+            else { assert(j == 3); assert(rows.id_at(j).unwrap()@ == "input"@); }
+        }
+        fixture_first_input(&rows, "input"@, 1, ordinary);
+        fixture_first_input(&rows, "输入\0\n"@, 2, unicode);
+        fixture_first_input(&rows, ""@, 4, empty);
+        assert("Input"@.len() == 5);
+        assert("输入"@.len() == 2);
+        assert("input"@ != "Input"@) by { assert("input"@[0] != "Input"@[0]); }
+        assert forall|j: int| 0 <= j < 5 implies
+            !composition_input_matches(&rows, j, "Input"@)
+            && !composition_input_matches(&rows, j, "输入"@) by {
+            assert(rows.id_at(j) == rows.ids@[j]);
+            if j == 0 { assert(rows.id_at(j).is_none()); }
+            else if j == 1 || j == 3 { assert(rows.id_at(j).unwrap()@ == "input"@); }
+            else if j == 2 { assert(rows.id_at(j).unwrap()@ == "输入\0\n"@); }
+            else { assert(j == 4); assert(rows.id_at(j).unwrap()@ == ""@); }
+        }
+        if let Some(index) = case { assert(!composition_input_matches(&rows, index as int, "Input"@)); }
+        if let Some(index) = prefix { assert(!composition_input_matches(&rows, index as int, "输入"@)); }
+    }
+    assert(ordinary == Some(1usize));
+    assert(unicode == Some(2usize));
+    assert(empty == Some(4usize));
+    assert(case.is_none());
+    assert(prefix.is_none());
+    if ordinary != Some(1) || unicode != Some(2) || empty != Some(4)
+        || case.is_some() || prefix.is_some() { panic!(); }
+    let no_ids: [Option<&str>; 0] = [];
+    let no_rows = CompositionInputFixture { ids: &no_ids };
+    let missing = find_composition_input(&no_rows, "input");
+    assert(missing.is_none());
+    if missing.is_some() { panic!(); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_merge_rejects_environment_before_files() {
+    use policy::composition::*;
+    reveal(composition_merge_endpoint_result);
+    let initial = 17u64;
+    let snapshot = 29u64;
+    let (state, result) = merge_composition_endpoint(initial, CompositionEndpoint::Base,
+        Some(&snapshot),
+        &|_state: &u64, _endpoint: CompositionEndpoint| -> (present: bool)
+            ensures present,
+        { true },
+        &|state: u64, _endpoint: CompositionEndpoint, _snapshot: &u64| -> (out: u64)
+            ensures out == state,
+        { state },
+        &|_state: &u64, _endpoint: CompositionEndpoint, _snapshot: &u64| -> (same: bool)
+            ensures !same,
+        { false },
+        &|_snapshot: &u64| -> (rows: Result<Vec<(&str, &u64)>, String>)
+            ensures match rows { Err(error) => error@ == "snapshot files"@, _ => false },
+        { Err("snapshot files".to_string()) },
+        &|_state: &u64, _endpoint: CompositionEndpoint, _id: &str, _value: &u64|
+            -> (same: Option<bool>) ensures same == Some(false),
+        { Some(false) },
+        &|state: u64, _endpoint: CompositionEndpoint, _id: &str, _value: &u64|
+            -> (out: u64) ensures out == state,
+        { state });
+    assert(state == 17);
+    if state != 17 { panic!(); }
+    match result {
+        Err(CompositionMergeError::Environment(endpoint)) => {
+            assert(endpoint == CompositionEndpoint::Base);
+            if !matches!(endpoint, CompositionEndpoint::Base) { panic!(); }
+        },
+        _ => { assert(false); panic!(); },
+    }
+}
+
+fn composition_merge_files_error_case(existing: bool) {
+    use policy::composition::*;
+    reveal(composition_merge_endpoint_result);
+    let initial = vec![17u64];
+    let snapshot = 29u64;
+    let (state, result) = merge_composition_endpoint(initial, CompositionEndpoint::Candidate,
+        Some(&snapshot),
+        &|_state: &Vec<u64>, _endpoint: CompositionEndpoint| -> (present: bool)
+            ensures present == existing,
+        { existing },
+        &|mut state: Vec<u64>, _endpoint: CompositionEndpoint, snapshot: &u64| -> (out: Vec<u64>)
+            ensures out@ == state@.push(*snapshot),
+        { state.push(*snapshot); state },
+        &|_state: &Vec<u64>, _endpoint: CompositionEndpoint, _snapshot: &u64| -> (same: bool)
+            ensures same,
+        { true },
+        &|_snapshot: &u64| -> (rows: Result<Vec<(&str, &u64)>, String>)
+            ensures match rows { Err(error) => error@ == "snapshot files 原错\0\n"@, _ => false },
+        { Err("snapshot files 原错\0\n".to_string()) },
+        &|_state: &Vec<u64>, _endpoint: CompositionEndpoint, _id: &str, _value: &u64|
+            -> (same: Option<bool>) ensures same == Some(false),
+        { Some(false) },
+        &|state: Vec<u64>, _endpoint: CompositionEndpoint, _id: &str, _value: &u64|
+            -> (out: Vec<u64>) ensures out == state,
+        { state });
+    if existing { fixture_merge_trace(&[17], state.as_slice()); }
+    else { fixture_merge_trace(&[17, 29], state.as_slice()); }
+    match result {
+        Err(CompositionMergeError::Files(error)) => {
+            let same = composition_text::equal_text(error.as_str(), "snapshot files 原错\0\n");
+            assert(same);
+            if !same { panic!(); }
+        },
+        _ => { assert(false); panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_merge_initialization_and_original_files_error_are_preserved() {
+    composition_merge_files_error_case(false);
+    composition_merge_files_error_case(true);
+}
+
+fn fixture_merge_prior(_state: &Vec<u64>, _endpoint: policy::composition::CompositionEndpoint,
+    _id: &str, value: &u64) -> (same: Option<bool>)
+    ensures same == if *value == 0 { Some(false) } else if *value == 1 { Some(true) } else { None },
+{
+    if *value == 0 { Some(false) } else if *value == 1 { Some(true) } else { None }
+}
+
+fn fixture_merge_write(mut state: Vec<u64>, _endpoint: policy::composition::CompositionEndpoint,
+    _id: &str, value: &u64) -> (out: Vec<u64>)
+    ensures out@ == state@.push(*value),
+{
+    state.push(*value);
+    state
+}
+
+spec fn fixture_merge_values(rows: Seq<(&str, &u64)>, count: int) -> Seq<u64>
+    decreases count,
+{
+    if count <= 0 { Seq::empty() }
+    else { fixture_merge_values(rows, count - 1).push(*rows[count - 1].1) }
+}
+
+proof fn fixture_merge_prefix_step<'a, S, V: 'a, P, W>(initial: S,
+    endpoint: policy::composition::CompositionEndpoint, rows: Seq<(&'a str, &'a V)>,
+    states: Seq<S>, index: int, prior: &P, write: &W)
+    where P: Fn(&S, policy::composition::CompositionEndpoint, &'a str, &'a V) -> Option<bool>,
+        W: Fn(S, policy::composition::CompositionEndpoint, &'a str, &'a V) -> S,
+    requires policy::composition::composition_merge_files_prefix(initial, endpoint, rows, states, prior, write),
+        0 <= index < states.len() - 1,
+    ensures write.ensures((states[index], endpoint, rows[index].0, rows[index].1), states[index + 1]),
+        exists|same: Option<bool>| #[trigger] prior.ensures(
+            (&states[index], endpoint, rows[index].0, rows[index].1), same) && same != Some(false),
+{
+    reveal(policy::composition::composition_merge_files_prefix);
+}
+
+proof fn fixture_merge_prefix_state(initial: Vec<u64>,
+    endpoint: policy::composition::CompositionEndpoint, rows: Seq<(&str, &u64)>,
+    states: Seq<Vec<u64>>, index: int)
+    requires policy::composition::composition_merge_files_prefix(initial, endpoint, rows, states,
+            &fixture_merge_prior, &fixture_merge_write),
+        0 <= index < states.len(),
+    ensures states[index]@ == initial@ + fixture_merge_values(rows, index),
+        forall|j: int| 0 <= j < index ==> *(#[trigger] rows[j]).1 != 0,
+    decreases index,
+{
+    reveal(policy::composition::composition_merge_files_prefix);
+    if index > 0 {
+        fixture_merge_prefix_state(initial, endpoint, rows, states, index - 1);
+        fixture_merge_prefix_step(initial, endpoint, rows, states, index - 1,
+            &fixture_merge_prior, &fixture_merge_write);
+        assert(fixture_merge_write.ensures((states[index - 1], endpoint,
+            rows[index - 1].0, rows[index - 1].1), states[index]));
+        assert(exists|same: Option<bool>| #[trigger] fixture_merge_prior.ensures(
+            (&states[index - 1], endpoint, rows[index - 1].0, rows[index - 1].1), same)
+            && same != Some(false));
+        assert(states[index]@ == states[index - 1]@.push(*rows[index - 1].1));
+        assert(states[index]@ =~= initial@ + fixture_merge_values(rows, index));
+    }
+}
+
+fn fixture_merge_trace(expected: &[u64], actual: &[u64])
+    requires expected@ =~= actual@,
+{
+    if expected.len() != actual.len() { panic!(); }
+    let mut i = 0usize;
+    while i < expected.len()
+        invariant expected@ == actual@, i <= expected.len(),
+        decreases expected.len() - i,
+    {
+        if expected[i] != actual[i] { panic!(); }
+        i += 1;
+    }
+}
+
+fn composition_merge_file_case(first: u64, second: u64, third: u64) {
+    use policy::composition::*;
+    let rows = [("首\0\n", &first), ("", &second), ("末\0\n", &third)];
+    let initial = vec![u64::MAX];
+    let ghost before = initial;
+    let (state, result) = merge_composition_files(initial, CompositionEndpoint::Candidate,
+        rows.as_slice(), &fixture_merge_prior, &fixture_merge_write);
+    proof {
+        reveal_with_fuel(fixture_merge_values, 4);
+        let states = choose|states: Seq<Vec<u64>>|
+            #[trigger] composition_merge_files_prefix(before, CompositionEndpoint::Candidate, rows@,
+                states, &fixture_merge_prior, &fixture_merge_write)
+            && state == states.last() && match result {
+                Ok(()) => states.len() == rows@.len() + 1,
+                Err(error) => states.len() <= rows@.len()
+                    && error == CompositionMergeError::Conflict(CompositionEndpoint::Candidate,
+                        rows@[states.len() - 1].0)
+                    && fixture_merge_prior.ensures((&states.last(), CompositionEndpoint::Candidate,
+                        rows@[states.len() - 1].0, rows@[states.len() - 1].1), Some(false)),
+            };
+        fixture_merge_prefix_state(before, CompositionEndpoint::Candidate, rows@,
+            states, states.len() - 1);
+        if first == 0 { assert(states.len() == 1); }
+        else if second == 0 { assert(states.len() == 2); }
+        else if third == 0 { assert(states.len() == 3); }
+        else { assert(states.len() == 4); }
+    }
+    if first == 0 { fixture_merge_trace(&[u64::MAX], state.as_slice()); }
+    else if second == 0 { fixture_merge_trace(&[u64::MAX, first], state.as_slice()); }
+    else if third == 0 { fixture_merge_trace(&[u64::MAX, first, second], state.as_slice()); }
+    else { fixture_merge_trace(&[u64::MAX, first, second, third], state.as_slice()); }
+    if first == 0 || second == 0 || third == 0 {
+        match result {
+            Err(CompositionMergeError::Conflict(endpoint, id)) => {
+                assert(endpoint == CompositionEndpoint::Candidate);
+                if !matches!(endpoint, CompositionEndpoint::Candidate) { panic!(); }
+                let expected = if first == 0 { "首\0\n" } else if second == 0 { "" } else { "末\0\n" };
+                let same = composition_text::equal_text(id, expected);
+                assert(same);
+                if !same { panic!(); }
+            },
+            _ => { assert(false); panic!(); },
+        }
+    } else {
+        assert(result.is_ok());
+        if result.is_err() { panic!(); }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_merge_keeps_successful_prefix_and_exact_first_conflict() {
+    composition_merge_file_case(1, 2, u64::MAX);
+    composition_merge_file_case(0, 0, 0);
+    composition_merge_file_case(1, 0, 0);
+    composition_merge_file_case(1, 2, 0);
+    composition_merge_file_case(u64::MAX, 1, 2);
+    use policy::composition::*;
+    let initial = vec![u64::MAX];
+    let rows: Vec<(&str, &u64)> = Vec::new();
+    let (state, result) = merge_composition_files(initial, CompositionEndpoint::Base,
+        rows.as_slice(), &fixture_merge_prior, &fixture_merge_write);
+    assert(result.is_ok());
+    if result.is_err() { panic!(); }
+    fixture_merge_trace(&[u64::MAX], state.as_slice());
+}
+
+fn fixture_merge_present(_state: &Vec<u64>, _endpoint: policy::composition::CompositionEndpoint)
+    -> (present: bool) ensures !present,
+{ false }
+
+fn fixture_merge_initialize(mut state: Vec<u64>, endpoint: policy::composition::CompositionEndpoint,
+    _snapshot: &bool) -> (out: Vec<u64>)
+    ensures out@ == state@.push(match endpoint {
+        policy::composition::CompositionEndpoint::Base => 10u64,
+        policy::composition::CompositionEndpoint::Candidate => 20u64,
+    }),
+{
+    state.push(match endpoint {
+        policy::composition::CompositionEndpoint::Base => 10,
+        policy::composition::CompositionEndpoint::Candidate => 20,
+    });
+    state
+}
+
+fn fixture_merge_environment(_state: &Vec<u64>, _endpoint: policy::composition::CompositionEndpoint,
+    snapshot: &bool) -> (same: bool) ensures same == *snapshot,
+{ *snapshot }
+
+fn fixture_merge_empty_files(_snapshot: &bool) -> (rows: Result<Vec<(&str, &u64)>, String>)
+    ensures match rows { Ok(rows) => rows@.len() == 0, _ => false },
+{ Ok(Vec::new()) }
+
+proof fn fixture_merge_empty_endpoint(initial: Vec<u64>, endpoint: policy::composition::CompositionEndpoint,
+    snapshot: Option<&bool>, out: (Vec<u64>, Result<(), policy::composition::CompositionMergeError>))
+    requires policy::composition::composition_merge_endpoint_result(initial, endpoint, snapshot,
+        &fixture_merge_present, &fixture_merge_initialize, &fixture_merge_environment,
+        &fixture_merge_empty_files, &fixture_merge_prior, &fixture_merge_write, out),
+    ensures out.0@ == if snapshot.is_some() { initial@.push(match endpoint {
+            policy::composition::CompositionEndpoint::Base => 10u64,
+            policy::composition::CompositionEndpoint::Candidate => 20u64,
+        }) } else { initial@ },
+        match snapshot {
+            Some(value) => if !*value { out.1 == Err::<(), policy::composition::CompositionMergeError>(
+                policy::composition::CompositionMergeError::Environment(endpoint)) } else { out.1.is_ok() },
+            None => out.1.is_ok(),
+        },
+{
+    reveal(policy::composition::composition_merge_endpoint_result);
+}
+
+fn composition_merge_endpoint_case(base: Option<&bool>, candidate: Option<&bool>) {
+    use policy::composition::*;
+    let initial = vec![u64::MAX];
+    let ghost before = initial;
+    let (state, result) = merge_composition_part(initial, base, candidate,
+        &fixture_merge_present, &fixture_merge_initialize, &fixture_merge_environment,
+        &fixture_merge_empty_files, &fixture_merge_prior, &fixture_merge_write);
+    proof {
+        let (middle, first) = choose|middle: Vec<u64>, first: Result<(), CompositionMergeError>|
+            #[trigger] composition_merge_endpoint_result(before, CompositionEndpoint::Base, base,
+                &fixture_merge_present, &fixture_merge_initialize, &fixture_merge_environment,
+                &fixture_merge_empty_files, &fixture_merge_prior, &fixture_merge_write, (middle, first))
+            && match first {
+                Err(error) => state == middle && result == Err::<(), CompositionMergeError>(error),
+                Ok(()) => composition_merge_endpoint_result(middle, CompositionEndpoint::Candidate, candidate,
+                    &fixture_merge_present, &fixture_merge_initialize, &fixture_merge_environment,
+                    &fixture_merge_empty_files, &fixture_merge_prior, &fixture_merge_write, (state, result)),
+            };
+        fixture_merge_empty_endpoint(before, CompositionEndpoint::Base, base, (middle, first));
+        if first.is_ok() {
+            fixture_merge_empty_endpoint(middle, CompositionEndpoint::Candidate, candidate, (state, result));
+        }
+    }
+    match base {
+        Some(value) => if !*value {
+            fixture_merge_trace(&[u64::MAX, 10], state.as_slice());
+            assert(result == Err::<(), CompositionMergeError>(CompositionMergeError::Environment(CompositionEndpoint::Base)));
+        } else {
+            match candidate {
+                None => fixture_merge_trace(&[u64::MAX, 10], state.as_slice()),
+                Some(_) => fixture_merge_trace(&[u64::MAX, 10, 20], state.as_slice()),
+            }
+        },
+        None => match candidate {
+            None => fixture_merge_trace(&[u64::MAX], state.as_slice()),
+            Some(_) => fixture_merge_trace(&[u64::MAX, 20], state.as_slice()),
+        },
+    }
+    let failure = match base { Some(value) => !*value, None => false }
+        || match candidate { Some(value) => !*value, None => false };
+    assert(result.is_err() == failure);
+    if result.is_err() != failure { panic!(); }
+    match result {
+        Err(CompositionMergeError::Environment(endpoint)) => {
+            let base_failed = match base { Some(value) => !*value, None => false };
+            match endpoint {
+                CompositionEndpoint::Base => { assert(base_failed); if !base_failed { panic!(); } },
+                CompositionEndpoint::Candidate => { assert(!base_failed); if base_failed { panic!(); } },
+            }
+        },
+        Err(_) => { assert(false); panic!(); },
+        Ok(()) => {},
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_merge_initializes_skips_and_preserves_base_before_candidate() {
+    let yes = true;
+    let no = false;
+    composition_merge_endpoint_case(None, None);
+    composition_merge_endpoint_case(Some(&yes), None);
+    composition_merge_endpoint_case(None, Some(&yes));
+    composition_merge_endpoint_case(Some(&yes), Some(&yes));
+    composition_merge_endpoint_case(Some(&no), Some(&no));
+    composition_merge_endpoint_case(Some(&no), Some(&yes));
+    composition_merge_endpoint_case(Some(&yes), Some(&no));
+    composition_merge_endpoint_case(None, Some(&no));
+}
+
 proof fn input_fixture_prefix_member(args: Seq<String>, kind: policy::InputKind, pairs: int, index: int)
     requires policy::input_prefix_valid(args, kind, pairs), 0 <= index < pairs,
     ensures policy::input_key_allowed(kind, args[1 + 2 * index]@),

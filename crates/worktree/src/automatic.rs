@@ -11,6 +11,136 @@ pub use owner_deployment::{absent_attachment_conflict, known_absent_enrollment};
 
 verus! {
 
+pub open spec fn admission_handoff_result<S, H, R, P>(initial: S,
+    handoff: H, reload: R, protect: P, out: (S, Result<(), String>)) -> bool
+    where H: FnOnce(S) -> (S, Result<(), String>),
+        R: FnOnce(S, String) -> (S, Result<(), String>),
+        P: FnOnce(S) -> (S, Result<(), String>),
+{
+    exists|attempted: S, result: Result<(), String>|
+        #[trigger] handoff.ensures((initial,), (attempted, result))
+        && match result {
+            Ok(()) => protect.ensures((attempted,), out),
+            Err(error) => exists|restored: S, recovery: Result<(), String>|
+                #[trigger] reload.ensures((attempted, error), (restored, recovery))
+                && match recovery {
+                    Err(failure) => out == (restored, Err::<(), String>(failure)),
+                    Ok(()) => protect.ensures((restored,), out),
+                },
+        }
+}
+
+/// 交接失败先保留原错并重读持久记录；必要保护成功才允许后续消费。
+pub fn admission_handoff<S, H, R, P>(initial: S, handoff: H, reload: R, protect: P)
+    -> (out: (S, Result<(), String>))
+    where H: FnOnce(S) -> (S, Result<(), String>),
+        R: FnOnce(S, String) -> (S, Result<(), String>),
+        P: FnOnce(S) -> (S, Result<(), String>),
+    requires handoff.requires((initial,)),
+        forall|state: S, error: String| reload.requires((state, error)),
+        forall|state: S| protect.requires((state,)),
+    ensures admission_handoff_result(initial, handoff, reload, protect, out),
+{
+    let (state, result) = handoff(initial);
+    let ghost attempted = state;
+    let ghost observation = result;
+    assert(handoff.ensures((initial,), (attempted, observation)));
+    match result {
+        Ok(()) => {
+            let out = protect(state);
+            assert(protect.ensures((attempted,), out));
+            out
+        },
+        Err(error) => {
+            let ghost original = error;
+            let (state, recovery) = reload(state, error);
+            let ghost restored = state;
+            let ghost reloaded = recovery;
+            assert(reload.ensures((attempted, original), (restored, reloaded)));
+            match recovery {
+                Err(error) => (state, Err(error)),
+                Ok(()) => {
+                    let out = protect(state);
+                    assert(protect.ensures((restored,), out));
+                    out
+                },
+            }
+        },
+    }
+}
+
+pub open spec fn enrollment_write_result<S, W, A>(initial: S,
+    write: W, after: A, out: (S, Result<(), String>)) -> bool
+    where W: FnOnce(S) -> (S, Result<(), String>),
+        A: FnOnce(S) -> (S, Result<(), String>),
+{
+    exists|written: S, writing: Result<(), String>|
+        #[trigger] write.ensures((initial,), (written, writing))
+        && match writing {
+            Err(error) => out == (written, Err::<(), String>(error)),
+            Ok(()) => after.ensures((written,), out),
+        }
+}
+
+pub open spec fn enrollment_record_result<S, B, W, A>(initial: S, grows: bool,
+    before: B, write: W, after: A, out: (S, Result<(), String>)) -> bool
+    where B: FnOnce(S) -> (S, Result<(), String>),
+        W: FnOnce(S) -> (S, Result<(), String>),
+        A: FnOnce(S) -> (S, Result<(), String>),
+{
+    if grows {
+        exists|prepared: S, preparation: Result<(), String>|
+            #[trigger] before.ensures((initial,), (prepared, preparation))
+            && match preparation {
+                Err(error) => out == (prepared, Err::<(), String>(error)),
+                Ok(()) => enrollment_write_result(prepared, write, after, out),
+            }
+    } else {
+        enrollment_write_result(initial, write, after, out)
+    }
+}
+
+/// 新引用先保护；收窄沿用旧保护，写入成功后才发布当前引用。
+pub fn publish_enrollment_record<S, B, W, A>(initial: S, grows: bool,
+    before: B, write: W, after: A) -> (out: (S, Result<(), String>))
+    where B: FnOnce(S) -> (S, Result<(), String>),
+        W: FnOnce(S) -> (S, Result<(), String>),
+        A: FnOnce(S) -> (S, Result<(), String>),
+    requires before.requires((initial,)),
+        forall|state: S| write.requires((state,)),
+        forall|state: S| after.requires((state,)),
+    ensures enrollment_record_result(initial, grows, before, write, after, out),
+{
+    let (state, preparation) = if grows { before(initial) } else { (initial, Ok(())) };
+    let ghost prepared = state;
+    let ghost preparation_result = preparation;
+    assert(if grows { before.ensures((initial,), (prepared, preparation_result)) }
+        else { prepared == initial && preparation_result == Ok::<(), String>(()) });
+    match preparation {
+        Err(error) => {
+            let out = (state, Err(error));
+            assert(enrollment_record_result(initial, grows, before, write, after, out));
+            return out;
+        },
+        Ok(()) => (),
+    }
+    let (state, writing) = write(state);
+    let ghost written = state;
+    let ghost writing_result = writing;
+    assert(write.ensures((prepared,), (written, writing_result)));
+    let out = match writing {
+        Err(error) => (state, Err(error)),
+        Ok(()) => {
+            let out = after(state);
+            assert(after.ensures((written,), out));
+            out
+        },
+    };
+    assert(enrollment_write_result(prepared, write, after, out));
+    assert(enrollment_record_result(initial, grows, before, write, after, out));
+    out
+}
+
 /// Only explicit maintenance with the original exclusion probes a missing cache.
 pub fn absence_probe_required(maintenance: bool, cache_pending: bool, excluded: bool)
     -> (required: bool)
@@ -1846,6 +1976,7 @@ impl Manager {
             scope,
             exclusive_namespace,
             wait,
+            true,
             recover_published_results,
         )
         .map(Some)
@@ -1857,6 +1988,7 @@ impl Manager {
         scope: &Path,
         exclusive_namespace: bool,
         wait: bool,
+        protect: bool,
         recover_published_results: bool,
     ) -> Result<Self, String> {
         let scope = absolute(scope, true)?;
@@ -2047,7 +2179,9 @@ impl Manager {
         if recover_published_results {
             manager.reconcile_published_results()?;
         }
-        manager.protect_originals()?;
+        if protect {
+            manager.protect_originals()?;
+        }
         Ok(manager)
     }
     /// The enrollment is an actual durable consumer, independently of any
@@ -2454,28 +2588,32 @@ impl Manager {
         let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(
             &self.inputs.policy.coordinator_root,
         )?;
-        if let Some(inventory) = &inventory {
-            let previous: Ledger = decode(&fs::read(&path).map_err(|e| e.to_string())?)?;
-            let mut paths = self.original_paths(&previous)?;
-            paths.extend(self.original_paths(&self.ledger)?);
-            // Protect both possible durable records before publication. A
-            // failed ledger write leaves the previous recovery inputs rooted.
-            inventory.reference_paths(
-                &self.original_role()?,
-                &paths.into_iter().collect::<Vec<_>>(),
-            )?;
-        }
-        write_json(&path, &self.ledger, false)?;
-        if let Some(inventory) = inventory {
-            inventory.reference_paths(
-                &self.original_role()?,
-                &self
-                    .original_paths(&self.ledger)?
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-            )?;
-        }
-        Ok(())
+        let Some(inventory) = inventory else {
+            return write_json(&path, &self.ledger, false).map(|_| ());
+        };
+        let previous: Ledger = decode(&fs::read(&path).map_err(|e| e.to_string())?)?;
+        let previous = self.original_paths(&previous)?;
+        let next = self.original_paths(&self.ledger)?;
+        let grows = !next.is_subset(&previous);
+        let role = self.original_role()?;
+        let (_, result) = publish_enrollment_record(
+            (),
+            grows,
+            |()| {
+                let mut paths = previous;
+                paths.extend(next.iter().cloned());
+                let result =
+                    inventory.reference_paths(&role, &paths.into_iter().collect::<Vec<_>>());
+                ((), result)
+            },
+            |()| ((), write_json(&path, &self.ledger, false).map(|_| ())),
+            |()| {
+                let result =
+                    inventory.reference_paths(&role, &next.iter().cloned().collect::<Vec<_>>());
+                ((), result)
+            },
+        );
+        result
     }
     fn stable(&self, r: &mut Runner) -> Result<(), String> {
         self._namespace.stable()?;
@@ -4061,7 +4199,15 @@ impl Manager {
         self.ledger.entries[i].cleanup = Some(CleanupProgress {
             stage,
             detail: detail.into(),
-            report_path: report["report_path"].as_str().map(str::to_owned),
+            // A whole-round report is still being published while unrelated
+            // business completes. Progress consumes only the observation, not
+            // that publisher's path. Actual cleanup children retain their own
+            // sealed original when they return through this same boundary.
+            report_path: if report["operation"] == "maintain" {
+                None
+            } else {
+                report["report_path"].as_str().map(str::to_owned)
+            },
         });
         self.save()
     }
@@ -4503,6 +4649,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     target.is_none(),
                 );
             }
+            let handoff = crate::verified_lifecycle::ordinary_admission(operation.as_str());
             let mut manager = Manager::from_inputs(
                 r,
                 inputs,
@@ -4510,12 +4657,44 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 target.as_deref().unwrap_or(&invoking),
                 operation == "deploy-owner",
                 true,
+                !handoff,
                 false,
             )?;
             manager.restore_absent_policy(r)?;
             if !matches!(operation.as_str(), "maintain" | "import") {
                 manager.adopt_live_policy(r)?;
             }
+            let mut manager = if handoff {
+                // Settle sealed predecessors before adding another consumer,
+                // including at the previous role's membership limit. Recovery
+                // failure preserves the durable ledger and its original error;
+                // independent work still proceeds if its protection succeeds.
+                let (manager, result) = admission_handoff(
+                    manager,
+                    |mut manager| {
+                        let result = manager.reconcile_published_results();
+                        (manager, result)
+                    },
+                    |mut manager, error| {
+                        report["result_handoff_error"] = value!(error);
+                        let result = (|| {
+                            let path =
+                                no_symlink_parents(&manager.record_directory, "ledger.json")?;
+                            manager.ledger = decode(&fs::read(path).map_err(|e| e.to_string())?)?;
+                            Ok(())
+                        })();
+                        (manager, result)
+                    },
+                    |manager| {
+                        let result = manager.protect_originals();
+                        (manager, result)
+                    },
+                );
+                result?;
+                manager
+            } else {
+                manager
+            };
             manager.inputs.report_source(report);
             report["drain"] = value!([]);
             report["cleanup_failures"] = value!([]);
