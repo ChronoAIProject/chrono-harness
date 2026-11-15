@@ -41,11 +41,15 @@ pub use continuity_plan::validate_source_plan;
 mod source_registration;
 #[cfg(not(verus_keep_ghost))]
 pub use chrono_judge_registration::{
-    ObjectFieldError, object_error_parts, validate_object_fields, validate_reference_syntax,
+    ObjectFieldError, Retained, RetainedError, RetainedObservation, object_error_parts,
+    parse_retained, select_retained, validate_object_fields, validate_reference_syntax,
 };
 #[cfg(verus_keep_ghost)]
+pub use source_registration::inputs::{retained_error_head, retained_error_suffix};
+#[cfg(verus_keep_ghost)]
 pub use source_registration::{
-    ObjectFieldError, object_error_parts, validate_object_fields, validate_reference_syntax,
+    ObjectFieldError, Retained, RetainedError, RetainedObservation, object_error_parts,
+    parse_retained, select_retained, validate_object_fields, validate_reference_syntax,
 };
 
 verus! {
