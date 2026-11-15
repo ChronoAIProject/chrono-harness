@@ -3232,10 +3232,7 @@ fn ordinary_use_hands_off_sealed_results_and_keeps_unqualified_results_pending()
         let process = h
             .root
             .join(used["managed_process_original"]["path"].as_str().unwrap());
-        assert_eq!(
-            fs::read(process.join("stdout")).unwrap(),
-            b"ordinary-work"
-        );
+        assert_eq!(fs::read(process.join("stdout")).unwrap(), b"ordinary-work");
     }
     let second_report = h.root.join(results[1]["report_path"].as_str().unwrap());
     let second_bytes = fs::read(&second_report).unwrap();
@@ -3252,16 +3249,17 @@ fn ordinary_use_hands_off_sealed_results_and_keeps_unqualified_results_pending()
     assert_eq!(code, 0, "{used} {error}");
     assert_eq!(
         h.ledger()["entries"][0]["enrollment"]["completed_uses"],
-        value!([results[1]["managed_use_receipt"], used["managed_use_receipt"]]),
+        value!([
+            results[1]["managed_use_receipt"],
+            used["managed_use_receipt"]
+        ]),
         "an incomplete predecessor report must stay pending while independent work proceeds"
     );
     assert_eq!(fs::read(&second_report).unwrap(), b"{\"status\":");
     fs::write(&second_report, second_bytes).unwrap();
-    let receipt_path = h.root.join(
-        results[1]["managed_use_receipt"]["path"]
-            .as_str()
-            .unwrap(),
-    );
+    let receipt_path = h
+        .root
+        .join(results[1]["managed_use_receipt"]["path"].as_str().unwrap());
     let receipt_bytes = fs::read(&receipt_path).unwrap();
     fs::write(&receipt_path, b"changed original receipt").unwrap();
     let third_receipt = used["managed_use_receipt"].clone();
@@ -3275,7 +3273,10 @@ fn ordinary_use_hands_off_sealed_results_and_keeps_unqualified_results_pending()
         ],
     );
     assert_eq!(code, 0, "{used} {error}");
-    assert_eq!(used["result_handoff_error"], "original lifecycle receipt changed");
+    assert_eq!(
+        used["result_handoff_error"],
+        "original lifecycle receipt changed"
+    );
     assert_eq!(
         h.ledger()["entries"][0]["enrollment"]["completed_uses"],
         value!([
@@ -3285,7 +3286,10 @@ fn ordinary_use_hands_off_sealed_results_and_keeps_unqualified_results_pending()
         ]),
         "a failed handoff must not publish a partial in-memory ledger or block independent use"
     );
-    assert_eq!(fs::read(&receipt_path).unwrap(), b"changed original receipt");
+    assert_eq!(
+        fs::read(&receipt_path).unwrap(),
+        b"changed original receipt"
+    );
     fs::write(receipt_path, receipt_bytes).unwrap();
 }
 

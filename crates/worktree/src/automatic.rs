@@ -2571,12 +2571,14 @@ impl Manager {
             |()| {
                 let mut paths = previous;
                 paths.extend(next.iter().cloned());
-                let result = inventory.reference_paths(&role, &paths.into_iter().collect::<Vec<_>>());
+                let result =
+                    inventory.reference_paths(&role, &paths.into_iter().collect::<Vec<_>>());
                 ((), result)
             },
             |()| ((), write_json(&path, &self.ledger, false).map(|_| ())),
             |()| {
-                let result = inventory.reference_paths(&role, &next.iter().cloned().collect::<Vec<_>>());
+                let result =
+                    inventory.reference_paths(&role, &next.iter().cloned().collect::<Vec<_>>());
                 ((), result)
             },
         );
@@ -4636,7 +4638,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     |mut manager, error| {
                         report["result_handoff_error"] = value!(error);
                         let result = (|| {
-                            let path = no_symlink_parents(&manager.record_directory, "ledger.json")?;
+                            let path =
+                                no_symlink_parents(&manager.record_directory, "ledger.json")?;
                             manager.ledger = decode(&fs::read(path).map_err(|e| e.to_string())?)?;
                             Ok(())
                         })();
