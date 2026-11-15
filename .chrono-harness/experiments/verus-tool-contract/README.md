@@ -503,7 +503,7 @@ loop_isolation_boundary、mut_refs_loops 和 exec_termination 六个完整目标
 仅接受一个行为 trait 加这三个标准标记；关联类型和其他动态形式仍按原规则拒绝。
 Rust 原始签名、强制转换、执行及 ghost 借用检查和实际编译均保留。
 
-四份独立生产输入沿现有 native bootstrap 执行，分别保留双流和真实退出状态：
+六份独立生产输入沿现有 native bootstrap 执行，分别保留双流和真实退出状态：
 
 | `investigate.verus-source.*-check` | 预期 |
 | --- | --- |
@@ -511,6 +511,8 @@ Rust 原始签名、强制转换、执行及 ghost 借用检查和实际编译�
 | `dyn-marker-assertion-check` | `Send` 不能加强方法结果，必须实际收到 assertion failed |
 | `dyn-marker-missing-send-check` | 无 Send 的动态类型不能传给 Send 使用方，必须收到 Rust 类型错误 |
 | `dyn-marker-borrow-check` | 同一动态对象不能同时可变借用两次，必须收到 Rust 借用错误 |
+| `dyn-marker-overlap-check` | 抽象后重叠的两项实现不得引入相反规格，必须收到 trait 冲突错误 |
+| `dyn-marker-incompatible-check` | 标记不能绕过行为 trait 的动态兼容性，必须收到 uses Self outside of the receiver |
 
 先观察原工具对正例的翻译失败，再应用补丁并复验。负例的非零不是 bootstrap 通过。
 沿原完整 runner 入口继续核对剩余错误；局部输入不授予正式工具或证明资格。
