@@ -119,6 +119,101 @@ fn host(nodes: usize, summaries: usize) -> tempfile::TempDir {
 fn inventory(root: &Path) -> Inventory {
     Inventory::adopted(root).unwrap().unwrap()
 }
+
+#[test]
+fn explicit_quota_observes_more_members_than_one_address_budget() {
+    if !isolated_capability_test("explicit_quota_observes_more_members_than_one_address_budget") {
+        return;
+    }
+    let d = host(32, 2);
+    let path = d.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    policy["keep_seconds"] = json!(3600);
+    policy["max_millis_per_round"] = json!(25);
+    policy["terminal_limits"] = json!({"fixture": {
+        "keep_seconds": 3600, "max_count": 2, "max_bytes": 1024,
+        "metadata_keep_seconds": 0
+    }});
+    fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(d.path());
+    let mut files = Vec::new();
+    for i in 0..40 {
+        let file = d
+            .path()
+            .join(format!(".chrono-harness/state/fixtures/quota-{i}"));
+        let output = owner.create("fixture", &file, false, json!({})).unwrap();
+        fs::write(&file, b"cache").unwrap();
+        output.complete(json!({"status":"passed"})).unwrap();
+        files.push(file);
+    }
+    let live = d.path().join(".chrono-harness/state/fixtures/live");
+    let publication = owner.create("fixture", &live, false, json!({})).unwrap();
+    fs::write(&live, b"active producer").unwrap();
+    let round = owner.maintain_explicit().unwrap();
+    assert_eq!(
+        round["terminal_quotas"]["fixture"]["scope_complete"], true,
+        "{round}"
+    );
+    assert_eq!(
+        round["terminal_quotas"]["fixture"]["errors"],
+        json!([]),
+        "{round}"
+    );
+    assert_eq!(
+        files.iter().filter(|file| file.exists()).count(),
+        2,
+        "{round}"
+    );
+    assert_eq!(fs::read(&live).unwrap(), b"active producer");
+    publication.complete(json!({"status":"passed"})).unwrap();
+}
+
+#[test]
+fn unknown_quota_member_preserves_other_outputs_until_its_scope_is_known() {
+    if !isolated_capability_test(
+        "unknown_quota_member_preserves_other_outputs_until_its_scope_is_known",
+    ) {
+        return;
+    }
+    let d = host(32, 2);
+    let path = d.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    policy["keep_seconds"] = json!(3600);
+    policy["terminal_limits"] = json!({"fixture": {
+        "keep_seconds": 3600, "max_count": 1, "max_bytes": 1024,
+        "metadata_keep_seconds": 0
+    }});
+    fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(d.path());
+    let mut files = Vec::new();
+    let mut first = None;
+    for i in 0..3 {
+        let file = d
+            .path()
+            .join(format!(".chrono-harness/state/fixtures/unknown-quota-{i}"));
+        let output = owner.create("fixture", &file, false, json!({})).unwrap();
+        first.get_or_insert_with(|| output.id().to_owned());
+        fs::write(&file, b"required original").unwrap();
+        output.complete(json!({"status":"passed"})).unwrap();
+        files.push(file);
+    }
+    let record = d
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/objects")
+        .join(first.unwrap())
+        .join("record.json");
+    let original = fs::read(&record).unwrap();
+    fs::write(&record, b"unknown declaration").unwrap();
+    let round = owner.maintain_explicit().unwrap();
+    assert_eq!(
+        round["terminal_quotas"]["fixture"]["scope_complete"], false,
+        "{round}"
+    );
+    for file in &files {
+        assert_eq!(fs::read(file).unwrap(), b"required original", "{round}");
+    }
+    fs::write(record, original).unwrap();
+}
 #[cfg(not(verus_keep_ghost))]
 fn maintenance(root: &Path) -> Value {
     let round = inventory(root).maintain().unwrap();
