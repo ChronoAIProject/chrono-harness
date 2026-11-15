@@ -185,7 +185,9 @@ fn enrollment_publication_skips_only_the_shrinking_preparation_and_stops_on_firs
     let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), true,
         before_error, write_ok, after_ok);
     assert(trace@ =~= seq![1u8]);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8]));
+    let expected = [1u8];
+    assert(expected@ =~= seq![1u8]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &expected));
     match result {
         Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "新增引用保护失败\0原件")),
         Ok(()) => require_absence_expectation(false),
@@ -193,7 +195,9 @@ fn enrollment_publication_skips_only_the_shrinking_preparation_and_stops_on_firs
     let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
         before_ok, write_error, after_ok);
     assert(trace@ =~= seq![2u8]);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[2u8]));
+    let expected = [2u8];
+    assert(expected@ =~= seq![2u8]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &expected));
     match result {
         Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "账本写入失败\0原件")),
         Ok(()) => require_absence_expectation(false),
