@@ -7,6 +7,8 @@
 use super::identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
+#[cfg(verus_keep_ghost)]
+use std::collections::BTreeSet;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -28,6 +30,29 @@ pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
         && pending_references),
 {
     retiring && disposing && sealed && entries_empty && pending_references
+}
+
+/// 只有退役条件已满足且每个剩余引用均已载入时，才尝试共同持有物理路径。
+pub fn metadata_path_ready(metadata_only: bool, references: &[String],
+    loaded: &BTreeSet<String>) -> (ready: bool)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures ready == (metadata_only && forall|i: int| 0 <= i < references@.len()
+        ==> loaded@.contains(#[trigger] references@[i])),
+{
+    if !metadata_only { return false; }
+    let mut index = 0;
+    while index < references.len()
+        invariant
+            vstd::laws_cmp::obeys_cmp::<String>(),
+            0 <= index <= references@.len(),
+            forall|i: int| 0 <= i < index
+                ==> loaded@.contains(#[trigger] references@[i]),
+        decreases references@.len() - index,
+    {
+        if !loaded.contains(&references[index]) { return false; }
+        index += 1;
+    }
+    true
 }
 }
 
@@ -1528,16 +1553,17 @@ impl Inventory {
             // now so their detachment and final retirement share one component.
             for record in observed.values().filter(|record| {
                 record.output.as_ref().is_some_and(|output| {
-                    metadata_only_retirement(
-                        retiring_report.as_ref() == Some(&record.id),
-                        output.phase == "disposing",
-                        output.manifest.sealed,
-                        output.manifest.entries.is_empty(),
-                        !output.references.is_empty(),
-                    ) && output
-                        .references
-                        .iter()
-                        .all(|id| retained_dependencies.contains(id))
+                    metadata_path_ready(
+                        metadata_only_retirement(
+                            retiring_report.as_ref() == Some(&record.id),
+                            output.phase == "disposing",
+                            output.manifest.sealed,
+                            output.manifest.entries.is_empty(),
+                            !output.references.is_empty(),
+                        ),
+                        &output.references,
+                        &retained_dependencies,
+                    )
                 })
             }) {
                 match self.path_gates(&[record.path.clone()], false, false, false) {
