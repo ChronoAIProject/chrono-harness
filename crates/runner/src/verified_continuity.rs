@@ -24,6 +24,8 @@ pub struct FileObservation {
     pub mode: String,
     pub kind: String,
     pub registered: bool,
+    /// 原登记已有分类时只追踪来源；源码连续性仅供 unknown 使用。
+    pub classified: bool,
 }
 
 /// 宿主显式声明的单文件引用语法；只改变两端的确切包围字节，目标仍须对应。
@@ -908,7 +910,7 @@ pub open spec fn assessment<I: Read>(base: &Endpoint, current: &Endpoint, path: 
             (Some(a), Some(b)) => {
                 let old = &base.files[a]; let new = &current.files[b];
                 let history = Some((old.path@, new.path@));
-                if !comparable(old, new, base, current) { Ok((history, None)) }
+                if new.classified || !comparable(old, new, base, current) { Ok((history, None)) }
                 else { match io.contents(true, old.path@) {
                     Err(error) => Err(error),
                     Ok(left) => match io.contents(false, new.path@) {
@@ -940,7 +942,7 @@ fn assess_path<I: Read>(base: &Endpoint, current: &Endpoint, path: &[u8], io: &I
     if let (Some(a), Some(b)) = (a, b) {
         let old = &base.files[a]; let new = &current.files[b];
         let history = Some(Origin { previous: old.path.clone(), current: new.path.clone() });
-        if !old.registered || !new.registered || !is_regular(old) || !is_regular(new)
+        if new.classified || !old.registered || !new.registered || !is_regular(old) || !is_regular(new)
             || !super::super::equal_text(old.mode.as_str(), new.mode.as_str())
             || !equal_bytes(old.metadata.as_slice(), new.metadata.as_slice())
             || (!super::super::equal_text(old.path.as_str(), new.path.as_str())
@@ -1008,8 +1010,9 @@ pub open spec fn assembled_file(
     file.path@ == tree.path@ && file.mode@ == tree.mode@ && file.kind@ == tree.kind@
         && (match file.registered {
             true => exists|i: int| unique_file(rows, vstd::utf8::encode_utf8(tree.path@), i)
-                && file.metadata@ == rows[i].metadata@,
-            false => !exists|i: int| unique_file(rows, vstd::utf8::encode_utf8(tree.path@), i),
+                && file.metadata@ == rows[i].metadata@ && file.classified == rows[i].classified,
+            false => !file.classified
+                && !exists|i: int| unique_file(rows, vstd::utf8::encode_utf8(tree.path@), i),
         })
 }
 
@@ -1029,9 +1032,13 @@ pub fn assemble(
     {
         let index = find_file(&rows, tree[i].path.as_str().as_bytes());
         let mut metadata = Vec::new();
-        if let Some(index) = index { append_bytes(&mut metadata, rows[index].metadata.as_slice()); }
+        let mut classified = false;
+        if let Some(index) = index {
+            append_bytes(&mut metadata, rows[index].metadata.as_slice());
+            classified = rows[index].classified;
+        }
         files.push(FileObservation { path: tree[i].path.clone(), mode: tree[i].mode.clone(), kind: tree[i].kind.clone(),
-            metadata, registered: index.is_some() });
+            metadata, registered: index.is_some(), classified });
         i += 1;
     }
     Endpoint { projects, files, outputs, reference_syntax: Vec::new() }
@@ -1077,6 +1084,7 @@ struct DecodedFile {
     edges: serde_json::Value,
     symlink: Option<serde_json::Value>,
     projection: Option<serde_json::Value>,
+    verification: Option<super::SourceVerification>,
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -1113,6 +1121,7 @@ pub fn observe_endpoint(
                 mode: String::new(),
                 kind: String::new(),
                 registered: false,
+                classified: row.verification.is_some(),
                 metadata: serde_json::to_vec(&(
                     row.owner,
                     row.surface,
@@ -1133,6 +1142,7 @@ pub fn observe_endpoint(
             mode: entry.mode,
             kind: entry.kind,
             registered: false,
+            classified: false,
             metadata: Vec::new(),
         })
         .collect();

@@ -40,16 +40,17 @@ impl c::Read for Bytes {
 
 fn file(path: &str) -> (out: c::FileObservation)
     ensures out.path@ == path@, out.metadata@ == seq![1u8], out.mode@ == "100644"@,
-        out.kind@ == "blob"@, out.registered,
+        out.kind@ == "blob"@, out.registered, !out.classified,
 {
     c::FileObservation { path: path.to_string(), metadata: vec![1u8], mode: "100644".to_string(),
-        kind: "blob".to_string(), registered: true }
+        kind: "blob".to_string(), registered: true, classified: false }
 }
 
 fn side(root: &str, path: &str) -> (out: c::Endpoint)
     ensures out.projects.len() == 1, out.projects[0].id@ == "p"@, out.projects[0].root@ == root@,
         out.files.len() == 1, out.files[0].path@ == path@, out.files[0].metadata@ == seq![1u8],
         out.files[0].mode@ == "100644"@, out.files[0].kind@ == "blob"@, out.files[0].registered,
+        !out.files[0].classified,
         out.outputs.len() == 0, out.reference_syntax.len() == 0,
 {
     c::Endpoint { projects: vec![c::ProjectRoot { id: "p".to_string(), root: root.to_string() }],
@@ -303,6 +304,31 @@ fn read_failure_preserves_the_original_error() {
     let error = match out { Err(error) => error, Ok(_) => String::new() };
     let exact = identifiers::equal_text(error.as_str(), "read failed");
     expect_verifier_true(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn classified_sources_retain_origin_without_reading_or_granting_continuity() {
+    let base = side("a", "a/x"); let mut current = side("b", "b/x");
+    proof { names(); single_move(&base, &current); }
+    current.files[0].classified = true;
+    proof { reveal(c::assessment); }
+    // 任何源码读取都会返回原错误；已分类路径应只取得来源。
+    let evidence = c::assess(&base, &current, &vec!["b/x".to_string()], &FailedRead {});
+    expect_verifier_true(evidence.is_ok()); let evidence = evidence.unwrap();
+    let origin = evidence.origin("b/x");
+    expect_verifier_true(origin.is_some());
+    let correct = identifiers::equal_text(origin.unwrap(), "a/x");
+    expect_verifier_true(correct);
+    let preserved = evidence.preserved("b/x");
+    expect_verifier_true(!preserved);
+    let old = sources::source_registry(vec![sources::SourceFile { path: "a/x".to_string(),
+        verification: Some(sources::SourceVerification { role: sources::SourceRole::Program,
+            roots: vec![sources::SourceProofRoot { path: "root".to_string(), operation: "proof".to_string() }] }) }], Some(true));
+    let new = sources::source_registry(vec![sources::SourceFile { path: "b/x".to_string(),
+        verification: Some(sources::SourceVerification { role: sources::SourceRole::Data, roots: Vec::new() }) }], Some(true));
+    proof { reveal_with_fuel(sources::classifications_error, 3); reveal_with_fuel(c::first_origin, 3); }
+    let result = sources::validate_file_classifications(&new, Ok(Some(&old)), &evidence);
+    expect_verifier_true(result.is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
