@@ -3103,6 +3103,16 @@ FIFO 首次发现生成确定的最短跳数和前驱；传播行逐槽对应原
 
 ## 执行资源上限
 
+启动树的身份容量也由 `verified_limits.rs` 维护。4096 个位置和子进程／启动器两类事件
+共享原有整数编码；`next_launch_generation` 在编码容量耗尽后拒绝分配，
+`launch_cookie` 拒绝零代次、越界位置和不可表示代次。合同保留完整原编码，要求两个事件
+均不溢出，且原位置、原代次分别精确解码。`process_ownership.rs` 的实际分配和观察器
+直接消费这些函数；原子计数更新失败发生在位置发布前，不留下初始化中的位置。
+独立预期核第一／最后位置、最大可编码身份及紧邻非法边界，并沿现有
+`verify.runner-limits`／`verify.runner-limits-tests` 及未过滤 runner 测试验收。
+本候选尚待执行这些检查；完整 runner 的共享映射、权限与 Send／Sync 证明仍未完成。
+没有新增依赖、证明根、受信接口、线程或预算，完整验证与运行成本未知。
+
 `crates/runner/src/verified_limits.rs` 负责执行资源准入的唯一判断：超时为正 `u64`，
 输出为 1 至 67,108,864 字节（64 MiB，含两端）的 `usize`。
 `valid_execution_bounds` 和单独的 `valid_output_limit` 分别证明返回值与规格充要相等。

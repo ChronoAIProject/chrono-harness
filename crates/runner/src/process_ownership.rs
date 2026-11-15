@@ -1,6 +1,7 @@
 //! Unix runner-owned launch tree. Anonymous inherited descriptors carry ownership,
 //! never argv/environment policy. Each launcher reaps its own children on cancellation.
 use crate::ProcessFailure;
+use crate::verified_limits::{LAUNCH_CAPACITY as CAPACITY, launch_cookie, next_launch_generation};
 use std::{
     collections::BTreeMap,
     fs::File,
@@ -12,10 +13,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-#[cfg(not(verus_keep_ghost))]
-use verus_builtin_macros::verus;
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
 
 const TREE_FD: i32 = 198;
 const CONTEXT_FD: i32 = 199;
@@ -25,10 +22,6 @@ const MAGIC: u64 = 0x4348524f4e4f5036;
 const OBSERVER_FD: i32 = 200;
 // Private copies must not alias the fixed inherited transport descriptors.
 pub(crate) const PRIVATE_FD_MIN: i32 = 202;
-
-verus! {
-const CAPACITY: usize = 4096;
-}
 
 #[repr(i32)]
 enum LaunchStage {
@@ -485,6 +478,13 @@ impl Launch {
         let acknowledgement_sender = high_descriptor(File::from(std::os::fd::OwnedFd::from(
             acknowledgement_sender,
         )))?;
+        // Exhaustion must fail before publishing a reserved slot. Generations
+        // never wrap or exceed the observer's child/launcher cookie encoding.
+        let generation = tree
+            .memory()
+            .next_generation
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, next_launch_generation)
+            .map_err(|_| ProcessFailure::from("process ownership generation exhausted"))?;
         let index = tree
             .slots()
             .iter()
@@ -496,10 +496,7 @@ impl Launch {
             .ok_or("process ownership capacity exhausted")?;
         let slot = &tree.slots()[index];
         slot.pid.store(0, Ordering::Release);
-        slot.generation.store(
-            tree.memory().next_generation.fetch_add(1, Ordering::AcqRel),
-            Ordering::Release,
-        );
+        slot.generation.store(generation, Ordering::Release);
         slot.terminal.store(false, Ordering::Release);
         slot.reaped.store(false, Ordering::Release);
         slot.terminal_observed_ns.store(0, Ordering::Release);
@@ -914,6 +911,7 @@ impl ExitObserver {
                         let reply =
                             unsafe { File::from_raw_fd(*(libc::CMSG_DATA(header).cast::<i32>())) };
                         let [index, generation, pid, launcher] = data;
+                        let cookie = launch_cookie(index, generation);
                         // The observer retains this endpoint until exit. It is
                         // private notification state, not a child capability.
                         let ack: i32 = if unsafe {
@@ -921,20 +919,23 @@ impl ExitObserver {
                         } < 0
                         {
                             std::io::Error::last_os_error().raw_os_error().unwrap_or(-2)
-                        } else if index < CAPACITY
-                            && shared.slots[index].generation.load(Ordering::Acquire) == generation
-                        {
-                            let cookie = generation * CAPACITY * 2 + index * 2;
-                            if wake.contains_key(&cookie) {
-                                0
-                            } else {
-                                identities
-                                    .register(pid as i32, launcher as i32, cookie)
-                                    .err()
-                                    .map_or(0, |e| e.raw_os_error().unwrap_or(-2))
-                            }
                         } else {
-                            -1
+                            match cookie {
+                                Some(cookie)
+                                    if shared.slots[index].generation.load(Ordering::Acquire)
+                                        == generation =>
+                                {
+                                    if wake.contains_key(&cookie) {
+                                        0
+                                    } else {
+                                        identities
+                                            .register(pid as i32, launcher as i32, cookie)
+                                            .err()
+                                            .map_or(0, |e| e.raw_os_error().unwrap_or(-2))
+                                    }
+                                }
+                                _ => -1,
+                            }
                         };
                         unsafe {
                             libc::send(
@@ -944,10 +945,9 @@ impl ExitObserver {
                                 libc::MSG_NOSIGNAL,
                             );
                         }
-                        if ack == 0 {
+                        if let (0, Some(cookie)) = (ack, cookie) {
                             changed = true;
-                            wake.entry(generation * CAPACITY * 2 + index * 2)
-                                .or_insert(reply);
+                            wake.entry(cookie).or_insert(reply);
                         }
                     }
                     identities.retain(|cookie| {

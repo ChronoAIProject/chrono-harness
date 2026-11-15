@@ -17,6 +17,44 @@ pub fn observable_socket(observe_sockets: bool, is_socket: bool) -> (allowed: bo
 
 pub const MAX_OUTPUT_BYTES: usize = 67_108_864;
 
+// One low bit distinguishes child and launcher events; twelve bits identify
+// the existing 4096 launch slots. The remaining bits belong to the generation.
+pub const LAUNCH_CAPACITY: usize = 4096;
+pub const MAX_LAUNCH_GENERATION: usize = (usize::MAX - 8191) / 8192;
+
+pub fn next_launch_generation(current: usize) -> (next: Option<usize>)
+    ensures
+        next.is_some() <==> 0 < current && current <= MAX_LAUNCH_GENERATION,
+        next.is_some() ==> next.unwrap() == current + 1,
+{
+    if current == 0 || current > MAX_LAUNCH_GENERATION {
+        None
+    } else {
+        Some(current + 1)
+    }
+}
+
+/// The even cookie leaves its following odd value for the launcher event.
+pub fn launch_cookie(index: usize, generation: usize) -> (cookie: Option<usize>)
+    ensures
+        cookie.is_some() <==> index < LAUNCH_CAPACITY
+            && 0 < generation && generation <= MAX_LAUNCH_GENERATION,
+        cookie.is_some() ==> {
+            &&& cookie.unwrap() as int == generation as int * 8192 + index as int * 2
+            &&& cookie.unwrap() < usize::MAX
+            &&& cookie.unwrap() % 2 == 0
+            &&& (cookie.unwrap() / 2) % LAUNCH_CAPACITY == index
+            &&& cookie.unwrap() / (LAUNCH_CAPACITY * 2) == generation
+            &&& ((cookie.unwrap() + 1) / 2) % LAUNCH_CAPACITY == index
+            &&& (cookie.unwrap() + 1) / (LAUNCH_CAPACITY * 2) == generation
+        },
+{
+    if index >= LAUNCH_CAPACITY || generation == 0 || generation > MAX_LAUNCH_GENERATION {
+        return None;
+    }
+    Some(generation * 8192 + index * 2)
+}
+
 pub open spec fn output_limit(bytes: usize) -> bool {
     0 < bytes && bytes <= MAX_OUTPUT_BYTES
 }
