@@ -1,5 +1,33 @@
 # Verus 实施范围
 
+## 缓存原结果重放与终态诊断
+
+`cache/src/attempt.rs::replay_cache_result` 拥有原结果的全部组合判断。只有计划存在、
+不是 JSON Null 且错误文本缺失时，才交回同一借用计划；计划缺失或为 Null 且错误文本
+存在时，原样返回完整错误。两者同时存在、两者都没有等其余组合保留原拒绝文字，
+不会重新派发。真实 `replay` 只取得三个原字段观察，消费该结果并克隆成功的原 JSON 值。
+
+`cache_publication_error_fragments` 产生固定七项借用字符串数组。原错误不存在时，
+前两项为空；原错误存在时保留完整原文和 `; `，即使原错误为空也保留分隔符。
+其余五项按原顺序保留发布失败文字、完整发布错误及原尝试的 `result.json` 地址。
+真实 `publication_error` 只用标准字符串拼接渲染该数组，不再自行选择原错误前缀。
+数组不增加堆上片段容器，完整运行和分配成本仍未测。
+
+三项独立 Verus 预期同时作为普通 Rust 测试运行，核对计划存在／Null／错误存在的
+全部八种组合、成功的完整计划、原错误、拒绝文字，以及错误片段顺序和缺失／空原错误
+的区别；覆盖空串、Unicode、NUL、换行和分隔符原文。沿用现役 planner 两项严格整
+crate 根和原未过滤 cache-tests，原环境错误重放、终态失败及中断恢复用例继续执行。
+没有新增依赖、仓内受信函数、证明入口、过滤、线程或预算。
+
+本范围采用以下明确外部接口合同：固定 Serde 的 `Value::get` 返回所请求的原字段
+或 None，字符串键索引在缺失时提供 Null，`is_null` 与 `as_str` 分别投影 Null 和原
+字符串观察；固定 Rust 1.95.0 的 `Result<&Value, String>::cloned` 只克隆 Ok 的完整
+原 JSON 值并保留 Err，`Value::clone` 保留完整值；`[&str]::concat` 按数组顺序无分隔地
+连接全部原 UTF-8 字符串。字符串借用、`str::to_string` 和数组索引沿固定 vstd 合同。
+这些标准库／Serde 内部接口未由本仓机械精化，不为仓内函数授予 `external_body` 或
+assume 例外。其余 JSON command 集合投影、原件写入事务、库存及 retention 内部、
+完整缓存调用组合和全仓覆盖门仍有各自义务；原超时和失败现场继续保留。
+
 ## 缓存库存准入与消费引用释放
 
 `cache/src/attempt.rs::admit_attempt_inventory` 直接处理真实库存采用结果；采用错误原样

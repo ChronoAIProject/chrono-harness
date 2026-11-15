@@ -8,6 +8,55 @@ use chrono_harness::{verified_identifiers as identifiers, verus};
 use vstd::prelude::*;
 
 verus! {
+pub open spec fn cache_result_replay<'a, T>(plan: Option<&'a T>, plan_is_null: bool,
+    error: Option<&str>, out: Result<&'a T, String>) -> bool
+{
+    if plan.is_some() && !plan_is_null && error.is_none() {
+        out == Ok::<&T, String>(plan.unwrap())
+    } else {
+        match out {
+            Err(message) => if (plan.is_none() || plan_is_null) && error.is_some() {
+                message@ == error.unwrap()@
+            } else {
+                message@ == "E_CACHE_ATTEMPT: invalid original result; no redispatch"@
+            },
+            _ => false,
+        }
+    }
+}
+
+/// 只有非 Null 的 JSON 计划与缺失错误的组合可以重放；原错误不改写。
+pub fn replay_cache_result<'a, T>(plan: Option<&'a T>, plan_is_null: bool,
+    error: Option<&str>) -> (out: Result<&'a T, String>)
+    ensures cache_result_replay(plan, plan_is_null, error, out),
+{
+    let selected = if plan_is_null { None } else { plan };
+    match (selected, error) {
+        (Some(value), None) => Ok(value),
+        (None, Some(error)) => Err(error.to_string()),
+        _ => Err("E_CACHE_ATTEMPT: invalid original result; no redispatch".to_string()),
+    }
+}
+
+/// 原错误是否存在决定前缀；固定片段保留完整错误与原件地址的顺序。
+pub fn cache_publication_error_fragments<'a>(relative: &'a str,
+    publication: &'a str, original: Option<&'a str>) -> (out: [&'a str; 7])
+    ensures
+        out@[0]@ == match original { Some(error) => error@, None => ""@ },
+        out@[1]@ == match original { Some(_) => "; "@, None => ""@ },
+        out@[2]@ == "E_CACHE_ATTEMPT: terminal publication: "@,
+        out@[3]@ == publication@,
+        out@[4]@ == "; original "@,
+        out@[5]@ == relative@,
+        out@[6]@ == "/result.json"@,
+{
+    let (previous, separator) = match original {
+        Some(error) => (error, "; "), None => ("", ""),
+    };
+    [previous, separator, "E_CACHE_ATTEMPT: terminal publication: ",
+        publication, "; original ", relative, "/result.json"]
+}
+
 /// Request digests and original addresses use complete text, including absence.
 pub fn same_attempt(expected: &str, original: Option<&str>) -> (bound: bool)
     ensures bound == match original { Some(value) => expected@ == value@, None => false },
@@ -607,23 +656,15 @@ mod runtime {
         result
     }
     fn publication_error(relative: &str, publication: &str, original: Option<&str>) -> String {
-        let publication = format!(
-            "E_CACHE_ATTEMPT: terminal publication: {publication}; original {relative}/result.json"
-        );
-        match original {
-            Some(original) => format!("{original}; {publication}"),
-            None => publication,
-        }
+        decision::cache_publication_error_fragments(relative, publication, original).concat()
     }
     fn replay(result: &Value) -> Result<Value, String> {
-        match (
-            result.get("plan").filter(|p| !p.is_null()),
+        decision::replay_cache_result(
+            result.get("plan"),
+            result["plan"].is_null(),
             result["error"].as_str(),
-        ) {
-            (Some(plan), None) => Ok(plan.clone()),
-            (None, Some(error)) => Err(error.to_owned()),
-            _ => Err("E_CACHE_ATTEMPT: invalid original result; no redispatch".into()),
-        }
+        )
+        .cloned()
     }
 
     /// Derive custody only from current command originals and verify the unchanged
