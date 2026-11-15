@@ -5083,15 +5083,34 @@ fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
     let out = policy::record_git_index_stage(&mut stages, a, "2");
     expect_tree_insert_ok(out);
     proof {
+        assert(stages@.dom() =~= set![policy::GitIndexStage { path: a, stage: "0" },
+            policy::GitIndexStage { path: a, stage: "1" },
+            policy::GitIndexStage { path: a, stage: "2" }]);
         assert forall|key: policy::GitIndexStage| #[trigger] stages@.contains_key(key)
             implies key.path.spec_bytes() == a.spec_bytes()
-                && key.stage.spec_bytes() != "3".spec_bytes() by {}
+                && key.stage.spec_bytes() != "3".spec_bytes() by {
+            assert(key == policy::GitIndexStage { path: a, stage: "0" }
+                || key == policy::GitIndexStage { path: a, stage: "1" }
+                || key == policy::GitIndexStage { path: a, stage: "2" });
+            assert(key.stage@ != "3"@);
+            vstd::utf8::encode_utf8_decode_utf8(key.stage@);
+            vstd::utf8::encode_utf8_decode_utf8("3"@);
+        }
     }
     let out = policy::record_git_index_stage(&mut stages, a, "3");
     expect_tree_insert_ok(out);
     proof {
+        assert(stages@.dom() =~= set![policy::GitIndexStage { path: a, stage: "0" },
+            policy::GitIndexStage { path: a, stage: "1" },
+            policy::GitIndexStage { path: a, stage: "2" },
+            policy::GitIndexStage { path: a, stage: "3" }]);
         assert forall|key: policy::GitIndexStage| #[trigger] stages@.contains_key(key)
-            implies key.path.spec_bytes() == a.spec_bytes() by {}
+            implies key.path.spec_bytes() == a.spec_bytes() by {
+            assert(key == policy::GitIndexStage { path: a, stage: "0" }
+                || key == policy::GitIndexStage { path: a, stage: "1" }
+                || key == policy::GitIndexStage { path: a, stage: "2" }
+                || key == policy::GitIndexStage { path: a, stage: "3" });
+        }
     }
     let out = policy::record_git_index_stage(&mut stages, b, "0");
     expect_tree_insert_ok(out);
