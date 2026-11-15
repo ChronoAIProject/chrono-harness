@@ -2866,11 +2866,7 @@ impl Inventory {
                 let root = no_symlink_parents(&self.root, &o.path)?;
                 match fs::symlink_metadata(&root) {
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                        disposal_fact = if o.phase == "disposing" {
-                            "absent-after-partial-disposal"
-                        } else {
-                            "already-absent-before-disposal"
-                        };
+                        disposal_fact = crate::verified_release::absent_disposal_fact(&o.phase);
                         return Ok(true);
                     }
                     Err(e) => return Err(e.to_string()),
@@ -3062,9 +3058,13 @@ impl Inventory {
                     match fs::symlink_metadata(&path) {
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                             l.outputs[i].manifest.entries.pop();
-                            if o.tree {
-                                self.save(&l, &gate)?;
-                            }
+                            crate::verified_release::checkpoint_disposal(
+                                (),
+                                o.tree,
+                                l.outputs[i].manifest.entries.len(),
+                                &|()| ((), self.save(&l, &gate)),
+                            )
+                            .1?;
                             continue;
                         }
                         Err(e) => return Err(e.to_string()),
@@ -3123,12 +3123,15 @@ impl Inventory {
                     l.outputs[i].reserved_bytes =
                         l.outputs[i].reserved_bytes.saturating_sub(entry.bytes);
                     l.outputs[i].manifest.entries.pop();
-                    // Missing regular entries are safely reconciled from the
-                    // durable disposing manifest on the next round. Tree and
-                    // partial-disposal cursors retain their per-step writes.
-                    if o.tree {
-                        self.save(&l, &gate)?;
-                    }
+                    // 已持久的 disposing 意图可恢复缺失项。部分树游标逐步保存；
+                    // 最后一项交给下面的终态／引用脱离保存，避免重复落盘空清单。
+                    crate::verified_release::checkpoint_disposal(
+                        (),
+                        o.tree,
+                        l.outputs[i].manifest.entries.len(),
+                        &|()| ((), self.save(&l, &gate)),
+                    )
+                    .1?;
                 }
                 Ok(l.outputs[i].manifest.entries.is_empty())
             })();
