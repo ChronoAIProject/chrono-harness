@@ -29,6 +29,148 @@ mod probe;
 
 verus! {
 
+fn record_publication_case(failure: u8, identity: usize, raw: &str,
+    temporary: &str, parent_path: &str, stage_error: &str)
+    requires failure <= 7,
+{
+    let encode = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<String, String>))
+        ensures publication_event.ensures((trace, 1, identity, raw), out.0),
+            match out.1 {
+                Err(error) => failure == 1 && error@ == stage_error@,
+                Ok(value) => failure != 1 && value@ == raw@,
+            },
+    {
+        (publication_event(trace, 1, identity, raw),
+            if failure == 1 { Err(stage_error.to_string()) } else { Ok(raw.to_string()) })
+    };
+    let write = |trace: PublicationTrace, bytes: &String|
+        -> (out: (PublicationTrace, Result<String, String>))
+        ensures out.0@.len() == trace@.len() + 1 && out.0@.drop_last() == trace@
+            && out.0@.last().0 == 2 && out.0@.last().1 == identity && out.0@.last().2@ == bytes@,
+            match out.1 {
+                Err(error) => failure == 2 && error@ == stage_error@,
+                Ok(value) => failure != 2 && value@ == temporary@,
+            },
+    {
+        (publication_event(trace, 2, identity, bytes.as_str()),
+            if failure == 2 { Err(stage_error.to_string()) } else { Ok(temporary.to_string()) })
+    };
+    let link = |trace: PublicationTrace, path: &String|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1 && out.0@.drop_last() == trace@
+            && out.0@.last().0 == 3 && out.0@.last().1 == identity && out.0@.last().2@ == path@,
+            match out.1 {
+                Err(error) => failure == 3 && error@ == stage_error@,
+                Ok(()) => failure != 3,
+            },
+    {
+        (publication_event(trace, 3, identity, path.as_str()),
+            if failure == 3 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let remove = |trace: PublicationTrace, path: &String|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1 && out.0@.drop_last() == trace@
+            && out.0@.last().0 == 4 && out.0@.last().1 == identity && out.0@.last().2@ == path@,
+            match out.1 {
+                Err(error) => failure == 4 && error@ == stage_error@,
+                Ok(()) => failure != 4,
+            },
+    {
+        (publication_event(trace, 4, identity, path.as_str()),
+            if failure == 4 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let parent = |trace: PublicationTrace| -> (out: (PublicationTrace, Option<String>))
+        ensures publication_event.ensures((trace, 5, identity, parent_path), out.0),
+            match out.1 {
+                None => failure == 5,
+                Some(value) => failure != 5 && value@ == parent_path@,
+            },
+    {
+        (publication_event(trace, 5, identity, parent_path),
+            if failure == 5 { None } else { Some(parent_path.to_string()) })
+    };
+    let open = |trace: PublicationTrace, path: String|
+        -> (out: (PublicationTrace, Result<usize, String>))
+        ensures out.0@.len() == trace@.len() + 1 && out.0@.drop_last() == trace@
+            && out.0@.last().0 == 6 && out.0@.last().1 == identity && out.0@.last().2@ == path@,
+            match out.1 {
+                Err(error) => failure == 6 && error@ == stage_error@,
+                Ok(file) => failure != 6 && file == identity,
+            },
+    {
+        (publication_event(trace, 6, identity, path.as_str()),
+            if failure == 6 { Err(stage_error.to_string()) } else { Ok(identity) })
+    };
+    let sync = |trace: PublicationTrace, file: usize|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 7, file, raw), out.0),
+            match out.1 {
+                Err(error) => failure == 7 && error@ == stage_error@,
+                Ok(()) => failure != 7,
+            },
+    {
+        (publication_event(trace, 7, file, raw),
+            if failure == 7 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let initial = publication_event(Vec::new(), 99, identity, stage_error);
+    let (trace, result) = policy::record_cache_attempt(initial,
+        encode, write, link, remove, parent, open, sync);
+    let calls = if failure == 0 { 7usize } else { failure as usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == identity);
+    expect_restore_text(trace[0].2.as_str(), stage_error);
+    expect_cache_true(trace[1].0 == 1 && trace[1].1 == identity);
+    expect_restore_text(trace[1].2.as_str(), raw);
+    if calls >= 2 {
+        expect_cache_true(trace[2].0 == 2 && trace[2].1 == identity);
+        expect_restore_text(trace[2].2.as_str(), raw);
+    }
+    if calls >= 3 {
+        expect_cache_true(trace[3].0 == 3 && trace[3].1 == identity);
+        expect_restore_text(trace[3].2.as_str(), temporary);
+    }
+    if calls >= 4 {
+        expect_cache_true(trace[4].0 == 4 && trace[4].1 == identity);
+        expect_restore_text(trace[4].2.as_str(), temporary);
+    }
+    if calls >= 5 {
+        expect_cache_true(trace[5].0 == 5 && trace[5].1 == identity);
+        expect_restore_text(trace[5].2.as_str(), parent_path);
+    }
+    if calls >= 6 {
+        expect_cache_true(trace[6].0 == 6 && trace[6].1 == identity);
+        expect_restore_text(trace[6].2.as_str(), parent_path);
+    }
+    if calls >= 7 {
+        expect_cache_true(trace[7].0 == 7 && trace[7].1 == identity);
+        expect_restore_text(trace[7].2.as_str(), raw);
+    }
+    match result {
+        Ok(()) => expect_cache_true(failure == 0),
+        Err(error) => {
+            expect_cache_true(failure != 0);
+            expect_restore_text(error.as_str(), if failure == 5 {
+                "E_CACHE_ATTEMPT: record parent"
+            } else { stage_error });
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn record_publication_keeps_every_stage_prefix_and_payload() {
+    let mut failure = 0u8;
+    while failure <= 7
+        invariant failure <= 8,
+        decreases 8 - failure,
+    {
+        record_publication_case(failure, 0, "", "", "", "");
+        record_publication_case(failure, usize::MAX, "raw/λ\0\n", "writing/λ\0\n",
+            "parent/λ\0\n", "stage; error/λ\0\n");
+        record_publication_case(failure, 0, "raw", "different temporary", "different parent", "error");
+        failure += 1;
+    }
+}
+
 fn attempt_finalization_case(terminal: bool, original_failure: bool, failure: u8,
     identity: usize, original_error: &str, stage_error: &str)
     requires failure <= 4,

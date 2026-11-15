@@ -1,5 +1,32 @@
 # Verus 实施范围
 
+## 缓存收据的原件发布顺序
+
+`cache/src/attempt.rs::record_cache_attempt` 拥有实际收据记录的完整顺序：先编码同一
+JSON 值，成功后才构造临时地址并写入、同步原字节，再将同一临时文件硬链接到目标，
+删除临时地址，取得目标父路径，打开并同步父目录。每个阶段首错都停止后续调用，保留
+完整原错误和该阶段实际返回的状态。缺失父路径只在临时地址删除成功后检查，由 Verus
+返回原 `E_CACHE_ATTEMPT: record parent`；同步的原结果直接返回。
+
+实际 `Attempt::record` 直接调用该流程，编码字节、临时地址、父路径和文件能力依次
+交给后续操作。同步回调先关闭文件再渲染原错误，保留原接口中的关闭顺序。真实硬链接
+冲突回归继续核对 `compiler/process.json.writing` 保留完整原结果、任务已加入、尝试
+未知且重入不重新派发，以及维护后原件仍在；不把组合证明扩大为文件系统原子性保证。
+
+独立 Verus 预期同体作为普通 Rust 测试运行，覆盖成功及七个阶段的首错、完整调用
+前缀、原状态、编码字节、临时地址、父路径、文件身份和完整错误。三组输入分别覆盖
+空串、Unicode／NUL／换行、不同载荷以及 usize 端点。沿用现役 planner 两项严格整
+crate 根和原未过滤 cache-tests；没有新增证明入口、依赖、受信函数、过滤、线程或预算。
+
+外部接口逐项限定为固定 Serde 的 `serde_json::to_vec` 及错误显示，固定 Rust 1.95.0
+的 `Path::with_extension`、`Path::parent`、`fs::hard_link`、`fs::remove_file`、
+`File::open`、`File::sync_all`、`drop` 和 `Result::map`／`map_err`。它们提供原编码
+结果、路径观察、实际 IO 结果、文件关闭及原错误转交；字符串与借用沿固定 vstd 合同。
+原 `Publication::write_file` 的资格、创建、写入及同步内部仍有仓内证明义务，不登记为
+外部公理，也不为回调或仓内函数授予 `external_body`／assume 例外。完整记录事务、
+保留实现及全仓覆盖仍未完成；新增构建、证明、CI、运行及存储总成本未测，旧失败
+原件继续保留。
+
 ## 缓存尝试的结果收尾
 
 `cache/src/attempt.rs::finalize_cache_attempt` 拥有新尝试的实际收尾顺序：先记录同一

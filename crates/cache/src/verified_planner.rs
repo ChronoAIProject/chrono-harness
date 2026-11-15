@@ -26,8 +26,8 @@ mod recovery_source;
 pub use crate::attempt::{
     CacheAttemptFailure, CacheAttemptStage, accept_original, admit_attempt_inventory,
     cache_attempt_failure_fragments, cache_publication_error_fragments, confirmed_probe,
-    finalize_cache_attempt, publish_cache_plan, release_cache_plan, release_custody,
-    replay_attempt, replay_cache_result, same_attempt,
+    finalize_cache_attempt, publish_cache_plan, record_cache_attempt, release_cache_plan,
+    release_custody, replay_attempt, replay_cache_result, same_attempt,
 };
 #[cfg(not(verus_keep_ghost))]
 pub use crate::recovery::{
@@ -42,14 +42,14 @@ pub use crate::recovery::{
 pub use attempt::{
     CacheAttemptFailure, CacheAttemptStage, accept_original, admit_attempt_inventory,
     cache_attempt_failure_fragments, cache_publication_error_fragments, confirmed_probe,
-    finalize_cache_attempt, publish_cache_plan, release_cache_plan, release_custody,
-    replay_attempt, replay_cache_result, same_attempt,
+    finalize_cache_attempt, publish_cache_plan, record_cache_attempt, release_cache_plan,
+    release_custody, replay_attempt, replay_cache_result, same_attempt,
 };
 #[cfg(verus_keep_ghost)]
 pub use attempt::{
     attempt_inventory_result, attempt_original_error, attempt_result_forwarded,
     cache_attempt_failure_parts, cache_attempt_finalization_result, cache_plan_publication_result,
-    cache_plan_release_result, cache_result_replay,
+    cache_plan_release_result, cache_record_publication_result, cache_result_replay,
 };
 #[cfg(verus_keep_ghost)]
 pub use recovery_source::*;
