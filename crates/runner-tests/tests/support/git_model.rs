@@ -1670,6 +1670,15 @@ mod runtime {
             "show-ref" | "for-each-ref" => {
                 let selected = a.iter().find(|v| v.starts_with("refs/"));
                 for (name, oid) in &repo.refs {
+                    if a[0] == "for-each-ref"
+                        && (oid.is_empty()
+                            || repo
+                                .symbolic
+                                .get(name)
+                                .is_some_and(|target| !repo.refs.contains_key(target)))
+                    {
+                        continue;
+                    }
                     if selected.is_some_and(|prefix| {
                         if a[0] == "show-ref" {
                             name != *prefix
@@ -1682,7 +1691,10 @@ mod runtime {
                     let line = if a.contains(&"--format=%(refname)") {
                         format!("{name}\n")
                     } else if a.contains(&"--format=%(refname) %(objectname) %(symref)") {
-                        format!("{name} {oid} \n")
+                        format!(
+                            "{name} {oid} {}\n",
+                            repo.symbolic.get(name).map(String::as_str).unwrap_or("")
+                        )
                     } else if a.contains(&"--hash") {
                         format!("{oid}\n")
                     } else {
