@@ -1523,39 +1523,7 @@ impl Inventory {
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
     pub fn reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
-        // This transition changes only the consumer's membership. Its members
-        // retain their outputs and dependency edges under the existing scoped
-        // exclusion, without loading those dependencies into this activity.
-        let gate =
-            self.addressed_gate_scope(&[], paths, &[consumer.into()], None, false, true, true)?;
-        let mut l = self.load(&gate)?;
-        let mut ids = BTreeSet::new();
-        for path in paths {
-            crate::relative_path(path)?;
-            if let Some(o) = l
-                .outputs
-                .iter()
-                .find(|o| o.path == *path || (o.tree && path.starts_with(&format!("{}/", o.path))))
-            {
-                if o.phase == "disposing" {
-                    return Err("referenced original disposal has started".into());
-                }
-                ids.insert(o.id.clone());
-            } // Unenrolled legacy originals retain their original semantics.
-        }
-        if consumer.is_empty()
-            || consumer.len() > 256
-            || ids.len() > self.policy.max_related_outputs
-            || (!l.roots.contains_key(consumer) && l.roots.len() >= self.policy.max_related_outputs)
-        {
-            return Err("retention consumer capacity/identity".into());
-        }
-        if ids.is_empty() {
-            l.roots.remove(consumer);
-        } else {
-            l.roots.insert(consumer.into(), ids.into_iter().collect());
-        }
-        self.save(&l, &gate)
+        self.partition_reference_paths(consumer, paths)
     }
     fn extend_reference_path(&self, consumer: &str, path: &str) -> Result<(), String> {
         let gate =
