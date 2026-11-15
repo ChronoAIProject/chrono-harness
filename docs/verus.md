@@ -1,5 +1,24 @@
 # Verus 实施范围
 
+## 输入快照的 schema 选择
+
+`judge-registration/src/inputs.rs::select_snapshot_schema` 直接拥有真实输入捕获、离线
+组合和登记快照绑定所用的版本选择。存在 selector 时始终使用 v3；没有 selector 时，
+直接配置版本恰为 2、3 或 4 才使用 v2，缺值及其余全部 u64 使用 v1。三项原公开
+schema 常量与该选择同在 Verus 中定义，结果合同固定完整原字符串。两个原 JSON／
+登记入口只转交观察并返回同一结果，不再自行分类。
+
+三组独立 Verus 预期同体作为普通 Rust 测试执行，核缺值、0、1、2、3、4、5 和
+u64 上界；泛化辅助函数还证明任意非 2／3／4 的直接版本都选 v1，以及任意版本观察
+在有 selector 时都选 v3。沿原两项严格整 crate CI 根和未过滤行为入口验收，不增加
+项目、依赖、证明入口、受信仓内函数、过滤、参数或预算。
+
+明确的外部观察为固定 Serde JSON 的字段索引和 `Value::as_u64`（缺值或非 u64 为
+None），以及固定 Rust 的 `Option::is_some`。登记引用获取的存量实现、JSON 到观察
+的完整机械对应、快照其它准入与发布事务仍有各自证明义务。selector 路径现在也先
+观察一次已有配置的版本字段；该观察只读，没有新增分配、内容复制、文件 IO 或进程。
+完整构建、证明、CI、运行、存储及维护成本未测，全仓覆盖门仍未完成。
+
 ## 保留输入的表示解析
 
 `judge-registration/src/inputs.rs::retained_shape` 直接消费同源 Verus 的
