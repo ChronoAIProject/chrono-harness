@@ -4,24 +4,24 @@
 
 设计参考固定版本 [trureturing 的 PR 入口](https://github.com/the-omega-institute/trureturing/blob/481b9d7c46c8ef94b34842eb888d1ac254b2349f/tools/scripts/pr.sh)：显式远端分支、head SHA、结构化结果、有界请求和等待。参考仓库只读，其政策、门数、语言工具链和认证代理不属于本产品。
 
-## 构建与调用
+## 安装与调用
 
-从本仓根目录执行登记的 `build.pr`：
+从本仓根目录执行登记的 `host.bootstrap-pr`，由现有 bootstrap 在生命周期保护下调用 `build.pr` 并安装：
 
 ```sh
-cargo build --locked --manifest-path crates/pr/Cargo.toml
+/bin/bash .chrono-harness/ci/bootstrap-native.sh . .chrono-harness/ci/bootstrap-pr.json
 ```
 
-当前源码入口为 `crates/pr/target/debug/chrono-pr`。发布计划已登记 Linux x86_64 和 macOS arm64 的 `chrono-pr`，通过[现有安装入口](distribution.md#一键安装)选择工具；所选固定发布的清单必须实际包含它，候选登记不表示已经公开发布或安装验收。
+本仓源码安装后的日常入口为 `.chrono-harness/bin/chrono-pr`。配方固定 Rust 工具链、安装源／目的和原报告 `.chrono-harness/state/pr-bootstrap.json`；安装失败保留原结果，退出码沿用 [bootstrap 入口](ci.md#this-repository)。源码变化后重新执行同一入口。发布计划已登记 Linux x86_64 和 macOS arm64 的 `chrono-pr`，通过[现有安装入口](distribution.md#一键安装)选择工具；所选固定发布的清单必须实际包含它，候选登记不表示已经公开发布或安装验收。
 
-本宿主将 `crates/pr/target/` 声明为 `finish-dispose`，因为构建完成后的 PR 命令仍需该执行物。普通 `build.pr` 使用结束后保留目录，调用方核对全部 PR 操作完成再走正式 finish；检出继续复用时，显式维护也保留该目录；实际检出处置仍须排除使用方。使用方须已有能访问目标仓库的 GitHub CLI。工具沿用 gh 的原生认证，不申请额外权限。`.chrono-harness/pr.json` 使用 `chrono-pr-config/v2`，显式设置仓库、目标分支、检查名称、gh 程序、资源上限，以及 `state_directory`／`state_producer`。本宿主采用 `.chrono-harness/state/pr-operations` 和 retention.json 登记的 `pr-original`。宿主必须采用现役 retention/v2，登记 `pr-original` 的操作目录范围；缺失时不派发 gh。进程原件由同一个操作目录所有者保护，无需单独登记 `check-original`。配置与结果均只接受当前格式。其他宿主提供自己的同格式文件；默认读取 `--host-root` 下的 `.chrono-harness/pr.json`，也可用 `--config` 指定。
+本宿主将 `crates/pr/target/` 声明为 `finish-dispose`，只用于构建复用；正式生命周期可在满足年龄与保全条件后回收它。日常命令消费已安装的 bin 产物，bin 沿现有 retain 政策保留，PR 操作不再要求保留整个编译缓存。安装前须已有兼容的工作树所有者，使用方须已有能访问目标仓库的 GitHub CLI。工具沿用 gh 的原生认证，不申请额外权限。`.chrono-harness/pr.json` 使用 `chrono-pr-config/v2`，显式设置仓库、目标分支、检查名称、gh 程序、资源上限，以及 `state_directory`／`state_producer`。本宿主采用 `.chrono-harness/state/pr-operations` 和 retention.json 登记的 `pr-original`。宿主必须采用现役 retention/v2，登记 `pr-original` 的操作目录范围；缺失时不派发 gh。进程原件由同一个操作目录所有者保护，无需单独登记 `check-original`。配置与结果均只接受当前格式。其他宿主提供自己的同格式文件；默认读取 `--host-root` 下的 `.chrono-harness/pr.json`，也可用 `--config` 指定。
 
 ```sh
-crates/pr/target/debug/chrono-pr pr-open \
+.chrono-harness/bin/chrono-pr pr-open \
   --head integration/my-change --head-sha <40位提交SHA> \
   --title '添加功能' --body-file /path/to/body.md
-crates/pr/target/debug/chrono-pr pr-status --pr 123 --head-sha <40位提交SHA>
-crates/pr/target/debug/chrono-pr pr-watch --pr 123 --head-sha <40位提交SHA>
+.chrono-harness/bin/chrono-pr pr-status --pr 123 --head-sha <40位提交SHA>
+.chrono-harness/bin/chrono-pr pr-watch --pr 123 --head-sha <40位提交SHA>
 ```
 
 所有命令支持 `--host-root`、`--config`；`pr-open` 可加 `--draft`。打开前，调用方先保存、检查并推送候选。工具只支持同仓库分支，先核远端分支 SHA，再查找相同 head／base 的现存打开 PR；唯一匹配则复用，无匹配才创建。标题和正文按字面值传给 gh，正文通过 stdin 传输。创建后重新读取 PR，核对仓库、编号、base、分支和 SHA。并发调用或网络中断不保证事务；创建失败或回读失败保留未知结果和原回执。恢复时先核原操作、远端 PR 与固定身份；再次打开虽然会先查询现存打开 PR，但空列表不证明旧创建没有发生，不能据此盲目重复创建。跨中断的自动恢复尚未实现。
