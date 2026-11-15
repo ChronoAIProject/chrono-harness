@@ -25,6 +25,45 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_selector_dispatch_requires_the_complete_v3_schema() {
+    proof {
+        reveal_strlit("chrono-input-snapshot/v1"); reveal_strlit("chrono-input-snapshot/v2");
+        reveal_strlit("chrono-input-snapshot/v3");
+        assert("chrono-input-snapshot/v1"@[23] != "chrono-input-snapshot/v3"@[23]);
+        assert("chrono-input-snapshot/v2"@[23] != "chrono-input-snapshot/v3"@[23]);
+    }
+    expect_continuity_bool(policy::snapshot_uses_selector(Some("chrono-input-snapshot/v3")));
+    expect_continuity_bool(!policy::snapshot_uses_selector(Some("chrono-input-snapshot/v1")));
+    expect_continuity_bool(!policy::snapshot_uses_selector(Some("chrono-input-snapshot/v2")));
+    expect_continuity_bool(!policy::snapshot_uses_selector(None));
+}
+
+fn non_v3_snapshot_does_not_select_contents(schema: &str)
+    requires schema@ != "chrono-input-snapshot/v3"@,
+{
+    expect_continuity_bool(!policy::snapshot_uses_selector(Some(schema)));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_selector_dispatch_preserves_unknown_text_boundaries() {
+    proof {
+        reveal_strlit(""); reveal_strlit("chrono-input-snapshot/v3");
+        reveal_strlit("chrono-input-snapshot/v3\0"); reveal_strlit("chrono-input-snapshot/v3λ");
+        reveal_strlit("chrono-input-snapshot/v3\n"); reveal_strlit("chrono-input-snapshot/v4");
+        assert(""@.len() != "chrono-input-snapshot/v3"@.len());
+        assert("chrono-input-snapshot/v3\0"@.len() != "chrono-input-snapshot/v3"@.len());
+        assert("chrono-input-snapshot/v3λ"@.len() != "chrono-input-snapshot/v3"@.len());
+        assert("chrono-input-snapshot/v3\n"@.len() != "chrono-input-snapshot/v3"@.len());
+        assert("chrono-input-snapshot/v4"@[23] != "chrono-input-snapshot/v3"@[23]);
+    }
+    non_v3_snapshot_does_not_select_contents("");
+    non_v3_snapshot_does_not_select_contents("chrono-input-snapshot/v3\0");
+    non_v3_snapshot_does_not_select_contents("chrono-input-snapshot/v3λ");
+    non_v3_snapshot_does_not_select_contents("chrono-input-snapshot/v3\n");
+    non_v3_snapshot_does_not_select_contents("chrono-input-snapshot/v4");
+}
+
 fn selector_binding_error(result: Result<(), &str>)
     requires match result { Err(message) => message@ == "E_INPUT_SNAPSHOT: invalid selector binding schema"@, _ => false },
 {

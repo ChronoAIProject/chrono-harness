@@ -1,5 +1,19 @@
 # Verus 实施范围
 
+## 输入快照的 selector 分支选择
+
+`judge-registration/src/inputs.rs` 的 `snapshot_shape` 和端点快照校验直接调用
+同源 Verus 的 `snapshot_uses_selector`。只有完整 `chrono-input-snapshot/v3`
+文字才进入 selector 内容或端点绑定分支；缺值、v1／v2 和任意其他文字均不选择。
+原 schema 准入和错误顺序继续由各调用方先执行。
+
+两组独立 Verus 预期同体普通运行，覆盖三种有效版本、缺值、未知版本，以及
+NUL、Unicode 和换行后缀；泛化预期核任意非 v3 文字。生产复用已有完整文本比较，
+保留原借用和单次比较，不增加内容复制、文件 IO、进程、依赖、证明入口或预算。
+外部观察只沿用固定 Serde JSON 字段索引和 `Value::as_str`；分支选择本身由 Verus
+证明，不把仓内函数声明为外部公理。完整 JSON 观察对应、分支内其余路径／端点
+绑定和事务仍未闭合，完整成本未测。
+
 ## 输入快照的 selector 绑定准入
 
 `judge-registration/src/inputs.rs::snapshot_shape` 的 v3 selector 内容分支直接调用
@@ -21,7 +35,7 @@ NUL 和 Unicode 保留原义，路径格式仍由原后续校验负责。
 原短路路径可能提前返回，新调用会先取得全部只读观察，可能增加 JSON 全值比较；
 没有新增复制、文件 IO 或进程，完整运行、构建、证明及存储成本未测。
 
-JSON 全值比较与原树的完整机械对应、v3 分支选择、对象字段和路径格式校验及外层
+JSON 全值比较与原树的完整机械对应、对象字段和路径格式校验及外层
 事务仍有各自证明义务；局部观察合同不证明完整快照或全仓覆盖。Python 暂缓。
 
 ## 输入快照的 schema 准入与缺失表示

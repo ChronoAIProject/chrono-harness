@@ -67,6 +67,19 @@ fn classify_snapshot_schema(schema: Option<&str>) -> (version: u8)
     }
 }
 
+/// 只有完整 v3 schema 才选择 selector 内容和端点绑定分支。
+pub fn snapshot_uses_selector(schema: Option<&str>) -> (selected: bool)
+    ensures selected == match schema {
+        Some(text) => text@ == "chrono-input-snapshot/v3"@,
+        None => false,
+    },
+{
+    match schema {
+        Some(text) => identifiers::equal_text(text, SNAPSHOT_SCHEMA_V3),
+        None => false,
+    }
+}
+
 /// 先拒绝未知 schema；只有 v3 可以携带 selector 字段。
 pub fn admit_snapshot_header(schema: Option<&str>, effective: bool, selection: bool)
     -> (out: Result<(), &'static str>)
@@ -510,7 +523,7 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
         value.get("selection").is_some(),
     )
     .map_err(str::to_string)?;
-    if value["schema"] == SNAPSHOT_SCHEMA_V3 {
+    if snapshot_uses_selector(value["schema"].as_str()) {
         let effective = value["effective_config_path"]
             .as_str()
             .ok_or("E_INPUT_SNAPSHOT: missing effective config path")?;
@@ -977,7 +990,7 @@ fn validate_inner(
             {
                 return Err(format!("{name}: snapshot configuration binding mismatch"));
             }
-            if retained["schema"] == SNAPSHOT_SCHEMA_V3
+            if snapshot_uses_selector(retained["schema"].as_str())
                 && (retained["effective_config_path"] != r.effective_config_path()
                     || retained["selection"] != r.selection().cloned().unwrap_or(Value::Null))
             {
