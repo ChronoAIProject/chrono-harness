@@ -1521,9 +1521,11 @@ impl Inventory {
             leases.extend(additional);
             path_dirs.extend(dirs);
             exclusive_paths.extend(target_paths);
-            // Metadata-only detachment must remain possible behind a busy
-            // report path. When that path is available, hold it now so the
-            // last detached edge can retire the report in this same component.
+            // Only the final metadata component can retire the report path.
+            // Earlier components keep the original object/edge exclusion;
+            // repeatedly locking an unused physical path consumes their budget.
+            // When all remaining edges are loaded, retain the available path
+            // now so their detachment and final retirement share one component.
             for record in observed.values().filter(|record| {
                 record.output.as_ref().is_some_and(|output| {
                     metadata_only_retirement(
@@ -1532,7 +1534,10 @@ impl Inventory {
                         output.manifest.sealed,
                         output.manifest.entries.is_empty(),
                         !output.references.is_empty(),
-                    )
+                    ) && output
+                        .references
+                        .iter()
+                        .all(|id| retained_dependencies.contains(id))
                 })
             }) {
                 match self.path_gates(&[record.path.clone()], false, false, false) {
