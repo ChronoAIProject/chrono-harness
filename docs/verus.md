@@ -335,10 +335,12 @@ Display 与 `Option<String>` 的 Debug 编码；JSON 沿用 serde_json 的既有
 未登记的改写保持未取得连续性，不按相似度或忽略任意空白取绿。源码 byte 同一不等于
 原文件全语义已证明；未知继续未知，真正编译与消费者行为仍由原未过滤检查验收。
 
-**产品和宿主政策同时修改：**本宿主只登记四条当前采用的形式。两条 shell 形式
+**产品和宿主政策同时修改：**本宿主只登记六条当前采用的形式。两条 shell 形式
 分别把已存在的 `$task_root`／`$task_main` 解释为仓库根；两条 Rust 形式只覆盖
 `owner.rs` 中原 `serde_json::from_slice(include_bytes!(…)).unwrap()` 与
 `frontend.rs` 中原 `.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join(…))` 的 rustfmt 换行和尾逗号。
+另两条分别覆盖 `frontend.rs`／`execution.rs` 保存失败样本时换行并缩进 12 空格的
+`Path::new(env!("CARGO_MANIFEST_DIR")).join(…)`；两端格式完全相同，只迁移路径字面值。
 包围表达式、输入、调用和断言保持原义，完整原测试继续验收。声明的语言语义等价性是
 宿主政策责任，通用核心只证明声明限定的字节关系和实际引用目标；它不证明任意声明语义。
 因此不能把当前局部证明扩写为“任意逻辑变化都能被识别”，也不能登记含逻辑变化的形式。
