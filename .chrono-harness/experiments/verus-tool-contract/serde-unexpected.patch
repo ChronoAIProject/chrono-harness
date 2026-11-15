@@ -1,3 +1,16 @@
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -3,6 +3,9 @@
+ use std::borrow::Cow;
+
+ verus! {
++
++#[verifier::external_type_specification]
++pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
+
+ #[verifier::external_trait_specification]
+ pub trait ExExpected {
 diff --git a/source/rust_verify_test/tests/serde_unexpected.rs b/source/rust_verify_test/tests/serde_unexpected.rs
 new file mode 100644
 --- /dev/null
