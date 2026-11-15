@@ -684,7 +684,9 @@ pub proof fn registry_map_value<V>(map: Map<String, V>, key: String)
     ensures registry_map(map).contains_key(key@), registry_map(map)[key@] == map[key],
 {
     broadcast use Set::lemma_map_contains;
-    assert(exists|stored: String| map.contains_key(stored) && stored@ == key@);
+    assert(map.dom().contains(key));
+    map.dom().lemma_map_contains(|stored: String| stored@, key@);
+    assert(map.dom().map(|stored: String| stored@).contains(key@));
     let stored = choose|stored: String| map.contains_key(stored) && stored@ == key@;
     assert(stored == key);
 }
