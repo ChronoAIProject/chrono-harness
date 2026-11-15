@@ -78,7 +78,6 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn capture_rejects_retired_endpoint_options_before_accessing_host_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -100,7 +99,6 @@ fn capture_rejects_retired_endpoint_options_before_accessing_host_inputs() {
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_strict() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -182,7 +180,6 @@ fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_str
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn captures_only_declared_bytes_and_environment_and_deduplicates_content() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -224,7 +221,6 @@ fn captures_only_declared_bytes_and_environment_and_deduplicates_content() {
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn captures_observed_mismatch_without_rewriting_registration_and_preserves_old_blob() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -287,7 +283,6 @@ fn captures_observed_mismatch_without_rewriting_registration_and_preserves_old_b
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn pairs_explicit_snapshots_without_recapturing_the_old_environment_or_file() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -338,7 +333,6 @@ fn pairs_explicit_snapshots_without_recapturing_the_old_environment_or_file() {
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn wrong_checkout_dirty_config_missing_input_and_unsafe_output_never_publish_snapshot() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -417,7 +411,6 @@ fn wrong_checkout_dirty_config_missing_input_and_unsafe_output_never_publish_sna
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn transport_to_a_new_host_uses_retained_bytes_after_original_input_disappears() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -471,7 +464,6 @@ fn transport_to_a_new_host_uses_retained_bytes_after_original_input_disappears()
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn corrupt_existing_content_address_and_symlink_output_are_rejected() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -521,7 +513,6 @@ fn corrupt_existing_content_address_and_symlink_output_are_rejected() {
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn pairing_does_not_silently_normalize_conflicting_or_incomplete_snapshot_fields() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -597,7 +588,6 @@ fn pairing_does_not_silently_normalize_conflicting_or_incomplete_snapshot_fields
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn explicit_absence_is_retained_transported_and_distinct_from_empty_bytes() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -665,7 +655,6 @@ fn explicit_absence_is_retained_transported_and_distinct_from_empty_bytes() {
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn v2_absence_rejects_symlink_directory_and_non_directory_ancestors() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -744,7 +733,6 @@ fn v2_absence_rejects_symlink_directory_and_non_directory_ancestors() {
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn absence_versioning_rejects_ambiguous_declarations_and_legacy_null() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -810,7 +798,6 @@ fn absence_versioning_rejects_ambiguous_declarations_and_legacy_null() {
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1073,7 +1060,6 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn compose_genuine_captures_retains_originals_and_rejects_conflicts_and_missing_coverage() {
     if !chrono_git_boundary::isolated_git() {
         return;
