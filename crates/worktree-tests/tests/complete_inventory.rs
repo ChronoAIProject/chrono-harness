@@ -349,3 +349,85 @@ fn ordinary_completed_parent_expands_all_actions_and_original_receipts() {
     }
     assert_eq!(expanded_indices, (0..drain.len()).collect());
 }
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn unified_maintenance_reclaims_linked_outputs_and_measures_their_actual_root() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = EnrollmentOriginalsFixture::imported();
+    h.make_present();
+    fs::copy(h.root.join(POLICY_PATH), h.target.join(POLICY_PATH)).unwrap();
+    let inventory = Inventory::adopted(&h.target).unwrap().unwrap();
+    let expired = ".chrono-harness/state/linked-expired.bin";
+    let protected = ".chrono-harness/state/linked-protected.bin";
+    let live = ".chrono-harness/state/linked-live.bin";
+    for path in [expired, protected, live] {
+        fs::write(h.target.join(path), b"linked original").unwrap();
+    }
+    fs::write(h.root.join(protected), b"a different coordinator file").unwrap();
+    for path in [expired, protected] {
+        inventory.begin("lifecycle-original", path, value!(null)).unwrap()
+            .complete(value!({"status":"failed","error":"original failure"})).unwrap();
+    }
+    inventory.reference_paths("needed-failure", &[protected.into()]).unwrap();
+    let live_publication = inventory.begin("lifecycle-original", live, value!(null)).unwrap();
+    let source = fs::read(h.target.join("unsaved-source.rs")).unwrap();
+    let mut observed = Vec::new();
+    for attempt in 0..8 {
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{report}");
+        let rows = original(&h, &report);
+        let measured = rows.iter().find(|row| row["kind"] == "retention"
+            && row["source_root"] == value!(h.target)
+            && row["observation"]["kind"] == "declaration-state"
+            && row["observation"]["record"]["path"] == protected)
+            .expect("the coordinator must enumerate the linked retention owner");
+        assert_eq!(measured["observation"]["measurement"]["footprint"]["logical_bytes"], 15);
+        assert_eq!(fs::read(h.target.join(protected)).unwrap(), b"linked original");
+        assert_eq!(fs::read(h.target.join(live)).unwrap(), b"linked original");
+        assert_eq!(fs::read(h.root.join(protected)).unwrap(), b"a different coordinator file");
+        assert_eq!(fs::read(h.target.join("unsaved-source.rs")).unwrap(), source);
+        observed.push(report);
+        if !h.target.join(expired).exists() { break; }
+        assert!(attempt < 7, "bounded owner maintenance did not reclaim the expired linked output: {observed:?}");
+    }
+    assert!(!h.target.join(expired).exists());
+    drop(live_publication);
+    inventory.reference_paths("needed-failure", &[]).unwrap();
+    drop(inventory);
+    // A later coordinator round must reopen the same owner and continue after release.
+    for attempt in 0..8 {
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{report}");
+        if !h.target.join(protected).exists() { break; }
+        assert!(attempt < 7, "released linked original was not reclaimed: {report}");
+    }
+    assert!(!h.target.join(protected).exists());
+    assert_eq!(fs::read(h.target.join("unsaved-source.rs")).unwrap(), source);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn broken_linked_retention_preserves_unknown_bytes_and_keeps_coordinator_work() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::POLICY_PATH;
+    let h = EnrollmentOriginalsFixture::imported();
+    h.make_present();
+    fs::write(h.target.join(POLICY_PATH), b"unknown retention policy\n").unwrap();
+    let source = fs::read(h.target.join("unsaved-source.rs")).unwrap();
+    let (code, report) = h.invoke("maintain", false);
+    assert_ne!(code, 0, "a linked policy failure must remain visible: {report}");
+    let rows = original(&h, &report);
+    assert!(rows.iter().any(|row| row["kind"] == "retention"
+        && row["source_root"] == value!(h.root)
+        && row["observation"]["kind"] == "declaration"));
+    assert!(rows.iter().any(|row| row["kind"] == "enumeration-error"
+        && row["scope"].as_str().is_some_and(|scope| scope.contains(h.target.to_str().unwrap()))));
+    assert_eq!(fs::read(h.target.join(POLICY_PATH)).unwrap(), b"unknown retention policy\n");
+    assert_eq!(fs::read(h.target.join("unsaved-source.rs")).unwrap(), source);
+    assert_eq!(report["complete_inventory"]["member_enumeration_complete"], false);
+}
