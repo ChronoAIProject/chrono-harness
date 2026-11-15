@@ -1686,112 +1686,6 @@ impl Inventory {
         output.references = next.iter().cloned().collect();
         Ok(())
     }
-    /// Hand off explicitly declared process originals to an already sealed, rooted
-    /// consumer output. The caller holds read guards and has verified actual bytes.
-    /// Exclude and validate every publisher declaration, then release their
-    /// interim roots together; the destination already owns every dependency.
-    pub fn settle_publication_inputs(
-        &self,
-        destination: &str,
-        paths: &[String],
-    ) -> Result<(), String> {
-        let addressed_paths = [paths, &[destination.into()]].concat();
-        let gate = self.addressed_gate(&[], paths, &[], None, false, true)?;
-        let ledger = self.load(&gate)?;
-        let originals = paths
-            .iter()
-            .map(|path| {
-                let input = ledger
-                    .outputs
-                    .iter()
-                    .find(|o| o.path == *path)
-                    .ok_or("publication handoff input is not enrolled")?;
-                Ok(OriginalIdentity {
-                    id: input.id.clone(),
-                    path: input.path.clone(),
-                    identity: input.identity.clone(),
-                })
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-        let roles = originals
-            .iter()
-            .map(|input| self.consumer_role(&format!("publication-recheck:{}", input.id)))
-            .collect::<Result<Vec<_>, _>>()?;
-        drop(gate);
-        // Ordinary path discovery projects roots onto its selected objects.
-        // Explicit roles bring every publisher's full declaration under exclusion.
-        let gate = self.addressed_gate(&[], &addressed_paths, &roles, None, false, true)?;
-        let mut ledger = self.load(&gate)?;
-        let output = ledger
-            .outputs
-            .iter()
-            .find(|o| o.path == destination)
-            .ok_or("publication handoff destination is not enrolled")?;
-        if output.phase != "released"
-            || !output.manifest.sealed
-            || identity(&no_symlink_parents(&self.root, destination)?)? != output.identity
-        {
-            return Err("publication handoff destination is not sealed and protected".into());
-        }
-        let mut transfers = Vec::new();
-        let mut leases = Vec::new();
-        for (original, role) in originals.iter().zip(&roles) {
-            let path = &original.path;
-            let input = ledger
-                .outputs
-                .iter()
-                .find(|o| o.path == *path)
-                .ok_or("publication handoff input is not enrolled")?;
-            if input.id != original.id
-                || input.identity != original.identity
-                || input.id == output.id
-                || !output.references.contains(&input.id)
-                || input.phase != "released"
-                || !input.manifest.sealed
-                || identity(&no_symlink_parents(&self.root, path)?)? != input.identity
-            {
-                return Err(
-                    "publication handoff input is not sealed, referenced or unchanged".into(),
-                );
-            }
-            if input.tree || input.manifest.entries.len() != 1 {
-                return Err("publication handoff requires a sealed process file".into());
-            }
-            Manifest::validate(&input.manifest.entries[0], &self.root)?;
-            if let Some(ids) = ledger.roots.get(role) {
-                if !crate::verified_release::same_members(ids, &[input.id.clone()]) {
-                    return Err("caller original handoff root differs".into());
-                }
-                leases.extend(self.original_leases(
-                    &ledger,
-                    std::slice::from_ref(original),
-                    false,
-                )?);
-                transfers.push(role.clone());
-            }
-        }
-        // A completed handoff remains a no-op after the domain root is released.
-        // An actual pending producer transfer still requires a protected target.
-        if !transfers.is_empty() && !ledger.roots.values().any(|ids| ids.contains(&output.id)) {
-            return Err("publication handoff destination is not sealed and protected".into());
-        }
-        for role in &transfers {
-            self.reference_locked(&mut ledger, role, &[])?;
-        }
-        if !transfers.is_empty() {
-            self.save(&ledger, &gate)?;
-        }
-        drop(gate);
-        for lease in &leases {
-            let input = ledger
-                .outputs
-                .iter()
-                .find(|o| o.lease_id == lease.id())
-                .ok_or("publication handoff input capability has no original")?;
-            self.remember_input(lease, &input.id)?;
-        }
-        Ok(())
-    }
     /// Consumer roles are explicit roots. Replacing/releasing a role releases its prior closure.
     pub fn reference(&self, consumer: &str, ids: &[String]) -> Result<(), String> {
         if consumer.is_empty() || consumer.len() > 256 {
@@ -2866,11 +2760,7 @@ impl Inventory {
                 let root = no_symlink_parents(&self.root, &o.path)?;
                 match fs::symlink_metadata(&root) {
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                        disposal_fact = if o.phase == "disposing" {
-                            "absent-after-partial-disposal"
-                        } else {
-                            "already-absent-before-disposal"
-                        };
+                        disposal_fact = crate::verified_release::absent_disposal_fact(&o.phase);
                         return Ok(true);
                     }
                     Err(e) => return Err(e.to_string()),
@@ -3062,9 +2952,13 @@ impl Inventory {
                     match fs::symlink_metadata(&path) {
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                             l.outputs[i].manifest.entries.pop();
-                            if o.tree {
-                                self.save(&l, &gate)?;
-                            }
+                            crate::verified_release::checkpoint_disposal(
+                                (),
+                                o.tree,
+                                l.outputs[i].manifest.entries.len(),
+                                &|()| ((), self.save(&l, &gate)),
+                            )
+                            .1?;
                             continue;
                         }
                         Err(e) => return Err(e.to_string()),
@@ -3123,12 +3017,15 @@ impl Inventory {
                     l.outputs[i].reserved_bytes =
                         l.outputs[i].reserved_bytes.saturating_sub(entry.bytes);
                     l.outputs[i].manifest.entries.pop();
-                    // Missing regular entries are safely reconciled from the
-                    // durable disposing manifest on the next round. Tree and
-                    // partial-disposal cursors retain their per-step writes.
-                    if o.tree {
-                        self.save(&l, &gate)?;
-                    }
+                    // 已持久的 disposing 意图可恢复缺失项。部分树游标逐步保存；
+                    // 最后一项交给下面的终态／引用脱离保存，避免重复落盘空清单。
+                    crate::verified_release::checkpoint_disposal(
+                        (),
+                        o.tree,
+                        l.outputs[i].manifest.entries.len(),
+                        &|()| ((), self.save(&l, &gate)),
+                    )
+                    .1?;
                 }
                 Ok(l.outputs[i].manifest.entries.is_empty())
             })();

@@ -20,11 +20,47 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 #[path = "../../../identifiers/src/lib.rs"]
-mod identifiers;
+pub(crate) mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
 
 verus! {
+
+/// 中间树游标必须落盘；耗尽的游标交给现役终态／引用脱离保存。
+/// 选择和原结果转交归此函数，保存回调仍由保留声明的所有者执行。
+pub fn checkpoint_disposal<S, E, F>(state: S, tree: bool, remaining: usize, persist: &F)
+    -> (out: (S, Result<(), E>))
+    where F: Fn(S) -> (S, Result<(), E>),
+    requires persist.requires((state,)),
+    ensures if tree && remaining > 0 {
+        persist.ensures((state,), out)
+    } else {
+        out.0 == state && out.1 == Ok::<(), E>(())
+    },
+{
+    if tree && remaining > 0 {
+        let out = persist(state);
+        assert(persist.ensures((state,), out));
+        out
+    } else {
+        (state, Ok(()))
+    }
+}
+
+/// 根已缺失时仍按原持久阶段解释，不把省略的末项游标当作未执行删除。
+pub fn absent_disposal_fact(phase: &str) -> (fact: &'static str)
+    ensures fact@ == if phase@ == "disposing"@ {
+        "absent-after-partial-disposal"@
+    } else {
+        "already-absent-before-disposal"@
+    },
+{
+    if identifiers::equal_text(phase, "disposing") {
+        "absent-after-partial-disposal"
+    } else {
+        "already-absent-before-disposal"
+    }
+}
 
 pub open spec fn recovery_text(text: Option<&str>) -> Option<Seq<char>> {
     match text { Some(value) => Some(value@), None => None }
