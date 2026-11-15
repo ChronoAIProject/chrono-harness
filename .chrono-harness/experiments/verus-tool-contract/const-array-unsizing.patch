@@ -1,0 +1,55 @@
+--- /dev/null
++++ b/source/rust_verify_test/tests/const_array_unsizing.rs
+@@ -0,0 +1,52 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] const_slice_keeps_contents
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        use vstd::prelude::*;
++        const VALUES: &[u8] = &[3, 5];
++        verus! {
++            proof fn contents() {
++                assert(VALUES@ == seq![3u8, 5u8]);
++            }
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] nested_fields_table
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        use vstd::prelude::*;
++        fn fields() -> &'static [&'static str] {
++            const FIELDS: &[&str] = &["Unit", "Collect"];
++            FIELDS
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] const_slice_rejects_wrong_contents
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        use vstd::prelude::*;
++        const VALUES: &[u8] = &[3, 5];
++        verus! {
++            proof fn wrong_contents() {
++                assert(VALUES[1] == 9u8); // FAILS
++            }
++        }
++    } => Err(err) => assert_one_fails(err)
++}
++
++test_verify_one_file_with_options! {
++    #[test] exec_slice_keeps_contents
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        fn contents() {
++            let values = [3u8, 5u8];
++            let slice: &[u8] = &values;
++            assert(slice@ == seq![3u8, 5u8]);
++        }
++    } => Ok(())
++}
