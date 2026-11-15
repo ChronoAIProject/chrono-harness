@@ -1844,13 +1844,15 @@ impl Inventory {
                 observation
                     .as_ref()
                     .is_some_and(|(name, _)| *name == role.role),
-                ledger.roots.get(&role.role).cloned().unwrap_or_default()
-                    == role
+                ledger
+                    .roots
+                    .get(&role.role)
+                    .into_iter()
+                    .flatten()
+                    .eq(role
                         .ids
                         .iter()
-                        .filter(|id| !gate.maintenance || objects.contains_key(*id))
-                        .cloned()
-                        .collect::<Vec<_>>(),
+                        .filter(|id| !gate.maintenance || objects.contains_key(*id))),
             ) {
                 return Err("observation membership requires its domain transition".into());
             }
