@@ -14,12 +14,12 @@ use vstd::vpanic as panic;
 
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::retained_artifacts::retention as accounting;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
 #[cfg(verus_keep_ghost)]
 use policy::accounting;
 #[cfg(verus_keep_ghost)]
 use policy::identifiers;
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::verified_identifiers as identifiers;
 
 #[cfg(verus_keep_ghost)]
 #[path = "support/retention_frontier.rs"]
