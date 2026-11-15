@@ -67,6 +67,16 @@ fn ordinary_admission_selects_only_complete_registered_operation_names() {
         reveal_strlit("status"); reveal_strlit("maintain"); reveal_strlit("migrate");
         reveal_strlit("deploy-owner"); reveal_strlit("import");
         reveal_strlit(""); reveal_strlit("use\0");
+        assert("use"@.len() == 3);
+        assert("check"@.len() == 5);
+        assert("bootstrap"@.len() == 9);
+        assert("status"@.len() == 6);
+        assert("maintain"@.len() == 8);
+        assert("migrate"@.len() == 7);
+        assert("deploy-owner"@.len() == 12);
+        assert("import"@.len() == 6);
+        assert(""@.len() == 0);
+        assert("use\0"@.len() == 4);
     }
     require_absence_expectation(absence_policy::ordinary_admission("use"));
     require_absence_expectation(absence_policy::ordinary_admission("check"));
@@ -105,17 +115,20 @@ fn admission_handoff_orders_recovery_and_preserves_full_errors() {
         { handoff_trace_step(trace, 3, Err("必要保护失败\0完整".to_string())) };
     let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
         handoff_ok, reload_error, protect_ok);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 3]));
+    assert(trace@ =~= seq![1u8, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 3]));
     require_absence_expectation(result.is_ok());
 
     let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
         handoff_error, reload_ok, protect_ok);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 2, 3]));
+    assert(trace@ =~= seq![1u8, 2, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 2, 3]));
     require_absence_expectation(result.is_ok());
 
     let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
         handoff_error, reload_error, protect_ok);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 2]));
+    assert(trace@ =~= seq![1u8, 2]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 2]));
     match result {
         Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "原交接错误\0完整")),
         Ok(()) => require_absence_expectation(false),
@@ -123,7 +136,8 @@ fn admission_handoff_orders_recovery_and_preserves_full_errors() {
 
     let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
         handoff_ok, reload_ok, protect_error);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 3]));
+    assert(trace@ =~= seq![1u8, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 3]));
     match result {
         Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "必要保护失败\0完整")),
         Ok(()) => require_absence_expectation(false),
@@ -160,29 +174,34 @@ fn enrollment_publication_skips_only_the_shrinking_preparation_and_stops_on_firs
         { handoff_trace_step(trace, 3, Err("引用收窄失败\0原件".to_string())) };
     let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), true,
         before_ok, write_ok, after_ok);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 2, 3]));
+    assert(trace@ =~= seq![1u8, 2, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 2, 3]));
     require_absence_expectation(result.is_ok());
     let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
         forbidden, write_ok, after_ok);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![2u8, 3]));
+    assert(trace@ =~= seq![2u8, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[2u8, 3]));
     require_absence_expectation(result.is_ok());
     let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), true,
         before_error, write_ok, after_ok);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8]));
+    assert(trace@ =~= seq![1u8]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8]));
     match result {
         Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "新增引用保护失败\0原件")),
         Ok(()) => require_absence_expectation(false),
     }
     let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
         before_ok, write_error, after_ok);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![2u8]));
+    assert(trace@ =~= seq![2u8]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[2u8]));
     match result {
         Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "账本写入失败\0原件")),
         Ok(()) => require_absence_expectation(false),
     }
     let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
         before_ok, write_ok, after_error);
-    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![2u8, 3]));
+    assert(trace@ =~= seq![2u8, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[2u8, 3]));
     match result {
         Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "引用收窄失败\0原件")),
         Ok(()) => require_absence_expectation(false),
