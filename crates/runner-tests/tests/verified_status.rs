@@ -3754,7 +3754,7 @@ spec fn fixture_tree(tree: Map<policy::TreePath, policy::TreeEntry>,
 fn insert_tree_fixture(tree: &mut policy::Tree, path: &str, mode: &str, oid: &str, kind: &str)
     ensures forall|entries: Map<Seq<char>, policy::TreeEntryFields>|
         fixture_tree(old(tree)@, entries) && !entries.contains_key(path@)
-            ==> #[trigger] fixture_tree(tree@, entries.insert(path@, (mode@, oid@, kind@))),
+            ==> #[trigger] fixture_tree(final(tree)@, entries.insert(path@, (mode@, oid@, kind@))),
 {
     proof { policy::tree_path_obeys_cmp(); }
     let key = policy::TreePath::from_text(path);

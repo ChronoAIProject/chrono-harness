@@ -5445,6 +5445,15 @@
             "-Zchecksum-hash-algorithm=sha256"
           ]
         },
+        "verus-source-status-check": {
+          "operation": "investigate.verus-source.status-check",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus-source-status-tests.json"
+          ]
+        },
         "verus-source-status-tests": {
           "operation": "investigate.verus-source.status-tests",
           "tool": "cargo",

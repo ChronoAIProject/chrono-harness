@@ -65,10 +65,12 @@ native 原报告保存固定宿主提交、配置、完整操作、实际工具�
 `crates/judge-workflow/src/verified_execution.rs`，包含真实 response／status 源码及
 Serde derive；完整根、严格参数、编译和 dep-info 保留。所选 Serde 库路径来自上述
 原 Cargo 产物记录；依赖变化后须重新核实际记录和字节，不能静默选择另一个库。
-完整 workflow 根之后，`investigate.verus-source.status-tests` 沿同一 profile 验证原
-`crates/runner-tests/tests/verified_status.rs` 整 crate 独立预期；真实 Serde JSON 库路径同样
-来自前置 Cargo JSON 的产物记录，严格参数与同源工具保持。前置失败保留原错误，
-不声称后续根已经执行。
+独立预期使用登记的 `investigate.verus-source.status-check`，沿同一 native bootstrap 消费
+`bootstrap-verus-source-status-tests.json`：先核真实依赖，再执行
+`investigate.verus-source.status-tests` 的原 `crates/runner-tests/tests/verified_status.rs` 整 crate 根。
+真实 Serde JSON 库路径同样来自前置 Cargo JSON 的产物记录，严格参数与同源工具保持。
+两种根分开取得原结果；只改独立预期时不重复已经通过且输入不变的 workflow 根，
+一根失败也不冒充另一根已经执行或通过。
 该实验方法不登记正式 `output_contract`，普通退出成功不绕过原资格检查。
 执行复用已登记的 Cargo 和上游原 `verus` binary，显式消费同一 manifest／配置；
 保持宿主 cwd 及全部证明参数，不增加 CI 不认识的实验工具别名或另一个启动脚本。
