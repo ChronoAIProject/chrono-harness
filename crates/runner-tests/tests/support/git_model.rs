@@ -1934,6 +1934,21 @@ mod runtime {
                     return Err("not a fixture ancestor".into());
                 }
             }
+            "merge-base" if a.len() >= 3 && a[1] == "--independent" => {
+                let commits: BTreeSet<_> = a[2..].iter().map(|oid| resolve(repo, oid)).collect();
+                for commit in &commits {
+                    tree(repo, commit)?;
+                }
+                for commit in &commits {
+                    if !commits
+                        .iter()
+                        .any(|other| other != commit && ancestor(repo, commit, other))
+                    {
+                        out.extend_from_slice(commit.as_bytes());
+                        out.push(b'\n');
+                    }
+                }
+            }
             "rev-list" => {
                 let shallow: std::collections::BTreeSet<_> =
                     fs::read_to_string(common(root).join("shallow"))
