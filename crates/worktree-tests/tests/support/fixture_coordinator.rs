@@ -100,7 +100,15 @@ mod runtime {
                 "roles":{"feature":"integration","integration":"integration"}}});
         fs::write(root.join(".chrono-harness/worktree.json"),serde_json::to_vec(&config).unwrap()).unwrap();
         fs::write(root.join(".chrono-harness/cleanup.json"),serde_json::to_vec(&cleanup).unwrap()).unwrap();
-        fs::copy(source.join(".chrono-harness/retention.json"),root.join(".chrono-harness/retention.json")).unwrap();
+        let mut retention:Value=serde_json::from_slice(&fs::read(source.join(".chrono-harness/retention.json")).unwrap()).unwrap();
+        // This coordinator consumes only the four fixture producers above and
+        // their lifecycle originals. It never publishes instructions-operation,
+        // cache-plan or cache-probe-attempt outputs. Their repository quotas
+        // would scan unrelated fixture metadata inside the original 25 ms bound.
+        // Keep every retention and disposal bound; retire only these unused
+        // per-producer choices from this test-owned coordinator.
+        retention["terminal_limits"]=json!({});
+        fs::write(root.join(".chrono-harness/retention.json"),serde_json::to_vec(&retention).unwrap()).unwrap();
         policy::commit(&root);
         root
     })

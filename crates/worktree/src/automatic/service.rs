@@ -379,6 +379,83 @@ fn round(
 }
 
 #[cfg(not(verus_keep_ghost))]
+fn linked_retention_status(
+    r: &mut Runner,
+    token: &str,
+    inputs: &PolicyInputs,
+    path: &Path,
+) -> Result<&'static str, String> {
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok("absent"),
+        Err(error) => return Err(error.to_string()),
+        Ok(_) => {}
+    }
+    // Opening Inventory can create its namespace. Only inspect adoption here;
+    // absent policies need no attachment probes, and foreign roots get no writes.
+    let policy = no_symlink_parents(
+        path,
+        chrono_harness::retained_artifacts::retention::POLICY_PATH,
+    )?;
+    match fs::symlink_metadata(policy) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok("not-adopted"),
+        Err(error) => return Err(error.to_string()),
+        Ok(_) => {}
+    }
+    let owner = Manager::open_metadata(
+        r,
+        &inputs.policy.coordinator_root,
+        &inputs.config_path,
+        &inputs.anchor_config_bytes,
+        token,
+        path,
+        false,
+        false,
+    )?
+    .ok_or("cleanup policy disappeared")?;
+    let Some(index) = owner.current_entry(path) else {
+        return Ok("no-current-enrollment");
+    };
+    let head = r.oid(path, "HEAD")?;
+    owner.check_attachment(r, &owner.ledger.entries[index], &head, None)?;
+    Ok("ready")
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn maintain_retention_inventory(
+    root: &Path,
+    inventory: &mut inventory::Report,
+) -> Result<Option<Value>, String> {
+    match fs::symlink_metadata(root) {
+        Ok(metadata) if metadata.is_dir() => {}
+        Ok(_) => return Err("retention root is not a physical directory; preserve it".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            inventory.retention(root, value!({"kind":"source-result","status":"absent"}));
+            return Ok(None);
+        }
+        Err(error) => return Err(error.to_string()),
+    }
+    let root = absolute(root, false)?;
+    let Some(owner) = chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
+    else {
+        inventory.retention(
+            &root,
+            value!({"kind":"source-result","status":"not-adopted"}),
+        );
+        return Ok(None);
+    };
+    let result = owner.maintain_explicit_observed(|row| {
+        inventory.retention(&root, row.clone());
+        Ok(())
+    })?;
+    // Individual observations are already complete above. Keep source accounting
+    // and quota errors without duplicating the compact samples in the parent.
+    let mut summary = result.clone();
+    summary.as_object_mut().unwrap().remove("samples");
+    inventory.retention(&root, value!({"kind":"source-result","original":summary}));
+    Ok(Some(result))
+}
+
+#[cfg(not(verus_keep_ghost))]
 fn run_round(
     r: &mut Runner,
     token: &str,
@@ -407,6 +484,7 @@ fn run_round(
     inventory.worktrees(&observation, r, report, "before");
     let mut failures = Vec::new();
     let mut unprotected = Vec::new();
+    let mut linked_retention_roots = BTreeSet::new();
     match retirement::resume_retired_addresses(inputs, &directory, &namespace, r, report) {
         Ok(errors) => failures.extend(errors),
         Err(error) => failures.push(error),
@@ -445,6 +523,11 @@ fn run_round(
                 false,
             )?
             .ok_or("cleanup policy disappeared")?;
+            // A verified enrollment is the association; an empty admission or
+            // an inventory-only address cannot authorize a foreign store.
+            if &path != root && !owner.ledger.entries.is_empty() {
+                linked_retention_roots.insert(path.clone());
+            }
             owner.restore_absent_policy(r)?;
             if crate::verified_lifecycle::enrolled_policy_required(owner.ledger.entries.len()) {
                 owner.adopt_cleanup_policy(r, true)?;
@@ -560,17 +643,7 @@ fn run_round(
         namespace_complete,
         unprotected.len(),
         |(inventory, failures)| {
-            let result = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
-                .and_then(|owner| {
-                    owner
-                        .map(|owner| {
-                            owner.maintain_explicit_observed(|row| {
-                                inventory.retention(row.clone());
-                                Ok(())
-                            })
-                        })
-                        .transpose()
-                });
+            let result = maintain_retention_inventory(root, inventory);
             ((inventory, failures), result)
         },
         |state, result| (state, value!(result)),
@@ -596,6 +669,47 @@ fn run_round(
         },
     );
     report["output_retention"] = retention;
+    let mut linked_retention = Vec::new();
+    for path in linked_retention_roots {
+        if unprotected.contains(&path) {
+            inventory.retention(
+                &path,
+                value!({"kind":"source-result","status":"preserved",
+                "reason":"current enrollment original protection unavailable"}),
+            );
+            linked_retention.push(value!({"source_root":path,"status":"preserved",
+                "reason":"current enrollment original protection unavailable"}));
+            continue;
+        }
+        // The linked owner protects its own outputs. Unknown coordinator
+        // originals defer the coordinator store, not independent linked stores.
+        // No enrollment metadata lease spans this retention IO.
+        let result = (|| {
+            let status = linked_retention_status(r, token, inputs, &path)?;
+            if status != "ready" {
+                inventory.retention(&path, value!({"kind":"source-result","status":status}));
+                return Ok(status);
+            }
+            let result = maintain_retention_inventory(&path, &mut inventory)?;
+            Ok::<_, String>(if result.is_some() {
+                "reported"
+            } else {
+                "no-adopted-storage"
+            })
+        })();
+        match result {
+            Ok(status) => linked_retention.push(value!({"source_root":path,
+                "status":status,
+                "original":"see complete_inventory"})),
+            Err(error) => {
+                let scope = format!("retention:{}", path.display());
+                inventory.error(&scope, &error);
+                failures.push(format!("{scope}: {error}"));
+                linked_retention.push(value!({"source_root":path,"status":"failed","error":error}));
+            }
+        }
+    }
+    report["linked_output_retention"] = value!(linked_retention);
     inventory.worktrees(&observation, r, report, "after");
     if let Err(error) = inventory.finish(report) {
         failures.push(error);

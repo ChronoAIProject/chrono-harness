@@ -281,11 +281,11 @@ impl Report {
         }
     }
 
-    pub(super) fn retention(&mut self, mut row: Value) {
+    pub(super) fn retention(&mut self, source_root: &Path, mut row: Value) {
         if row["kind"] == "declaration-state" {
             if row["record"]["output"].is_object() {
                 if let Some(path) = row["record"]["path"].as_str() {
-                    row["measurement"] = self.measure(&self.root.join(path));
+                    row["measurement"] = self.measure(&source_root.join(path));
                     row["measurement"]["scope"] =
                         value!("current physical path; declaration identity is separate");
                 }
@@ -294,11 +294,17 @@ impl Report {
                 row["measurement"]["scope"] = value!("retired output declaration metadata only");
             }
             if !row["error"].is_null() {
-                self.error("retention-declaration", &row["error"]);
+                self.error(
+                    &format!("retention-declaration:{}", source_root.display()),
+                    &row["error"],
+                );
             }
         }
         if row["kind"] == "enumeration-error" {
-            self.error("retention-namespace", &row["error"]);
+            self.error(
+                &format!("retention-namespace:{}", source_root.display()),
+                &row["error"],
+            );
         }
         if row["kind"] == "round"
             && (!row["error"].is_null()
@@ -309,11 +315,27 @@ impl Report {
             self.enumeration_complete = false;
             self.measurements_complete = false;
             self.errors.push(format!(
-                "retention round {}: original error retained",
+                "retention {} round {}: original error retained",
+                source_root.display(),
                 row["address"]
             ));
         }
-        self.record(value!({"kind":"retention","owner":"runner-retention","observation":row}));
+        if row["kind"] == "source-result" {
+            for (producer, quota) in row["original"]["terminal_quotas"]
+                .as_object()
+                .into_iter()
+                .flatten()
+            {
+                for error in quota["errors"].as_array().into_iter().flatten() {
+                    self.error(
+                        &format!("retention-quota:{}:{producer}", source_root.display()),
+                        error,
+                    );
+                }
+            }
+        }
+        self.record(value!({"kind":"retention","owner":"runner-retention",
+            "source_root":source_root,"observation":row}));
     }
 
     pub(super) fn finish(mut self, parent: &mut Value) -> Result<(), String> {

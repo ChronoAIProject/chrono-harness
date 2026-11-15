@@ -806,6 +806,8 @@ start／reconstruct 的原报告和创建前 intent 保存 agent；同一地址�
 
 每项登记可带 `cleanup`，分别保留 `stage`、原因 `detail` 和原 `report_path`。阶段为 `pending`、`in-progress`、`waiting-for-consumers`、`retained`、`failed`、`caches-released`、`disposed`。它与工作状态 `status`／`terminal` 分开：缓存释放不表示工作完成；原进程或清理中断仍保留原尝试，不能仅凭阶段补写成功。旧记录缺少该字段时，表示尚无此阶段观察。
 
+已有 `finish` 交接的 `terminal` 项仍按原年龄规则保全源码并尝试到期退役。成功清理只释放缓存、保留检出时，该项进入 `retained`，不继续停在待消费终态；原缓存尝试及终态回执仍保留，后续可以正式迁移政策，并在需要时重新 `finish`。没有终态交接的缓存释放仍只记录 `caches-released`，不宣称任务完成。实际删除继续核原使用保护、源码保全和采用条件。
+
 v2 政策可登记 `terminal_history` 的 `keep_seconds`、`max_entries`、`max_bytes`；后两项须为正，作用于每个地址 ledger 的 disposed 历史。字节口径为各条目紧凑 JSON 的字节和。本宿主采用 24 小时、64 条、4 MiB。成功整树处置的生产者保存实际 `disposed_at`；后续统一维护轮次在达到保留时间、条数或字节上限后，按原登记顺序移出合格记录，不在 finish 返回前立即丢失新结果。
 
 移出前重新核对原终态和清理回执、附件、实际物理路径及 Git 登记，并持有原关联的独占租约直到 ledger 更新；仍活跃、保留、缺时刻、未知、忙碌、回执损坏或地址已复用的条目继续保护。它只释放 ledger 的历史使用方引用，不额外删除工作树或分支。`history_rotation` 报告实际移出量、剩余条数／字节和是否仍超限。

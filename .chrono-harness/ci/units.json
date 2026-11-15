@@ -1102,7 +1102,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/cache/Cargo.lock",
             "crates/ci/Cargo.lock",
             "crates/judge-ci/Cargo.lock",
@@ -1129,7 +1129,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/identifiers-tests/Cargo.lock",
             "crates/identifiers/Cargo.lock",
             "crates/runner-tests/Cargo.lock",
@@ -1156,7 +1156,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/instructions-tests/Cargo.lock",
             "crates/instructions/Cargo.lock"
           ],
@@ -1181,7 +1181,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/judge-ci-tests/Cargo.lock",
             "crates/judge-ci/Cargo.lock",
             "crates/runner/Cargo.lock"
@@ -1207,7 +1207,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/ci-tests/Cargo.lock",
             "crates/judge-ci/Cargo.lock",
             "crates/judge-registration/Cargo.lock",
@@ -1235,7 +1235,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/judge-registration-tests/Cargo.lock",
             "crates/judge-registration/Cargo.lock",
             "crates/runner/Cargo.lock"
@@ -1261,7 +1261,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/judge-filemap-tests/Cargo.lock",
             "crates/judge-filemap/Cargo.lock",
             "crates/judge-projects/Cargo.lock",
@@ -1290,7 +1290,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/judge-routes-tests/Cargo.lock",
             "crates/judge-routes/Cargo.lock"
           ],
@@ -1315,7 +1315,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/judge-ci/Cargo.lock",
             "crates/judge-filemap/Cargo.lock",
             "crates/judge-projects-tests/Cargo.lock",
@@ -1345,7 +1345,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/judge-cost-tests/Cargo.lock",
             "crates/judge-cost/Cargo.lock",
             "crates/judge-filemap/Cargo.lock",
@@ -1373,7 +1373,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/judge-cost/Cargo.lock",
             "crates/judge-filemap/Cargo.lock",
             "crates/judge-mixed-tests/Cargo.lock",
@@ -1402,7 +1402,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/ci/Cargo.lock",
             "crates/inputs/Cargo.lock",
             "crates/judge-cost/Cargo.lock",
@@ -1437,7 +1437,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/inputs-tests/Cargo.lock",
             "crates/inputs/Cargo.lock",
             "crates/judge-cost/Cargo.lock",
@@ -1470,7 +1470,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/distribution-tests/Cargo.lock",
             "crates/distribution/Cargo.lock"
           ],
@@ -1495,7 +1495,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/ci/Cargo.lock",
             "crates/pr-tests/Cargo.lock",
             "crates/pr/Cargo.lock",
@@ -1524,7 +1524,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/ci/Cargo.lock",
             "crates/inputs/Cargo.lock",
             "crates/judge-cost/Cargo.lock",
@@ -1559,7 +1559,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/ci/Cargo.lock",
             "crates/inputs/Cargo.lock",
             "crates/judge-cost/Cargo.lock",
@@ -1594,9 +1594,9 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
-            ".chrono-harness/release/native/Cargo.lock",
-            ".chrono-harness/release/native-tests/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
+            "crates/host-release/Cargo.lock",
+            "crates/host-release-tests/Cargo.lock",
             "crates/cache/Cargo.lock",
             "crates/distribution/Cargo.lock"
           ],
@@ -1621,7 +1621,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/ci/Cargo.lock",
             "crates/runner/Cargo.lock",
             "crates/worktree-tests/Cargo.lock",
@@ -1648,7 +1648,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/diagnostics-tests/Cargo.lock",
             "crates/diagnostics/Cargo.lock"
           ],
@@ -1673,8 +1673,8 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native-tests/Cargo.lock",
-            ".chrono-harness/ci/native/Cargo.lock"
+            "crates/host-bootstrap-tests/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock"
           ],
           "consumers": [
             "unit_host-bootstrap"
@@ -1697,7 +1697,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
+            "crates/host-bootstrap/Cargo.lock",
             "crates/cache-tests/Cargo.lock",
             "crates/cache/Cargo.lock"
           ],
@@ -1722,7 +1722,7 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock"
+            "crates/host-bootstrap/Cargo.lock"
           ],
           "consumers": [
             "aggregate"
