@@ -29,6 +29,184 @@ mod probe;
 
 verus! {
 
+fn attempt_finalization_case(terminal: bool, original_failure: bool, failure: u8,
+    identity: usize, original_error: &str, stage_error: &str)
+    requires failure <= 4,
+{
+    let record = |trace: PublicationTrace, actual: &Result<usize, String>|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 1,
+            match actual {
+                Ok(value) => out.0@.last().1 == *value && out.0@.last().2@ == ""@,
+                Err(error) => out.0@.last().1 == 0 && out.0@.last().2@ == error@,
+            },
+            match out.1 {
+                Err(error) => failure == 1 && error@ == stage_error@,
+                Ok(()) => failure != 1,
+            },
+    {
+        let (value, text) = match actual {
+            Ok(value) => (*value, ""), Err(error) => (0, error.as_str()),
+        };
+        (publication_event(trace, 1, value, text),
+            if failure == 1 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let digest = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<usize, String>))
+        ensures publication_event.ensures((trace, 2, identity, stage_error), out.0),
+            match out.1 {
+                Err(error) => failure == 2 && error@ == stage_error@,
+                Ok(value) => failure != 2 && value == identity,
+            },
+    {
+        (publication_event(trace, 2, identity, stage_error),
+            if failure == 2 { Err(stage_error.to_string()) } else { Ok(identity) })
+    };
+    let seal = |trace: PublicationTrace, hash: &usize|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 3, *hash, stage_error), out.0),
+            match out.1 {
+                Err(error) => failure == 3 && error@ == stage_error@,
+                Ok(()) => failure != 3,
+            },
+    {
+        (publication_event(trace, 3, *hash, stage_error),
+            if failure == 3 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let release = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 4, identity, original_error), out.0),
+            match out.1 {
+                Err(error) => failure == 4 && error@ == stage_error@,
+                Ok(()) => failure != 4,
+            },
+    {
+        (publication_event(trace, 4, identity, original_error),
+            if failure == 4 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let result = if original_failure { Err(original_error.to_string()) } else { Ok(identity) };
+    let initial = publication_event(Vec::new(), 99, identity, original_error);
+    let (state, result) = policy::finalize_cache_attempt(initial, terminal, result, record, digest, seal, release);
+    let trace = match state {
+        policy::CacheAttemptStage::BeforeSeal(trace) => {
+            expect_cache_true(failure == 1 || !terminal || failure == 2);
+            trace
+        },
+        policy::CacheAttemptStage::AfterSeal(trace) => {
+            expect_cache_true(terminal && failure != 1 && failure != 2);
+            trace
+        },
+    };
+    let calls = if failure == 1 || !terminal { 1usize }
+        else if failure == 2 { 2usize }
+        else if failure == 3 || !original_failure { 3usize } else { 4usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == identity);
+    expect_restore_text(trace[0].2.as_str(), original_error);
+    expect_cache_true(trace[1].0 == 1);
+    expect_cache_true(trace[1].1 == if original_failure { 0 } else { identity });
+    expect_restore_text(trace[1].2.as_str(), if original_failure { original_error } else { "" });
+    if calls > 1 {
+        expect_cache_true(trace[2].0 == 2 && trace[2].1 == identity);
+        expect_restore_text(trace[2].2.as_str(), stage_error);
+    }
+    if calls > 2 {
+        expect_cache_true(trace[3].0 == 3 && trace[3].1 == identity);
+        expect_restore_text(trace[3].2.as_str(), stage_error);
+    }
+    if calls > 3 {
+        expect_cache_true(trace[4].0 == 4 && trace[4].1 == identity);
+        expect_restore_text(trace[4].2.as_str(), original_error);
+    }
+    match result {
+        Ok(actual) => {
+            expect_cache_true(!original_failure && failure != 1
+                && (!terminal || (failure != 2 && failure != 3)));
+            expect_cache_true(actual == identity);
+        },
+        Err(policy::CacheAttemptFailure::Recording(actual, original)) => {
+            expect_cache_true(failure == 1);
+            expect_restore_text(actual.as_str(), stage_error);
+            match original {
+                Some(error) => {
+                    expect_cache_true(original_failure);
+                    expect_restore_text(error.as_str(), original_error);
+                },
+                None => expect_cache_true(!original_failure),
+            }
+        },
+        Err(policy::CacheAttemptFailure::Sealing(actual, original)) => {
+            expect_cache_true(terminal && failure == 3);
+            expect_restore_text(actual.as_str(), stage_error);
+            match original {
+                Some(error) => {
+                    expect_cache_true(original_failure);
+                    expect_restore_text(error.as_str(), original_error);
+                },
+                None => expect_cache_true(!original_failure),
+            }
+        },
+        Err(policy::CacheAttemptFailure::Original(actual)) => {
+            expect_cache_true((terminal && failure == 2)
+                || (original_failure && failure != 1 && (!terminal || failure != 3)));
+            let expected = if terminal && (failure == 2 || failure == 4) { stage_error } else { original_error };
+            expect_restore_text(actual.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn attempt_finalization_keeps_results_and_stops_after_the_first_failed_stage() {
+    let mut failure = 0u8;
+    while failure <= 4
+        invariant failure <= 5,
+        decreases 5 - failure,
+    {
+        attempt_finalization_case(false, false, failure, usize::MAX, "original/λ\0\n", "stage/λ\0\n");
+        attempt_finalization_case(false, true, failure, usize::MAX, "original/λ\0\n", "stage/λ\0\n");
+        attempt_finalization_case(true, false, failure, 0, "", "");
+        attempt_finalization_case(true, true, failure, 0, "original/λ\0\n", "stage/λ\0\n");
+        attempt_finalization_case(false, true, failure, 0, "", "");
+        attempt_finalization_case(true, true, failure, usize::MAX, "", "");
+        failure += 1;
+    }
+}
+
+fn attempt_finalization_diagnostic_case(kind: u8, relative: &str, original: &str, publication: &str)
+    requires kind <= 4,
+{
+    let error = if kind == 0 { policy::CacheAttemptFailure::Original(original.to_string()) }
+        else if kind == 1 { policy::CacheAttemptFailure::Recording(publication.to_string(), None) }
+        else if kind == 2 { policy::CacheAttemptFailure::Recording(publication.to_string(), Some(original.to_string())) }
+        else if kind == 3 { policy::CacheAttemptFailure::Sealing(publication.to_string(), None) }
+        else { policy::CacheAttemptFailure::Sealing(publication.to_string(), Some(original.to_string())) };
+    let parts = policy::cache_attempt_failure_fragments(relative, &error);
+    let expected = if kind == 0 { [original, "", "", "", "", "", ""] }
+        else if kind == 1 { ["E_CACHE_ATTEMPT: result publication: ", publication, "; original ", relative, "", "", ""] }
+        else if kind == 2 { [original, "; result publication: ", publication, "; attempt ", relative, "", ""] }
+        else if kind == 3 { ["", "", "E_CACHE_ATTEMPT: terminal publication: ", publication, "; original ", relative, "/result.json"] }
+        else { [original, "; ", "E_CACHE_ATTEMPT: terminal publication: ", publication, "; original ", relative, "/result.json"] };
+    expect_restore_text(parts[0], expected[0]);
+    expect_restore_text(parts[1], expected[1]);
+    expect_restore_text(parts[2], expected[2]);
+    expect_restore_text(parts[3], expected[3]);
+    expect_restore_text(parts[4], expected[4]);
+    expect_restore_text(parts[5], expected[5]);
+    expect_restore_text(parts[6], expected[6]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn attempt_finalization_diagnostics_keep_every_fragment_and_empty_error_presence() {
+    let mut kind = 0u8;
+    while kind <= 4
+        invariant kind <= 5,
+        decreases 5 - kind,
+    {
+        attempt_finalization_diagnostic_case(kind, "attempt/λ\0\n", "original; error\0\n", "publication; error\0\n");
+        attempt_finalization_diagnostic_case(kind, "", "", "");
+        kind += 1;
+    }
+}
+
 fn original_result_case(present: bool, null: bool, has_error: bool,
     payload: &String, raw_error: &str)
 {

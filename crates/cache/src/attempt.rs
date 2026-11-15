@@ -8,6 +8,180 @@ use chrono_harness::{verified_identifiers as identifiers, verus};
 use vstd::prelude::*;
 
 verus! {
+pub enum CacheAttemptFailure {
+    Original(String),
+    Recording(String, Option<String>),
+    Sealing(String, Option<String>),
+}
+
+pub enum CacheAttemptStage<S, U> {
+    BeforeSeal(S),
+    AfterSeal(U),
+}
+
+pub open spec fn attempt_original_error<T>(result: Result<T, String>) -> Option<String> {
+    match result { Ok(_) => None, Err(error) => Some(error), }
+}
+
+pub open spec fn attempt_result_forwarded<T>(before: Result<T, String>,
+    after: Result<T, CacheAttemptFailure>) -> bool
+{
+    match before {
+        Ok(value) => after == Ok::<T, CacheAttemptFailure>(value),
+        Err(error) => after == Err::<T, CacheAttemptFailure>(CacheAttemptFailure::Original(error)),
+    }
+}
+
+fn forward_attempt_result<T>(result: Result<T, String>) -> (out: Result<T, CacheAttemptFailure>)
+    ensures attempt_result_forwarded(result, out),
+{
+    match result { Ok(value) => Ok(value), Err(error) => Err(CacheAttemptFailure::Original(error)), }
+}
+
+pub open spec fn cache_attempt_finalization_result<S, U, T, H, R, D, C, L>(initial: S,
+    terminal: bool, result: Result<T, String>, record: R, digest: D, seal: C, release: L,
+    out: (CacheAttemptStage<S, U>, Result<T, CacheAttemptFailure>)) -> bool
+    where R: FnOnce(S, &Result<T, String>) -> (S, Result<(), String>),
+        D: FnOnce(S) -> (S, Result<H, String>),
+        C: FnOnce(S, &H) -> (U, Result<(), String>),
+        L: FnOnce(U) -> (U, Result<(), String>),
+{
+    exists|recorded: S, recording: Result<(), String>|
+        #[trigger] record.ensures((initial, &result), (recorded, recording))
+        && match recording {
+            Err(error) => out == (CacheAttemptStage::<S, U>::BeforeSeal(recorded), Err::<T, CacheAttemptFailure>(
+                CacheAttemptFailure::Recording(error, attempt_original_error(result)))),
+            Ok(()) => if !terminal {
+                out.0 == CacheAttemptStage::<S, U>::BeforeSeal(recorded) && attempt_result_forwarded(result, out.1)
+            } else {
+                exists|digested: S, hashing: Result<H, String>|
+                    #[trigger] digest.ensures((recorded,), (digested, hashing))
+                    && match hashing {
+                        Err(error) => out == (CacheAttemptStage::<S, U>::BeforeSeal(digested), Err::<T, CacheAttemptFailure>(
+                            CacheAttemptFailure::Original(error))),
+                        Ok(hash) => exists|sealed: U, sealing: Result<(), String>|
+                            #[trigger] seal.ensures((digested, &hash), (sealed, sealing))
+                            && match sealing {
+                                Err(error) => out == (CacheAttemptStage::<S, U>::AfterSeal(sealed), Err::<T, CacheAttemptFailure>(
+                                    CacheAttemptFailure::Sealing(error, attempt_original_error(result)))),
+                                Ok(()) => match result {
+                                    Ok(value) => out == (CacheAttemptStage::<S, U>::AfterSeal(sealed), Ok::<T, CacheAttemptFailure>(value)),
+                                    Err(original) => exists|released: U, releasing: Result<(), String>|
+                                        #[trigger] release.ensures((sealed,), (released, releasing))
+                                        && out == (CacheAttemptStage::<S, U>::AfterSeal(released), Err::<T, CacheAttemptFailure>(
+                                            CacheAttemptFailure::Original(match releasing {
+                                                Err(error) => error, Ok(()) => original,
+                                            }))),
+                                },
+                            },
+                    }
+            },
+        }
+}
+
+/// 先记录结果；未知任务保留恢复能力，终态封存后只释放失败计划的引用。
+pub fn finalize_cache_attempt<S, U, T, H, R, D, C, L>(state: S, terminal: bool,
+    result: Result<T, String>, record: R, digest: D, seal: C, release: L,
+) -> (out: (CacheAttemptStage<S, U>, Result<T, CacheAttemptFailure>))
+    where R: FnOnce(S, &Result<T, String>) -> (S, Result<(), String>),
+        D: FnOnce(S) -> (S, Result<H, String>),
+        C: FnOnce(S, &H) -> (U, Result<(), String>),
+        L: FnOnce(U) -> (U, Result<(), String>),
+    requires forall|state: S, result: &Result<T, String>| record.requires((state, result)),
+        forall|state: S| digest.requires((state,)),
+        forall|state: S, hash: &H| seal.requires((state, hash)),
+        forall|state: U| release.requires((state,)),
+    ensures cache_attempt_finalization_result(state, terminal, result, record, digest, seal, release, out),
+{
+    let ghost initial = state;
+    let (state, recording) = record(state, &result);
+    let ghost recorded = state;
+    let ghost recording_result = recording;
+    assert(record.ensures((initial, &result), (recorded, recording_result)));
+    match recording {
+        Err(error) => {
+            let original = match result { Ok(_) => None, Err(original) => Some(original), };
+            return (CacheAttemptStage::BeforeSeal(state), Err(CacheAttemptFailure::Recording(error, original)));
+        },
+        Ok(()) => (),
+    }
+    if !terminal { return (CacheAttemptStage::BeforeSeal(state), forward_attempt_result(result)); }
+    let (state, hashing) = digest(state);
+    let ghost digested = state;
+    let ghost hashing_result = hashing;
+    assert(digest.ensures((recorded,), (digested, hashing_result)));
+    let hash = match hashing {
+        Err(error) => return (CacheAttemptStage::BeforeSeal(state), Err(CacheAttemptFailure::Original(error))),
+        Ok(hash) => hash,
+    };
+    let (state, sealing) = seal(state, &hash);
+    let ghost sealed = state;
+    let ghost sealing_result = sealing;
+    assert(seal.ensures((digested, &hash), (sealed, sealing_result)));
+    match sealing {
+        Err(error) => {
+            let original = match result { Ok(_) => None, Err(original) => Some(original), };
+            return (CacheAttemptStage::AfterSeal(state), Err(CacheAttemptFailure::Sealing(error, original)));
+        },
+        Ok(()) => (),
+    }
+    match result {
+        Ok(value) => (CacheAttemptStage::AfterSeal(state), Ok(value)),
+        Err(original) => {
+            let (state, releasing) = release(state);
+            assert(release.ensures((sealed,), (state, releasing)));
+            (CacheAttemptStage::AfterSeal(state), Err(CacheAttemptFailure::Original(match releasing {
+                Err(error) => error, Ok(()) => original,
+            })))
+        },
+    }
+}
+
+pub open spec fn cache_attempt_failure_parts(relative: &str, failure: &CacheAttemptFailure,
+    parts: [&str; 7]) -> bool
+{
+    match failure {
+        CacheAttemptFailure::Original(error) => parts@[0]@ == error@
+            && parts@[1]@ == ""@ && parts@[2]@ == ""@ && parts@[3]@ == ""@
+            && parts@[4]@ == ""@ && parts@[5]@ == ""@ && parts@[6]@ == ""@,
+        CacheAttemptFailure::Recording(publication, original) => match original {
+            Some(error) => parts@[0]@ == error@ && parts@[1]@ == "; result publication: "@
+                && parts@[2]@ == publication@ && parts@[3]@ == "; attempt "@
+                && parts@[4]@ == relative@ && parts@[5]@ == ""@ && parts@[6]@ == ""@,
+            None => parts@[0]@ == "E_CACHE_ATTEMPT: result publication: "@
+                && parts@[1]@ == publication@ && parts@[2]@ == "; original "@
+                && parts@[3]@ == relative@ && parts@[4]@ == ""@
+                && parts@[5]@ == ""@ && parts@[6]@ == ""@,
+        },
+        CacheAttemptFailure::Sealing(publication, original) =>
+            parts@[0]@ == match original { Some(error) => error@, None => ""@ }
+            && parts@[1]@ == match original { Some(_) => "; "@, None => ""@ }
+            && parts@[2]@ == "E_CACHE_ATTEMPT: terminal publication: "@
+            && parts@[3]@ == publication@ && parts@[4]@ == "; original "@
+            && parts@[5]@ == relative@ && parts@[6]@ == "/result.json"@,
+    }
+}
+
+/// 同一错误类型选择完整诊断片段；适配器只按原顺序连接。
+pub fn cache_attempt_failure_fragments<'a>(relative: &'a str, failure: &'a CacheAttemptFailure)
+    -> (out: [&'a str; 7])
+    ensures cache_attempt_failure_parts(relative, failure, out),
+{
+    match failure {
+        CacheAttemptFailure::Original(error) => [error.as_str(), "", "", "", "", "", ""],
+        CacheAttemptFailure::Recording(publication, original) => match original {
+            Some(error) => [error.as_str(), "; result publication: ", publication.as_str(),
+                "; attempt ", relative, "", ""],
+            None => ["E_CACHE_ATTEMPT: result publication: ", publication.as_str(),
+                "; original ", relative, "", "", ""],
+        },
+        CacheAttemptFailure::Sealing(publication, original) => {
+            let original = match original { Some(error) => Some(error.as_str()), None => None, };
+            cache_publication_error_fragments(relative, publication.as_str(), original)
+        },
+    }
+}
+
 pub open spec fn cache_result_replay<'a, T>(plan: Option<&'a T>, plan_is_null: bool,
     error: Option<&str>, out: Result<&'a T, String>) -> bool
 {
@@ -618,42 +792,49 @@ mod runtime {
         let terminal = !attempt.unknown.get();
         let receipt = json!({"schema":"chrono-cache-attempt-result/v1","request_sha256":wire::digest(&request)?,
         "updated":timestamp()?,"terminal":terminal,"plan":result.as_ref().ok(),"error":result.as_ref().err()});
-        attempt
-            .record(&attempt.directory.join("result.json"), &receipt)
-            .map_err(|publication| match &result {
-                Ok(_) => {
-                    format!(
-                        "E_CACHE_ATTEMPT: result publication: {publication}; original {relative}"
-                    )
-                }
-                Err(error) => {
-                    format!("{error}; result publication: {publication}; attempt {relative}")
-                }
-            })?;
-        tracing::debug!(
-            event_id = "cache.attempt.result_recorded",
-            elapsed_seconds = began.elapsed().as_secs_f64(),
+        decision::finalize_cache_attempt(
+            attempt,
             terminal,
-            "original attempt result was recorded"
-        );
-        // Unknown work retains its original unfinished capability and recovery root.
-        if terminal {
-            // The immediate plan consumer requires a sealed tree, not just a
-            // completed accounting round. Keep the same capability across rounds.
-            attempt.publication.complete_sealed(json!({"request_sha256":wire::digest(&request)?,"result":"result.json","completion":"confirmed"}))
-                .map_err(|error| publication_error(&relative, &error, result.as_ref().err().map(String::as_str)))?;
-            tracing::debug!(
-                event_id = "cache.attempt.sealed",
-                elapsed_seconds = began.elapsed().as_secs_f64(),
-                "terminal attempt sealing returned"
-            );
-            // A failed plan has no downstream restore/seal caller. Its original
-            // diagnostic result stays under the adopted finite terminal policy.
-            if result.is_err() {
-                inventory(&root)?.reference_paths(&role, &[])?;
-            }
-        }
-        result
+            result,
+            |attempt, _result| {
+                let recorded = attempt
+                    .record(&attempt.directory.join("result.json"), &receipt)
+                    .inspect(|_| {
+                        tracing::debug!(
+                            event_id = "cache.attempt.result_recorded",
+                            elapsed_seconds = began.elapsed().as_secs_f64(),
+                            terminal,
+                            "original attempt result was recorded"
+                        );
+                    });
+                (attempt, recorded)
+            },
+            |attempt| (attempt, wire::digest(&request)),
+            |attempt, request_sha256| {
+                (
+                    (),
+                    attempt
+                        .publication
+                        .complete_sealed(json!({"request_sha256":request_sha256,
+                        "result":"result.json","completion":"confirmed"}))
+                        .inspect(|_| {
+                            tracing::debug!(
+                                event_id = "cache.attempt.sealed",
+                                elapsed_seconds = began.elapsed().as_secs_f64(),
+                                "terminal attempt sealing returned"
+                            );
+                        }),
+                )
+            },
+            |()| {
+                (
+                    (),
+                    inventory(&root).and_then(|state| state.reference_paths(&role, &[])),
+                )
+            },
+        )
+        .1
+        .map_err(|error| decision::cache_attempt_failure_fragments(&relative, &error).concat())
     }
     fn publication_error(relative: &str, publication: &str, original: Option<&str>) -> String {
         decision::cache_publication_error_fragments(relative, publication, original).concat()
