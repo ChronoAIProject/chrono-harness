@@ -493,3 +493,26 @@ loop_isolation_boundary、mut_refs_loops 和 exec_termination 六个完整目标
 成功输入先观察修改前的语法拒绝，再应用候选并沿同一入口复验。最后沿原
 `investigate.verus-source.json-check` 复验完整 runner；局部输入成功不能代替完整根。
 外部工具与宿主证明登记同时修改，新增翻译、证明、IO 与维护成本未知。
+
+## 动态 trait 的标准标记
+
+完整 runner 的 `ProcessForward` 和流读取器使用 `dyn Write + Send`；两个流在现有
+作用域线程中转发，不能移除 `Send` 或线程。固定工具却在读取多个谓词时直接拒绝。
+现有泛型边界只在 Rust 原类型检查中处理 `Send/Sync/Unpin`，不为它们生成规格事实；
+本次动态类型沿用同一保守抽象和原始 Rust 类型，不增添标记成立或调用成功的公理。
+仅接受一个行为 trait 加这三个标准标记；关联类型和其他动态形式仍按原规则拒绝。
+Rust 原始签名、强制转换、执行及 ghost 借用检查和实际编译均保留。
+
+四份独立生产输入沿现有 native bootstrap 执行，分别保留双流和真实退出状态：
+
+| `investigate.verus-source.*-check` | 预期 |
+| --- | --- |
+| `dyn-markers-check` | 三种标记、泛型传递、具体值转动态类型及原 trait 后置条件，严格整 crate 证明并编译 |
+| `dyn-marker-assertion-check` | `Send` 不能加强方法结果，必须实际收到 assertion failed |
+| `dyn-marker-missing-send-check` | 无 Send 的动态类型不能传给 Send 使用方，必须收到 Rust 类型错误 |
+| `dyn-marker-borrow-check` | 同一动态对象不能同时可变借用两次，必须收到 Rust 借用错误 |
+
+先观察原工具对正例的翻译失败，再应用补丁并复验。负例的非零不是 bootstrap 通过。
+沿原完整 runner 入口继续核对剩余错误；局部输入不授予正式工具或证明资格。
+**外部工具与宿主证明登记同时修改。** 工具沿用既有标记抽象，宿主增加对应输入；
+严格参数、完整根、线程、预算和原安全检查保留。新增成本未知，继续复用当前缓存。
