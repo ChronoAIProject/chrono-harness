@@ -760,7 +760,7 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn finished_aged_checkout_completes_terminal_handoff_before_age_reuse() {
+fn finished_aged_checkout_records_retained_after_reusable_cache_cleanup() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
