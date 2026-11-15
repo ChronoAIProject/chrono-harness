@@ -327,11 +327,26 @@ Display 与 `Option<String>` 的 Debug 编码；JSON 沿用 serde_json 的既有
 库存门和完整计划消费同一个不可手填的 `Continuity` 值，且不改变影响选择。
 
 源码比较逐字节核对非引用内容。仅支持现役 Rust `#[path]`、`include_bytes!`、Cargo `path`、
-以 `CARGO_MANIFEST_DIR` 为基准的两种 join 写法及 bootstrap 的两个仓库根参数锚点。
+以 `CARGO_MANIFEST_DIR` 为基准的两种 join 写法；宿主特定形式只读当前固定 FILEMAP 的
+`reference_syntax` 声明，不再内置本仓 shell 变量。
 每个锚点都核词法规范化和两端实际目标；文件／项目根／登记输出目录分开核对。
 目标只能保留原固定地址或沿原项目 ID 的实际根迁移，不能改指另一真实对象。
-不支持的改写保持未取得连续性，不按相似度或忽略任意空白取绿。源码 byte 同一不等于
+声明按当前文件点名，给出两端确切前缀、引号前尾部、引号后后缀及路径基准；
+未登记的改写保持未取得连续性，不按相似度或忽略任意空白取绿。源码 byte 同一不等于
 原文件全语义已证明；未知继续未知，真正编译与消费者行为仍由原未过滤检查验收。
+
+**产品和宿主政策同时修改：**本宿主只登记四条当前采用的形式。两条 shell 形式
+分别把已存在的 `$task_root`／`$task_main` 解释为仓库根；两条 Rust 形式只覆盖
+`owner.rs` 中原 `serde_json::from_slice(include_bytes!(…)).unwrap()` 与
+`frontend.rs` 中原 `.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join(…))` 的 rustfmt 换行和尾逗号。
+包围表达式、输入、调用和断言保持原义，完整原测试继续验收。声明的语言语义等价性是
+宿主政策责任，通用核心只证明声明限定的字节关系和实际引用目标；它不证明任意声明语义。
+因此不能把当前局部证明扩写为“任意逻辑变化都能被识别”，也不能登记含逻辑变化的形式。
+
+`judge-registration/src/schema.rs` 的新同源判断核声明数量上限 250、文件规范路径、
+非空前缀末端和明确基准，实际 schema 解码后直接调用。`lib.rs` 仅公开转发这项实际能力；两份源文件通过已有 CI 集合整 crate 根编译，
+独立预期核正常、空前缀、错误末端和未知基准；旧 JSON schema 逻辑仍未完整证明。
+源码逐步比较与循环组合分别证明，未提高 rlimit、线程或报告预算。完整成本仍未知。
 
 接口假设沿用固定 Reader 原字节与 Serde 的字段投影。新适配只解码原 `projects`／`files`，
 按原树迭代字段投影，序列化 owner、surface、cost、edges、symlink、projection 的原值；

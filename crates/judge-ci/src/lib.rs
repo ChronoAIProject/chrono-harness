@@ -151,6 +151,7 @@ pub struct Policy {
 #[cfg(not(verus_keep_ghost))]
 struct Snapshot {
     registry: Value,
+    filemap: Value,
     tools: BTreeMap<String, Value>,
     owner_nodes: BTreeMap<String, String>,
     files: BTreeMap<String, Value>,
@@ -611,8 +612,13 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
         )
     };
     let scheduling = chrono_judge_registration::execution::scheduling(&fm, &pr, &artifacts)?;
+    if let Some(declaration) = fm.get("reference_syntax") {
+        let syntax = serde_json::from_value(declaration.clone()).map_err(|e| e.to_string())?;
+        chrono_judge_registration::validate_reference_syntax(&syntax)?;
+    }
     let snapshot = Snapshot {
         registry: pr,
+        filemap: fm.clone(),
         tools,
         owner_nodes,
         files,
@@ -1734,28 +1740,23 @@ fn inventory_profile(
         // Validate the complete obligation graph before selecting any unit.
         let (_, operations) =
             chrono_judge_routes::order(&global_selected, &new.plans, &methods, &new.execute)?;
-        let previous_files = old
-            .as_ref()
-            .map(|snapshot| object!({"files":snapshot.files.values().collect::<Vec<_>>()}));
-        let current_files = object!({"files":new.files.values().collect::<Vec<_>>()});
         let registry = new.source_registry.as_ref().map_err(Clone::clone)?;
         with_source_continuity(
             (),
             req.base
                 .as_deref()
                 .zip(old.as_ref())
-                .zip(previous_files.as_ref())
-                .map(|((oid, snapshot), files)| {
+                .map(|(oid, snapshot)| {
                     (
                         oid,
-                        files,
+                        &snapshot.filemap,
                         &snapshot.registry,
                         snapshot.policy.artifacts.clone(),
                     )
                 }),
             (
                 req.candidate.as_str(),
-                &current_files,
+                &new.filemap,
                 &new.registry,
                 new.policy.artifacts.clone(),
             ),

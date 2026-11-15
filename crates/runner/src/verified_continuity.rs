@@ -26,10 +26,25 @@ pub struct FileObservation {
     pub registered: bool,
 }
 
+/// 宿主显式声明的单文件引用语法；只改变两端的确切包围字节，目标仍须对应。
+/// base: 0 为源码目录，1 为项目根，2 为仓库根。
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct ReferenceSyntax {
+    pub file: String,
+    pub before: String,
+    pub after: String,
+    pub trailing: String,
+    pub suffix_before: String,
+    pub suffix_after: String,
+    pub base: u8,
+}
+
 pub struct Endpoint {
     pub projects: Vec<ProjectRoot>,
     pub files: Vec<FileObservation>,
     pub outputs: Vec<String>,
+    pub reference_syntax: Vec<ReferenceSyntax>,
 }
 
 pub trait Read {
@@ -323,63 +338,155 @@ pub fn resolve(base: &[u8], path: &[u8]) -> (out: Option<Vec<u8>>)
     Some(out)
 }
 
-/// 七个有界引用形式；其余字节逐个核对，不接受相似度。
-/// 1: #[path]；2: include_bytes!；3: Cargo path；4／5: manifest 根 join；
-/// 6／7 尚含本宿主的 shell 参数锚点，迁移到宿主声明前不能交付。
-pub open spec fn prefix(kind: u8) -> Seq<u8> {
+/// 五种语言引用由通用实现负责；其余语法只能来自当前固定宿主的显式声明。
+pub open spec fn builtin_prefix(kind: u16) -> Seq<u8> {
     if kind == 1 { seq![35u8, 91u8, 112u8, 97u8, 116u8, 104u8, 32u8, 61u8, 32u8, 34u8] }
     else if kind == 2 { seq![105u8, 110u8, 99u8, 108u8, 117u8, 100u8, 101u8, 95u8, 98u8, 121u8, 116u8, 101u8, 115u8, 33u8, 40u8, 34u8] }
     else if kind == 3 { seq![112u8, 97u8, 116u8, 104u8, 32u8, 61u8, 32u8, 34u8] }
     else if kind == 4 { seq![80u8, 97u8, 116u8, 104u8, 58u8, 58u8, 110u8, 101u8, 119u8, 40u8, 101u8, 110u8, 118u8, 33u8, 40u8, 34u8, 67u8, 65u8, 82u8, 71u8, 79u8, 95u8, 77u8, 65u8, 78u8, 73u8, 70u8, 69u8, 83u8, 84u8, 95u8, 68u8, 73u8, 82u8, 34u8, 41u8, 41u8, 46u8, 106u8, 111u8, 105u8, 110u8, 40u8, 34u8] }
-    else if kind == 5 { seq![80u8, 97u8, 116u8, 104u8, 58u8, 58u8, 110u8, 101u8, 119u8, 40u8, 101u8, 110u8, 118u8, 33u8, 40u8, 34u8, 67u8, 65u8, 82u8, 71u8, 79u8, 95u8, 77u8, 65u8, 78u8, 73u8, 70u8, 69u8, 83u8, 84u8, 95u8, 68u8, 73u8, 82u8, 34u8, 41u8, 41u8, 10u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 46u8, 106u8, 111u8, 105u8, 110u8, 40u8, 34u8] }
-    else if kind == 6 { seq![45u8, 45u8, 109u8, 97u8, 110u8, 105u8, 102u8, 101u8, 115u8, 116u8, 45u8, 112u8, 97u8, 116u8, 104u8, 32u8, 34u8, 36u8, 116u8, 97u8, 115u8, 107u8, 95u8, 114u8, 111u8, 111u8, 116u8, 47u8] }
-    else { seq![39u8, 60u8, 45u8, 45u8, 109u8, 97u8, 110u8, 105u8, 102u8, 101u8, 115u8, 116u8, 45u8, 112u8, 97u8, 116u8, 104u8, 62u8, 39u8, 32u8, 34u8, 60u8, 36u8, 116u8, 97u8, 115u8, 107u8, 95u8, 109u8, 97u8, 105u8, 110u8, 47u8] }
+    else { seq![80u8, 97u8, 116u8, 104u8, 58u8, 58u8, 110u8, 101u8, 119u8, 40u8, 101u8, 110u8, 118u8, 33u8, 40u8, 34u8, 67u8, 65u8, 82u8, 71u8, 79u8, 95u8, 77u8, 65u8, 78u8, 73u8, 70u8, 69u8, 83u8, 84u8, 95u8, 68u8, 73u8, 82u8, 34u8, 41u8, 41u8, 10u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 46u8, 106u8, 111u8, 105u8, 110u8, 40u8, 34u8] }
 }
 
-pub fn prefix_bytes(kind: u8) -> (out: &'static [u8])
-    requires 1 <= kind <= 7,
-    ensures out@ == prefix(kind),
+pub fn builtin_prefix_bytes(kind: u16) -> (out: &'static [u8])
+    requires 1 <= kind <= 5,
+    ensures out@ == builtin_prefix(kind),
 {
     if kind == 1 { &[35u8, 91u8, 112u8, 97u8, 116u8, 104u8, 32u8, 61u8, 32u8, 34u8] }
     else if kind == 2 { &[105u8, 110u8, 99u8, 108u8, 117u8, 100u8, 101u8, 95u8, 98u8, 121u8, 116u8, 101u8, 115u8, 33u8, 40u8, 34u8] }
     else if kind == 3 { &[112u8, 97u8, 116u8, 104u8, 32u8, 61u8, 32u8, 34u8] }
     else if kind == 4 { &[80u8, 97u8, 116u8, 104u8, 58u8, 58u8, 110u8, 101u8, 119u8, 40u8, 101u8, 110u8, 118u8, 33u8, 40u8, 34u8, 67u8, 65u8, 82u8, 71u8, 79u8, 95u8, 77u8, 65u8, 78u8, 73u8, 70u8, 69u8, 83u8, 84u8, 95u8, 68u8, 73u8, 82u8, 34u8, 41u8, 41u8, 46u8, 106u8, 111u8, 105u8, 110u8, 40u8, 34u8] }
-    else if kind == 5 { &[80u8, 97u8, 116u8, 104u8, 58u8, 58u8, 110u8, 101u8, 119u8, 40u8, 101u8, 110u8, 118u8, 33u8, 40u8, 34u8, 67u8, 65u8, 82u8, 71u8, 79u8, 95u8, 77u8, 65u8, 78u8, 73u8, 70u8, 69u8, 83u8, 84u8, 95u8, 68u8, 73u8, 82u8, 34u8, 41u8, 41u8, 10u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 46u8, 106u8, 111u8, 105u8, 110u8, 40u8, 34u8] }
-    else if kind == 6 { &[45u8, 45u8, 109u8, 97u8, 110u8, 105u8, 102u8, 101u8, 115u8, 116u8, 45u8, 112u8, 97u8, 116u8, 104u8, 32u8, 34u8, 36u8, 116u8, 97u8, 115u8, 107u8, 95u8, 114u8, 111u8, 111u8, 116u8, 47u8] }
-    else { &[39u8, 60u8, 45u8, 45u8, 109u8, 97u8, 110u8, 105u8, 102u8, 101u8, 115u8, 116u8, 45u8, 112u8, 97u8, 116u8, 104u8, 62u8, 39u8, 32u8, 34u8, 60u8, 36u8, 116u8, 97u8, 115u8, 107u8, 95u8, 109u8, 97u8, 105u8, 110u8, 47u8] }
+    else { &[80u8, 97u8, 116u8, 104u8, 58u8, 58u8, 110u8, 101u8, 119u8, 40u8, 101u8, 110u8, 118u8, 33u8, 40u8, 34u8, 67u8, 65u8, 82u8, 71u8, 79u8, 95u8, 77u8, 65u8, 78u8, 73u8, 70u8, 69u8, 83u8, 84u8, 95u8, 68u8, 73u8, 82u8, 34u8, 41u8, 41u8, 10u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 46u8, 106u8, 111u8, 105u8, 110u8, 40u8, 34u8] }
 }
 
-pub open spec fn anchor(input: Seq<u8>, at: int, kind: u8, manifest: bool) -> bool {
-    1 <= kind <= 7 && (kind != 3 || manifest) && super::prefix_at(input, at, prefix(kind))
+pub open spec fn known_kind(current: &Endpoint, kind: u16) -> bool {
+    1 <= kind <= 5 || (6 <= kind <= 255 && kind - 6 < current.reference_syntax.len())
 }
 
-pub fn anchor_at(input: &[u8], at: usize, manifest: bool) -> (kind: u8)
-    ensures kind == 0 <==> !exists|k: u8| anchor(input@, at as int, k, manifest),
-        kind != 0 ==> anchor(input@, at as int, kind, manifest),
-        kind != 0 ==> forall|j: u8| 1 <= j < kind ==> !anchor(input@, at as int, j, manifest),
+#[verifier::opaque]
+pub open spec fn prefix(kind: u16, current: &Endpoint, right: bool) -> Seq<u8> {
+    if 1 <= kind <= 5 { builtin_prefix(kind) }
+    else if known_kind(current, kind) {
+        let form = &current.reference_syntax[kind - 6];
+        vstd::utf8::encode_utf8(if right { form.after@ } else { form.before@ })
+    } else { Seq::empty() }
+}
+
+pub fn prefix_bytes<'a>(kind: u16, current: &'a Endpoint, right: bool) -> (out: &'a [u8])
+    requires known_kind(current, kind),
+    ensures out@ == prefix(kind, current, right),
 {
-    let mut k: u8 = 1;
-    while k <= 7
-        invariant 1 <= k <= 8,
-            forall|j: u8| 1 <= j < k ==> !anchor(input@, at as int, j, manifest),
-        decreases 8 - k,
+    reveal(prefix);
+    if kind <= 5 { builtin_prefix_bytes(kind) }
+    else {
+        let form = &current.reference_syntax[(kind - 6) as usize];
+        if right { form.after.as_str().as_bytes() } else { form.before.as_str().as_bytes() }
+    }
+}
+
+#[verifier::opaque]
+pub open spec fn suffix(kind: u16, current: &Endpoint, right: bool) -> Seq<u8> {
+    if 6 <= kind && known_kind(current, kind) {
+        let form = &current.reference_syntax[kind - 6];
+        vstd::utf8::encode_utf8(if right { form.suffix_after@ } else { form.suffix_before@ })
+    } else { Seq::empty() }
+}
+
+pub fn suffix_bytes<'a>(kind: u16, current: &'a Endpoint, right: bool) -> (out: &'a [u8])
+    requires known_kind(current, kind),
+    ensures out@ == suffix(kind, current, right),
+{
+    reveal(suffix);
+    if kind <= 5 { &[] }
+    else {
+        let form = &current.reference_syntax[(kind - 6) as usize];
+        if right { form.suffix_after.as_str().as_bytes() } else { form.suffix_before.as_str().as_bytes() }
+    }
+}
+
+#[verifier::opaque]
+pub open spec fn trailing(kind: u16, current: &Endpoint) -> Seq<u8> {
+    if 6 <= kind && known_kind(current, kind) {
+        vstd::utf8::encode_utf8(current.reference_syntax[kind - 6].trailing@)
+    } else { Seq::empty() }
+}
+
+pub fn trailing_bytes<'a>(kind: u16, current: &'a Endpoint) -> (out: &'a [u8])
+    requires known_kind(current, kind),
+    ensures out@ == trailing(kind, current),
+{
+    reveal(trailing);
+    if kind <= 5 { &[] }
+    else { current.reference_syntax[(kind - 6) as usize].trailing.as_str().as_bytes() }
+}
+
+pub open spec fn eligible(kind: u16, current: &Endpoint, file: Seq<u8>, manifest: bool) -> bool {
+    known_kind(current, kind) && (kind != 3 || manifest)
+        && (kind <= 5 || vstd::utf8::encode_utf8(current.reference_syntax[kind - 6].file@) == file)
+}
+
+pub open spec fn anchor(input: Seq<u8>, at: int, kind: u16, manifest: bool,
+    current: &Endpoint, file: Seq<u8>, right: bool) -> bool {
+    eligible(kind, current, file, manifest) && prefix(kind, current, right).len() > 0
+        && super::prefix_at(input, at, prefix(kind, current, right))
+}
+
+pub fn anchor_at(input: &[u8], at: usize, manifest: bool, current: &Endpoint, file: &[u8]) -> (kind: u16)
+    ensures kind == 0 <==> !exists|k: u16| anchor(input@, at as int, k, manifest, current, file@, false),
+        kind != 0 ==> anchor(input@, at as int, kind, manifest, current, file@, false),
+        kind != 0 ==> forall|j: u16| 1 <= j < kind ==> !anchor(input@, at as int, j, manifest, current, file@, false),
+{
+    let mut k: u16 = 1;
+    while k <= 5 || (k <= 255 && ((k - 6) as usize) < current.reference_syntax.len())
+        invariant 1 <= k <= 256,
+            forall|j: u16| 1 <= j < k ==> !anchor(input@, at as int, j, manifest, current, file@, false),
+        decreases 256 - k,
     {
-        if (k != 3 || manifest) && super::matches_at(input, at, prefix_bytes(k)) {
-            assert(anchor(input@, at as int, k, manifest));
-            assert(exists|j: u8| anchor(input@, at as int, j, manifest));
+        let selected = if k <= 5 { k != 3 || manifest }
+            else { equal_bytes(current.reference_syntax[(k - 6) as usize].file.as_str().as_bytes(), file) };
+        let p = prefix_bytes(k, current, false);
+        if selected && p.len() > 0 && super::matches_at(input, at, p) {
+            assert(anchor(input@, at as int, k, manifest, current, file@, false));
+            assert(exists|j: u16| anchor(input@, at as int, j, manifest, current, file@, false));
             return k;
         }
         k += 1;
     }
+    assert forall|j: u16| !anchor(input@, at as int, j, manifest, current, file@, false) by {
+        if j >= k { assert(!known_kind(current, j)); }
+    }
     0
 }
 
-pub open spec fn reference_end(input: Seq<u8>, at: int, kind: u8) -> int {
-    super::next_byte(input, at + prefix(kind).len(), 34)
+pub open spec fn reference_end(input: Seq<u8>, at: int, kind: u16, current: &Endpoint, right: bool) -> int {
+    super::next_byte(input, at + prefix(kind, current, right).len(), 34)
 }
 
-pub open spec fn literal_end(input: Seq<u8>, at: int, kind: u8) -> int {
-    reference_end(input, at, kind) - if kind == 7 { 1int } else { 0int }
+pub open spec fn closed_reference(input: Seq<u8>, at: int, kind: u16, current: &Endpoint, right: bool) -> bool {
+    let x = reference_end(input, at, kind, current, right);
+    at + prefix(kind, current, right).len() <= x < input.len()
+        && trailing(kind, current).len() <= x - at - prefix(kind, current, right).len()
+        && super::prefix_at(input, x - trailing(kind, current).len(), trailing(kind, current))
+        && super::prefix_at(input, x + 1, suffix(kind, current, right))
+}
+
+pub fn closed_at(input: &[u8], at: usize, kind: u16, current: &Endpoint, right: bool)
+    -> (out: Option<(usize, usize)>)
+    requires at <= input.len(), known_kind(current, kind),
+        prefix(kind, current, right).len() <= input.len() - at,
+    ensures match out {
+        None => !closed_reference(input@, at as int, kind, current, right),
+        Some((literal, next)) => closed_reference(input@, at as int, kind, current, right)
+            && literal == reference_end(input@, at as int, kind, current, right) - trailing(kind, current).len()
+            && next == reference_end(input@, at as int, kind, current, right) + 1 + suffix(kind, current, right).len(),
+    },
+{
+    let p = prefix_bytes(kind, current, right);
+    let tail = trailing_bytes(kind, current);
+    let rest = suffix_bytes(kind, current, right);
+    let x = super::find_byte(input, at + p.len(), 34);
+    if x == input.len() || tail.len() > x - at - p.len() { return None; }
+    if !super::matches_at(input, x - tail.len(), tail) || !super::matches_at(input, x + 1, rest) { return None; }
+    Some((x - tail.len(), x + 1 + rest.len()))
 }
 
 /// 路径引用用同一固定目标判断；根／输出目录的同一地址不要求伪造文件。
@@ -479,36 +586,41 @@ pub fn project_directory(projects: &Vec<ProjectRoot>, path: &[u8]) -> (out: Opti
     }
 }
 
-pub open spec fn reference_base(endpoint: &Endpoint, file: Seq<u8>, kind: u8) -> Option<Seq<u8>> {
-    if kind <= 3 { Some(directory(file)) }
-    else if kind <= 5 {
+pub open spec fn reference_base(endpoint: &Endpoint, file: Seq<u8>, kind: u16, current: &Endpoint) -> Option<Seq<u8>> {
+    let mode = if kind <= 3 { 0int } else if kind <= 5 { 1int }
+        else if known_kind(current, kind) { current.reference_syntax[kind - 6].base as int } else { 3int };
+    if mode == 0 { Some(directory(file)) }
+    else if mode == 1 {
         if exists|i: int| unique_project(endpoint.projects@, file, i) {
             let i = choose|i: int| unique_project(endpoint.projects@, file, i);
             Some(vstd::utf8::encode_utf8(endpoint.projects[i].root@))
         } else { None }
-    } else { Some(Seq::empty()) }
+    } else if mode == 2 { Some(Seq::empty()) } else { None }
 }
 
-pub fn base_for(endpoint: &Endpoint, file: &[u8], kind: u8) -> (out: Option<Vec<u8>>)
-    requires 1 <= kind <= 7,
-    ensures match out { None => reference_base(endpoint, file@, kind).is_none(),
-        Some(value) => reference_base(endpoint, file@, kind) == Some(value@) },
+pub fn base_for(endpoint: &Endpoint, file: &[u8], kind: u16, current: &Endpoint) -> (out: Option<Vec<u8>>)
+    requires known_kind(current, kind),
+    ensures match out { None => reference_base(endpoint, file@, kind, current).is_none(),
+        Some(value) => reference_base(endpoint, file@, kind, current) == Some(value@) },
 {
-    if kind <= 3 { Some(dirname(file)) }
-    else if kind <= 5 { project_directory(&endpoint.projects, file) }
-    else { Some(Vec::new()) }
+    let mode = if kind <= 3 { 0u8 } else if kind <= 5 { 1u8 }
+        else { current.reference_syntax[(kind - 6) as usize].base };
+    if mode == 0 { Some(dirname(file)) }
+    else if mode == 1 { project_directory(&endpoint.projects, file) }
+    else if mode == 2 { Some(Vec::new()) } else { None }
 }
 
+#[verifier::opaque]
 pub open spec fn reference_pair(
     left: Seq<u8>, right: Seq<u8>, old_file: Seq<u8>, new_file: Seq<u8>,
-    base: &Endpoint, current: &Endpoint, kind: u8,
+    base: &Endpoint, current: &Endpoint, kind: u16,
 ) -> bool {
-    reference_base(base, old_file, kind).is_some() && reference_base(current, new_file, kind).is_some()
-        && resolved(reference_base(base, old_file, kind).unwrap(), left).is_some()
-        && resolved(reference_base(current, new_file, kind).unwrap(), right).is_some()
+    reference_base(base, old_file, kind, current).is_some() && reference_base(current, new_file, kind, current).is_some()
+        && resolved(reference_base(base, old_file, kind, current).unwrap(), left).is_some()
+        && resolved(reference_base(current, new_file, kind, current).unwrap(), right).is_some()
         && {
-            let a = resolved(reference_base(base, old_file, kind).unwrap(), left).unwrap();
-            let b = resolved(reference_base(current, new_file, kind).unwrap(), right).unwrap();
+            let a = resolved(reference_base(base, old_file, kind, current).unwrap(), left).unwrap();
+            let b = resolved(reference_base(current, new_file, kind, current).unwrap(), right).unwrap();
             target_exists(base, a) && target_exists(current, b)
                 && (if exists|i: int, j: int| project_match(base.projects@, current.projects@, i, j, a) {
                     (exists|i: int, j: int| project_match(base.projects@, current.projects@, i, j, a))
@@ -523,13 +635,14 @@ pub open spec fn reference_pair(
 
 pub fn same_reference(
     left: &[u8], right: &[u8], old_file: &[u8], new_file: &[u8],
-    base: &Endpoint, current: &Endpoint, kind: u8,
+    base: &Endpoint, current: &Endpoint, kind: u16,
 ) -> (yes: bool)
-    requires 1 <= kind <= 7,
+    requires known_kind(current, kind),
     ensures yes == reference_pair(left@, right@, old_file@, new_file@, base, current, kind),
 {
-    let a = match base_for(base, old_file, kind) { None => { return false; }, Some(v) => v };
-    let b = match base_for(current, new_file, kind) { None => { return false; }, Some(v) => v };
+    reveal(reference_pair);
+    let a = match base_for(base, old_file, kind, current) { None => { return false; }, Some(v) => v };
+    let b = match base_for(current, new_file, kind, current) { None => { return false; }, Some(v) => v };
     let a = match resolve(a.as_slice(), left) { None => { return false; }, Some(v) => v };
     let b = match resolve(b.as_slice(), right) { None => { return false; }, Some(v) => v };
     if !exists_target(base, a.as_slice()) || !exists_target(current, b.as_slice()) { return false; }
@@ -548,26 +661,63 @@ pub open spec fn source_equal(
     if a < 0 || b < 0 || a > left.len() || b > right.len() { false }
     else if a == left.len() { b == right.len() }
     else if b == right.len() { false }
-    else if exists|k: u8| anchor(left, a, k, manifest) {
-        let k = choose|k: u8| anchor(left, a, k, manifest)
-            && forall|j: u8| 1 <= j < k ==> !anchor(left, a, j, manifest);
-        let x = reference_end(left, a, k);
-        let y = reference_end(right, b, k);
-        anchor(right, b, k, manifest)
-            && a + prefix(k).len() <= x < left.len() && b + prefix(k).len() <= y < right.len()
-            && (k != 7 || (x > a + prefix(k).len() && y > b + prefix(k).len()
-                && left[x - 1] == 62 && right[y - 1] == 62))
-            && reference_pair(left.subrange(a + prefix(k).len(), literal_end(left, a, k)),
-                right.subrange(b + prefix(k).len(), literal_end(right, b, k)),
+    else if exists|k: u16| anchor(left, a, k, manifest, current, new_file, false) {
+        let k = choose|k: u16| anchor(left, a, k, manifest, current, new_file, false)
+            && forall|j: u16| 1 <= j < k ==> !anchor(left, a, j, manifest, current, new_file, false);
+        let x = reference_end(left, a, k, current, false);
+        let y = reference_end(right, b, k, current, true);
+        anchor(right, b, k, manifest, current, new_file, true)
+            && closed_reference(left, a, k, current, false) && closed_reference(right, b, k, current, true)
+            && reference_pair(left.subrange(a + prefix(k, current, false).len(), x - trailing(k, current).len()),
+                right.subrange(b + prefix(k, current, true).len(), y - trailing(k, current).len()),
                 old_file, new_file, base, current, k)
-            && source_equal(left, right, x + 1, y + 1, old_file, new_file, base, current, manifest)
+            && source_equal(left, right, x + 1 + suffix(k, current, false).len(),
+                y + 1 + suffix(k, current, true).len(), old_file, new_file, base, current, manifest)
     } else {
         left[a] == right[b]
             && source_equal(left, right, a + 1, b + 1, old_file, new_file, base, current, manifest)
     }
 }
 
-/// 精确比较所有非引用字节；每个引用先核锚点、词法解析、原目标和当前目标。
+/// 单步保留完整余段等式；主循环只组合已核对的步，不展开内部语法。
+pub fn source_step(
+    left: &[u8], right: &[u8], a: usize, b: usize, old_file: &[u8], new_file: &[u8],
+    base: &Endpoint, current: &Endpoint, manifest: bool,
+) -> (out: Option<(usize, usize)>)
+    requires a < left.len(), b <= right.len(),
+    ensures match out {
+        None => !source_equal(left@, right@, a as int, b as int, old_file@, new_file@, base, current, manifest),
+        Some((x,y)) => a < x <= left.len() && b < y <= right.len()
+            && source_equal(left@, right@, a as int, b as int, old_file@, new_file@, base, current, manifest)
+                == source_equal(left@, right@, x as int, y as int, old_file@, new_file@, base, current, manifest),
+    },
+{
+    reveal_with_fuel(source_equal, 2);
+    if b == right.len() { return None; }
+    let kind = anchor_at(left, a, manifest, current, new_file);
+    if kind != 0 {
+        proof {
+            let chosen = choose|k: u16| anchor(left@, a as int, k, manifest, current, new_file@, false)
+                && forall|j: u16| 1 <= j < k ==> !anchor(left@, a as int, j, manifest, current, new_file@, false);
+            assert(chosen == kind);
+        }
+        let p = prefix_bytes(kind, current, false);
+        let q = prefix_bytes(kind, current, true);
+        if q.len() == 0 || !super::matches_at(right, b, q) { return None; }
+        assert(anchor(right@, b as int, kind, manifest, current, new_file@, true));
+        let (x, next_a) = match closed_at(left, a, kind, current, false) { None => { return None; }, Some(v) => v };
+        let (y, next_b) = match closed_at(right, b, kind, current, true) { None => { return None; }, Some(v) => v };
+        let l = super::copy_range(left, a + p.len(), x);
+        let r = super::copy_range(right, b + q.len(), y);
+        if !same_reference(l.as_slice(), r.as_slice(), old_file, new_file, base, current, kind) { return None; }
+        Some((next_a, next_b))
+    } else {
+        if left[a] != right[b] { return None; }
+        Some((a + 1, b + 1))
+    }
+}
+
+/// 精确比较所有非引用字节；每个引用先核声明、词法解析、原目标和当前目标。
 pub fn same_source(
     left: &[u8], right: &[u8], old_file: &[u8], new_file: &[u8],
     base: &Endpoint, current: &Endpoint, manifest: bool,
@@ -582,29 +732,12 @@ pub fn same_source(
                 == source_equal(left@, right@, a as int, b as int, old_file@, new_file@, base, current, manifest),
         decreases left.len() - a,
     {
-        reveal_with_fuel(source_equal, 2);
-        if b == right.len() { return false; }
-        let kind = anchor_at(left, a, manifest);
-        if kind != 0 {
-            let p = prefix_bytes(kind);
-            if !super::matches_at(right, b, p) { return false; }
-            let x = super::find_byte(left, a + p.len(), 34);
-            let y = super::find_byte(right, b + p.len(), 34);
-            if x == left.len() || y == right.len() { return false; }
-            if kind == 7 && (x == a + p.len() || y == b + p.len()
-                || left[x - 1] != 62 || right[y - 1] != 62) { return false; }
-            let trim: usize = if kind == 7 { 1 } else { 0 };
-            let l = super::copy_range(left, a + p.len(), x - trim);
-            let r = super::copy_range(right, b + p.len(), y - trim);
-            if !same_reference(l.as_slice(), r.as_slice(), old_file, new_file, base, current, kind) { return false; }
-            a = x + 1;
-            b = y + 1;
-        } else {
-            if left[a] != right[b] { return false; }
-            a += 1;
-            b += 1;
+        match source_step(left, right, a, b, old_file, new_file, base, current, manifest) {
+            None => { return false; },
+            Some((next_a, next_b)) => { a = next_a; b = next_b; },
         }
     }
+    reveal_with_fuel(source_equal, 1);
     b == right.len()
 }
 
@@ -901,7 +1034,15 @@ pub fn assemble(
             metadata, registered: index.is_some() });
         i += 1;
     }
-    Endpoint { projects, files, outputs }
+    Endpoint { projects, files, outputs, reference_syntax: Vec::new() }
+}
+
+/// 保留固定端点的所有原字段，仅附加该端原登记的引用声明。
+pub fn with_reference_syntax(endpoint: Endpoint, reference_syntax: Vec<ReferenceSyntax>) -> (out: Endpoint)
+    ensures out.projects == endpoint.projects, out.files == endpoint.files,
+        out.outputs == endpoint.outputs, out.reference_syntax == reference_syntax,
+{
+    Endpoint { projects: endpoint.projects, files: endpoint.files, outputs: endpoint.outputs, reference_syntax }
 }
 
 } // verus!
@@ -942,6 +1083,8 @@ struct DecodedFile {
 #[derive(serde::Deserialize)]
 struct DecodedFiles {
     files: Vec<DecodedFile>,
+    #[serde(default)]
+    reference_syntax: Vec<ReferenceSyntax>,
 }
 #[cfg(not(verus_keep_ghost))]
 #[derive(serde::Deserialize)]
@@ -993,7 +1136,10 @@ pub fn observe_endpoint(
             metadata: Vec::new(),
         })
         .collect();
-    Ok(assemble(projects.projects, rows, tree, outputs))
+    Ok(with_reference_syntax(
+        assemble(projects.projects, rows, tree, outputs),
+        files.reference_syntax,
+    ))
 }
 
 /// 所有调用方使用此固定两端接口；完整计划与分类库存共用它的同一结果。

@@ -588,4 +588,37 @@ fn combined_source_plan_accepts_the_complete_empty_initial_inventory() {
     expect_continuity_bool(result.is_ok());
 }
 
+
+fn reference_form(prefix: &str, base: u8) -> (out: source_verifier::sources::continuity::ReferenceSyntax)
+    ensures out.file@ == "x"@, out.before@ == prefix@, out.after@ == prefix@, out.base == base,
+{
+    source_verifier::sources::continuity::ReferenceSyntax {
+        file: "x".to_string(), before: prefix.to_string(), after: prefix.to_string(),
+        trailing: String::new(), suffix_before: String::new(), suffix_after: String::new(), base,
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn reference_declarations_validate_actual_prefixes_and_explicit_bases() {
+    proof {
+        reveal_strlit("x"); reveal_strlit("\""); reveal_strlit("/"); reveal_strlit("");
+        vstd::utf8::is_ascii_chars_encode_utf8("x"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("\""@);
+        vstd::utf8::is_ascii_chars_encode_utf8("/"@);
+        vstd::utf8::is_ascii_chars_encode_utf8(""@);
+        assert(vstd::utf8::encode_utf8("x"@) =~= seq![120u8]);
+        assert(vstd::utf8::encode_utf8("\""@) =~= seq![34u8]);
+        assert(vstd::utf8::encode_utf8("/"@) =~= seq![47u8]);
+        assert(vstd::utf8::encode_utf8(""@) =~= Seq::<u8>::empty());
+        assert(source_verifier::sources::canonical_source_path(seq![120u8])) by (compute);
+    }
+    let quoted = policy::validate_reference_syntax(&vec![reference_form("\"", 0)]);
+    let root = policy::validate_reference_syntax(&vec![reference_form("/", 2)]);
+    let wrong_base = policy::validate_reference_syntax(&vec![reference_form("/", 0)]);
+    let empty = policy::validate_reference_syntax(&vec![reference_form("", 0)]);
+    let unknown_base = policy::validate_reference_syntax(&vec![reference_form("\"", 3)]);
+    expect_continuity_bool(quoted.is_ok() && root.is_ok());
+    expect_continuity_bool(wrong_base.is_err() && empty.is_err() && unknown_base.is_err());
+}
+
 } // verus!

@@ -36,6 +36,14 @@ pub use continuity_pipeline::with_source_continuity;
 #[cfg(verus_keep_ghost)]
 pub use continuity_plan::validate_source_plan;
 
+#[cfg(verus_keep_ghost)]
+#[path = "../../judge-registration/src/lib.rs"]
+mod source_registration;
+#[cfg(not(verus_keep_ghost))]
+pub use chrono_judge_registration::validate_reference_syntax;
+#[cfg(verus_keep_ghost)]
+pub use source_registration::validate_reference_syntax;
+
 verus! {
 
 /// Registered hosts admit action references only from their full configuration.

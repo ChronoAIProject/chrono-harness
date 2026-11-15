@@ -50,10 +50,10 @@ fn side(root: &str, path: &str) -> (out: c::Endpoint)
     ensures out.projects.len() == 1, out.projects[0].id@ == "p"@, out.projects[0].root@ == root@,
         out.files.len() == 1, out.files[0].path@ == path@, out.files[0].metadata@ == seq![1u8],
         out.files[0].mode@ == "100644"@, out.files[0].kind@ == "blob"@, out.files[0].registered,
-        out.outputs.len() == 0,
+        out.outputs.len() == 0, out.reference_syntax.len() == 0,
 {
     c::Endpoint { projects: vec![c::ProjectRoot { id: "p".to_string(), root: root.to_string() }],
-        files: vec![file(path)], outputs: Vec::new() }
+        files: vec![file(path)], outputs: Vec::new(), reference_syntax: Vec::new() }
 }
 
 fn unknown(path: &str) -> (out: sources::SourceRegistry)
@@ -116,12 +116,13 @@ proof fn single_move(base: &c::Endpoint, current: &c::Endpoint)
 }
 
 proof fn plain(base: &c::Endpoint, current: &c::Endpoint)
+    requires current.reference_syntax.len() == 0,
     ensures c::source_equal(seq![120u8], seq![120u8], 0, 0, seq![97u8,47u8,120u8],
         seq![98u8,47u8,120u8], base, current, false),
         !c::source_equal(seq![120u8], seq![121u8], 0, 0, seq![97u8,47u8,120u8],
         seq![98u8,47u8,120u8], base, current, false),
 {
-    assert forall|k: u8| !c::anchor(seq![120u8], 0, k, false) by { reveal(c::prefix); }
+    assert forall|k: u16| !c::anchor(seq![120u8], 0, k, false, current, seq![98u8,47u8,120u8], false) by { reveal(c::prefix); reveal(c::builtin_prefix); }
     reveal_with_fuel(c::source_equal, 3);
 }
 
@@ -204,7 +205,7 @@ fn a_copy_is_not_a_move_and_missing_sources_stay_unproven() {
     let missing = c::relocate("b/x".as_bytes(), &current.projects, &Vec::new());
     let same = match missing { None => false, Some(value) => identifiers::equal_bytes(value.as_slice(), "b/x".as_bytes()) };
     expect_verifier_true(same);
-    let no_base = c::assess(&c::Endpoint { projects: Vec::new(), files: Vec::new(), outputs: Vec::new() },
+    let no_base = c::assess(&c::Endpoint { projects: Vec::new(), files: Vec::new(), outputs: Vec::new(), reference_syntax: Vec::new() },
         &current, &vec!["b/x".to_string()], &io);
     expect_verifier_true(no_base.is_ok()); let no_base = no_base.unwrap();
     let kept = no_base.preserved("b/x"); expect_verifier_true(!kept);
@@ -323,6 +324,81 @@ fn moved_proof_obligations_cannot_become_data_when_source_changed() {
     proof { reveal_with_fuel(sources::classifications_error, 3); reveal_with_fuel(c::first_origin, 3); }
     let result = sources::validate_file_classifications(&new, Ok(Some(&old)), &evidence);
     expect_verifier_true(result.is_err());
+}
+
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn declared_frames_are_bound_to_the_file_and_leave_all_other_bytes_exact() {
+    let base = side("a", "a/x"); let mut current = side("b", "b/x");
+    let left = [112u8,34,46,34];
+    let right = [112u8,10,34,46,34];
+    let extra = [112u8,10,34,46,34,33];
+    current.reference_syntax.push(c::ReferenceSyntax {
+        file: "b/x".to_string(), before: "p\"".to_string(), after: "p\n\"".to_string(),
+        trailing: String::new(), suffix_before: String::new(), suffix_after: String::new(), base: 2,
+    });
+    proof {
+        names();
+        reveal_strlit("p\""); reveal_strlit("p\n\""); reveal_strlit("");
+        vstd::utf8::is_ascii_chars_encode_utf8("p\""@);
+        vstd::utf8::is_ascii_chars_encode_utf8("p\n\""@);
+        vstd::utf8::is_ascii_chars_encode_utf8(""@);
+        assert(vstd::utf8::encode_utf8("p\""@) =~= seq![112u8,34]);
+        assert(vstd::utf8::encode_utf8("p\n\""@) =~= seq![112u8,10,34]);
+        assert(vstd::utf8::encode_utf8(""@) =~= Seq::<u8>::empty());
+        assert(left@ =~= seq![112u8,34,46,34]);
+        assert(right@ =~= seq![112u8,10,34,46,34]);
+        assert(extra@ =~= seq![112u8,10,34,46,34,33]);
+        reveal(c::prefix); reveal(c::suffix); reveal(c::trailing); reveal(c::reference_pair);
+        assert(c::prefix(6, &current, false) == seq![112u8,34]);
+        assert(c::prefix(6, &current, true) == seq![112u8,10,34]);
+        assert(left@.subrange(0,2) =~= seq![112u8,34]);
+        assert(right@.subrange(0,3) =~= seq![112u8,10,34]);
+        assert forall|k: u16| 1 <= k <= 5 implies c::builtin_prefix(k).len() > 5 by {
+            reveal(c::builtin_prefix);
+        }
+        assert forall|k: u16| c::anchor(left@, 0, k, false, &current, seq![98u8,47u8,120u8], false)
+            implies k == 6 by { }
+        assert(c::anchor(left@, 0, 6, false, &current, seq![98u8,47u8,120u8], false));
+        let chosen = choose|k: u16| c::anchor(left@, 0, k, false, &current, seq![98u8,47u8,120u8], false)
+            && forall|j: u16| 1 <= j < k ==> !c::anchor(left@, 0, j, false, &current, seq![98u8,47u8,120u8], false);
+        assert(chosen == 6);
+        assert(sources::next_byte(seq![112u8,34,46,34], 2, 34) == 3) by (compute);
+        assert(sources::next_byte(seq![112u8,10,34,46,34], 3, 34) == 4) by (compute);
+        assert(sources::next_byte(seq![112u8,10,34,46,34,33], 3, 34) == 4) by (compute);
+        assert(left@.subrange(2,3) =~= seq![46u8]);
+        assert(right@.subrange(3,4) =~= seq![46u8]);
+        assert(extra@.subrange(3,4) =~= seq![46u8]);
+        assert(c::trailing(6,&current) =~= Seq::<u8>::empty());
+        assert(c::suffix(6,&current,false) =~= Seq::<u8>::empty());
+        assert(c::suffix(6,&current,true) =~= Seq::<u8>::empty());
+        assert(c::reference_end(left@,0,6,&current,false) == 3);
+        assert(c::reference_end(right@,0,6,&current,true) == 4);
+        assert(left@.subrange(3,3) =~= Seq::<u8>::empty());
+        assert(left@.subrange(4,4) =~= Seq::<u8>::empty());
+        assert(right@.subrange(4,4) =~= Seq::<u8>::empty());
+        assert(right@.subrange(5,5) =~= Seq::<u8>::empty());
+        assert(c::closed_reference(left@,0,6,&current,false));
+        assert(c::closed_reference(right@,0,6,&current,true));
+        assert(c::resolved(Seq::<u8>::empty(), seq![46u8]) == Some(Seq::<u8>::empty())) by (compute);
+        assert forall|i: int,j: int| !c::project_match(base.projects@, current.projects@, i,j, Seq::<u8>::empty()) by { }
+        assert(c::reference_pair(seq![46u8], seq![46u8], seq![97u8,47u8,120u8],
+            seq![98u8,47u8,120u8], &base, &current, 6));
+        reveal_with_fuel(c::source_equal, 3);
+    }
+    let accepted = c::same_source(&left, &right, "a/x".as_bytes(), "b/x".as_bytes(), &base, &current, false);
+    let changed = c::same_source(&left, &extra, "a/x".as_bytes(), "b/x".as_bytes(), &base, &current, false);
+    expect_verifier_true(accepted); expect_verifier_true(!changed);
+    let mut form = current.reference_syntax.pop().unwrap();
+    form.file = "a/x".to_string();
+    current.reference_syntax.push(form);
+    proof {
+        assert forall|k: u16| !c::anchor(left@, 0, k, false, &current, seq![98u8,47u8,120u8], false) by { }
+        assert forall|k: u16| !c::anchor(left@, 1, k, false, &current, seq![98u8,47u8,120u8], false) by { }
+        reveal_with_fuel(c::source_equal, 4);
+    }
+    let wrong_file = c::same_source(&left, &right, "a/x".as_bytes(), "b/x".as_bytes(), &base, &current, false);
+    expect_verifier_true(!wrong_file);
 }
 
 } // verus!
