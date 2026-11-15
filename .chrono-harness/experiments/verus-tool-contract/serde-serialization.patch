@@ -47,7 +47,7 @@ diff --git a/source/vir/src/ast_to_sst_func.rs b/source/vir/src/ast_to_sst_func.
 diff --git a/source/rust_verify_test/tests/consts.rs b/source/rust_verify_test/tests/consts.rs
 --- a/source/rust_verify_test/tests/consts.rs
 +++ b/source/rust_verify_test/tests/consts.rs
-@@ -2,6 +2,44 @@
+@@ -2,6 +2,49 @@
  #[macro_use]
  mod common;
  use common::*;
@@ -71,8 +71,13 @@ diff --git a/source/rust_verify_test/tests/consts.rs b/source/rust_verify_test/t
 +                requires value < 10,
 +            { value }
 +        }
-+        const _: u8 = under_ten(10); // FAILS
-+    } => Err(err) => assert_one_fails(err)
++        const _: u8 = under_ten(10);
++    } => Err(err) => {
++        assert_eq!(err.errors.len(), 1);
++        assert!(relevant_error_span(&err.errors[0].spans).text.iter()
++            .any(|line| line.text.contains("under_ten(10)")));
++        assert_vir_error_msg(err, "precondition not satisfied");
++    }
 +}
 +
 +test_verify_one_file_with_options! {
