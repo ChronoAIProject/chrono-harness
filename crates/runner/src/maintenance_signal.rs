@@ -2,6 +2,9 @@
 #[path = "maintenance_signal/verified_send.rs"]
 pub mod verified_send;
 use verified_send::send_hint;
+pub use verified_send::{
+    valid_hint_length, valid_maintenance_location, valid_maintenance_policy_fields, validate_policy,
+};
 
 use crate::{decode, no_symlink_parents, relative_path, sha256};
 use serde::{Deserialize, Serialize};
@@ -14,6 +17,54 @@ use std::{
 
 pub const POLICY_PATH: &str = ".chrono-harness/maintenance.json";
 
+/// Routing context from an already admitted lifecycle caller. This is only an
+/// activation destination, never an ownership capability or disposal policy.
+pub const CONTEXT_ENV: &str = "CHRONO_MAINTENANCE_CONTEXT";
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestContext {
+    source_root: PathBuf,
+    owner_root: PathBuf,
+}
+
+impl RequestContext {
+    pub fn new(source_root: &Path, owner_root: &Path) -> Result<Self, String> {
+        let context = Self {
+            source_root: source_root.into(),
+            owner_root: owner_root.into(),
+        };
+        context.validate()?;
+        Ok(context)
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        self.validate_shape()?;
+        for root in [&self.source_root, &self.owner_root] {
+            if fs::canonicalize(root).map_err(|error| error.to_string())? != *root {
+                return Err("maintenance context requires physical absolute roots".into());
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_shape(&self) -> Result<(), String> {
+        for root in [&self.source_root, &self.owner_root] {
+            if !root.is_absolute()
+                || root.components().any(|part| {
+                    matches!(
+                        part,
+                        std::path::Component::CurDir | std::path::Component::ParentDir
+                    )
+                })
+            {
+                return Err("maintenance context requires physical absolute roots".into());
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
@@ -25,19 +76,17 @@ pub struct Policy {
 }
 impl Policy {
     pub fn validate(&self) -> Result<(), String> {
-        relative_path(self.state_directory.trim_end_matches('/'))?;
-        relative_path(&self.socket)?;
-        if self.schema != "chrono-unified-maintenance/v1"
-            || !self.state_directory.starts_with(".chrono-harness/state/")
-            || !self.state_directory.ends_with('/')
-            || !self.socket.starts_with(".chrono-harness/state/")
-            || self.socket.ends_with('/')
-            || self.timer_seconds == 0
-            || self.idle_seconds == Some(0)
-        {
-            return Err("invalid explicit maintenance policy".into());
-        }
-        Ok(())
+        validate_policy(
+            (),
+            &self.schema,
+            &self.state_directory,
+            &self.socket,
+            self.idle_seconds,
+            self.timer_seconds,
+            |(), path| ((), relative_path(path.trim_end_matches('/'))),
+            |(), path| ((), relative_path(path)),
+        )
+        .1
     }
     pub fn socket_path(&self, root: &Path) -> Result<PathBuf, String> {
         self.validate()?;
@@ -76,6 +125,13 @@ impl Drop for RoundGuard {
 /// A datagram is an activation hint, not an acknowledgement from the executor.
 /// Responsibility was durably recorded by the caller's original owner first.
 pub fn request_adopted(root: &Path, reason: &str) -> Value {
+    let context = std::env::var(CONTEXT_ENV).ok();
+    request_with_context(root, reason, context.as_deref())
+}
+
+/// Explicit context is also available to admitted in-process callers. A route
+/// for a different source cannot redirect this host's event.
+pub fn request_with_context(root: &Path, reason: &str, context: Option<&str>) -> Value {
     let mut receipt = json!({"schema":"chrono-maintenance-request/v1", "reason":reason,
         "accepted":false,"round_completion":"not-established", "disposal":"not-attempted",
         "responsibility":"existing-owner-state"});
@@ -84,6 +140,20 @@ pub fn request_adopted(root: &Path, reason: &str) -> Value {
         return receipt;
     }
     let request = (|| {
+        let context = context
+            .map(|raw| decode::<RequestContext>(raw.as_bytes()))
+            .transpose()?;
+        if let Some(context) = &context {
+            context.validate_shape()?;
+        }
+        let context = context
+            .as_ref()
+            .filter(|context| context.source_root == root);
+        if let Some(context) = context {
+            context.validate()?;
+        }
+        let root = context.map_or(root, |context| context.owner_root.as_path());
+        receipt["activation_root"] = json!(root);
         let Some((policy, bytes)) = adopted(root)? else {
             return Ok(false);
         };

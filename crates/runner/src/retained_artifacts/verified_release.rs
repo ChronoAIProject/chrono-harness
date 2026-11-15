@@ -3,6 +3,7 @@
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+use std::collections::BTreeSet;
 #[cfg(verus_keep_ghost)]
 #[path = "../../../identifiers/src/lib.rs"]
 mod identifiers;
@@ -10,6 +11,35 @@ mod identifiers;
 use crate::verified_identifiers as identifiers;
 
 verus! {
+/// 选择父报告退役时，已观察的其他原件继续受保护。
+pub fn preserve_frontier_original(id: &str, retiring: &str) -> (retain: bool)
+    ensures retain == (id@ != retiring@),
+{
+    !identifiers::equal_text(id, retiring)
+}
+
+/// 只有退役条件已满足且每个剩余引用均已载入时，才尝试共同持有物理路径。
+pub fn metadata_path_ready(metadata_only: bool, references: &[String],
+    loaded: &BTreeSet<String>) -> (ready: bool)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures ready == (metadata_only && forall|i: int| 0 <= i < references@.len()
+        ==> loaded@.contains(#[trigger] references@[i])),
+{
+    if !metadata_only { return false; }
+    let mut index = 0;
+    while index < references.len()
+        invariant
+            vstd::laws_cmp::obeys_cmp::<String>(),
+            0 <= index <= references@.len(),
+            forall|i: int| 0 <= i < index
+                ==> loaded@.contains(#[trigger] references@[i]),
+        decreases references@.len() - index,
+    {
+        if !loaded.contains(&references[index]) { return false; }
+        index += 1;
+    }
+    true
+}
 
 /// Sealed recovery accounting alone never establishes domain completion.
 pub fn accounting_releases(completing: bool, sealed: bool) -> (released: bool)
@@ -36,6 +66,30 @@ pub fn within_bound(length: u64, limit: u64) -> (fits: bool)
 
 pub open spec fn recovery_text(text: Option<&str>) -> Option<Seq<char>> {
     match text { Some(value) => Some(value@), None => None }
+}
+
+/// Addressed metadata already excludes reservation changes. Existing
+/// capabilities still require actual exclusion; migration never creates one.
+pub struct MigrationCustody<'a> {
+    pub admitted: bool,
+    pub acquire: bool,
+    pub expected: Option<&'a str>,
+}
+
+pub fn migration_custody<'a>(phase: &str, lease_id: &'a str, missing: bool)
+    -> (custody: MigrationCustody<'a>)
+    ensures custody.admitted == (phase@ == "reserving"@ || lease_id@.len() > 0),
+        custody.acquire == (lease_id@.len() > 0 || !missing),
+        recovery_text(custody.expected) == if lease_id@.len() == 0 {
+            None
+        } else { Some(lease_id@) },
+{
+    let attached = !lease_id.is_empty();
+    MigrationCustody {
+        admitted: attached || identifiers::equal_text(phase, "reserving"),
+        acquire: attached || !missing,
+        expected: if attached { Some(lease_id) } else { None },
+    }
 }
 
 fn same_recovery_text(left: Option<&str>, right: Option<&str>) -> (same: bool)
@@ -200,23 +254,22 @@ pub fn finalized_expansion(rooted: bool, initial: Option<&str>, id: &str,
     ensures match out {
         FinalizedExpansion::RetainOnly => rooted && recovery_text(initial) == Some(id@),
         FinalizedExpansion::RootFrontier => rooted && recovery_text(initial) != Some(id@),
-        FinalizedExpansion::RetireFrontier => !rooted && recovery_text(initial) == Some(id@)
-            && incoming == 0 && roles == 0,
-        FinalizedExpansion::Related => !rooted && (recovery_text(initial) != Some(id@)
-            || incoming != 0 || roles != 0),
+        FinalizedExpansion::RetireFrontier => !rooted && incoming == 0 && roles == 0,
+        FinalizedExpansion::Related => !rooted && (incoming != 0 || roles != 0),
     },
 {
     let initial = same_recovery_text(initial, Some(id));
     if rooted {
         if initial { FinalizedExpansion::RetainOnly } else { FinalizedExpansion::RootFrontier }
-    } else if initial && incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
+    } else if incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
     else { FinalizedExpansion::Related }
 }
 
 /// 原件仍有登记时才排除其物理路径；已移除记录不进入内容维护。
-pub fn maintenance_path_required(present: bool, initial: bool, retained: bool) -> (required: bool)
-    ensures required == (present && (initial || !retained)),
-{ present && (initial || !retained) }
+pub fn maintenance_path_required(present: bool, initial: bool, retained: bool,
+    retiring_report: bool) -> (required: bool)
+    ensures required == (present && (!retained || (initial && !retiring_report))),
+{ present && (!retained || (initial && !retiring_report)) }
 
 pub fn terminal_eligible(released: bool, sealed: bool) -> (eligible: bool)
     ensures eligible == (released && sealed),

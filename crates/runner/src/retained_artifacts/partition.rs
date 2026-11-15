@@ -567,10 +567,7 @@ impl Inventory {
     /// One streamed explicit pass. Each declared address gets one existing
     /// bounded round, without a global cursor, admission lock or retry loop.
     pub fn maintain_explicit(&self) -> Result<Value, String> {
-        self.maintain_explicit_at(now()?)
-    }
-    pub fn maintain_explicit_at(&self, observed: u64) -> Result<Value, String> {
-        self.maintain_explicit_reporting_at(observed, None)
+        self.maintain_explicit_reporting_at(now()?, None)
     }
     /// Stream every declared member and its unabridged original round to the
     /// actual maintain report. The compact sweep's sample ceiling is unchanged.
@@ -832,6 +829,7 @@ impl Inventory {
             }
         }
         let mut seen = BTreeSet::new();
+        let mut processed = BTreeSet::new();
         let mut unvisited_relations = BTreeSet::new();
         let mut measurements = BTreeMap::new();
         let addresses: Box<dyn Iterator<Item = Result<String, String>> + '_> = match originals {
@@ -850,7 +848,7 @@ impl Inventory {
         };
         for id in addresses {
             let id = id?;
-            if seen.contains(&id) {
+            if processed.contains(&id) {
                 continue;
             }
             if nodes >= self.policy.max_nodes_per_round
@@ -887,6 +885,13 @@ impl Inventory {
                     vec![]
                 };
                 seen.extend(owned.iter().cloned());
+                // 保留的叶原件只被观察，本轮尚未维护它自己的输出。
+                processed.extend(
+                    owned
+                        .iter()
+                        .filter(|id| !gate.retained_dependencies.contains(*id))
+                        .cloned(),
+                );
                 self.maintain_locked(observed, &gate).map(|round| {
                     let observations = gate.measurements(self.policy.max_output_bytes);
                     (
@@ -1386,6 +1391,13 @@ impl Inventory {
                         // Retire this consumer before releasing its originals.
                         // The source keeps all other edges durably.
                         retiring_report = Some(id.clone());
+                        // 从叶进入时，反向路径上的原件已先于父报告被读到。
+                        // 将它们与后续读到的原件一起保留，只退役选中的报告。
+                        for previous in observed.keys() {
+                            if verified::preserve_frontier_original(previous.as_str(), id.as_str()) {
+                                retained_dependencies.insert(previous.clone());
+                            }
+                        }
                         selected.extend(output.references.first().cloned());
                         report_frontier = true;
                     }
@@ -1473,6 +1485,7 @@ impl Inventory {
                         r.output.is_some(),
                         initial.as_ref() == Some(&r.id),
                         retained_dependencies.contains(&r.id),
+                        retiring_report.is_some(),
                     ) && !r.output.as_ref().is_some_and(|output| {
                         verified::metadata_only_retirement(
                             retiring_report.as_ref() == Some(&r.id),
@@ -1490,6 +1503,38 @@ impl Inventory {
             leases.extend(additional);
             path_dirs.extend(dirs);
             exclusive_paths.extend(target_paths);
+            // Only the final metadata component can retire the report path.
+            // Earlier components keep the original object/edge exclusion;
+            // repeatedly locking an unused physical path consumes their budget.
+            // When all remaining edges are loaded, retain the available path
+            // now so their detachment and final retirement share one component.
+            for record in observed.values().filter(|record| {
+                record.output.as_ref().is_some_and(|output| {
+                    verified::metadata_path_ready(
+                        verified::metadata_only_retirement(
+                            retiring_report.as_ref() == Some(&record.id),
+                            output.phase == "disposing",
+                            output.manifest.sealed,
+                            output.manifest.entries.is_empty(),
+                            !output.references.is_empty(),
+                        ),
+                        &output.references,
+                        &retained_dependencies,
+                    )
+                })
+            }) {
+                match self.path_gates(&[record.path.clone()], false, false, false) {
+                    Ok((additional, dirs)) => {
+                        leases.extend(additional);
+                        path_dirs.extend(dirs);
+                        exclusive_paths.insert(record.path.clone());
+                    }
+                    Err(error)
+                        if error.starts_with("retention path is busy: ")
+                            || error == "retention path birth is busy" => {}
+                    Err(error) => return Err(error),
+                }
+            }
         }
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
@@ -1666,10 +1711,12 @@ impl Inventory {
                 continue;
             }
             for role in &record.roles {
+                let loaded;
                 let current = if let Some(current) = roles.get(role) {
-                    Some(current.clone())
+                    Some(current)
                 } else {
-                    self.read_role(role)?
+                    loaded = self.read_role(role)?;
+                    loaded.as_ref()
                 };
                 match current {
                     Some(current) if current.ids.contains(&record.id) => {
@@ -1738,7 +1785,19 @@ impl Inventory {
         gate.stable()?;
         let mut objects = gate.objects.borrow_mut();
         let mut roles = gate.roles.borrow_mut();
-        let before = objects.clone();
+        // Only output presence and outbound references are read from the old state.
+        let before: BTreeMap<_, _> = objects
+            .iter()
+            .map(|(id, record)| {
+                (
+                    id.clone(),
+                    record
+                        .output
+                        .as_ref()
+                        .map(|output| output.references.clone()),
+                )
+            })
+            .collect();
         // partition_load reads the first addressed declaration's cursor. Keep
         // that single owner rather than synchronously rewriting every related
         // original whenever bounded disposal advances the component cursor.
@@ -1773,13 +1832,10 @@ impl Inventory {
                 observation
                     .as_ref()
                     .is_some_and(|(name, _)| *name == role.role),
-                ledger.roots.get(&role.role).cloned().unwrap_or_default()
-                    == role
-                        .ids
-                        .iter()
-                        .filter(|id| !gate.maintenance || objects.contains_key(*id))
-                        .cloned()
-                        .collect::<Vec<_>>(),
+                ledger.roots.get(&role.role).into_iter().flatten().eq(role
+                    .ids
+                    .iter()
+                    .filter(|id| !gate.maintenance || objects.contains_key(*id))),
             ) {
                 return Err("observation membership requires its domain transition".into());
             }
@@ -1787,7 +1843,7 @@ impl Inventory {
         // Publish the path's reservation before any output/source attachment.
         // An interrupted birth remains discoverable by the next same-path user.
         for output in &ledger.outputs {
-            if before.get(&output.id).is_some_and(|r| r.output.is_none()) {
+            if before.get(&output.id).is_some_and(Option::is_none) {
                 let directory = gate
                     .paths
                     .get(&output.path)
@@ -1815,11 +1871,11 @@ impl Inventory {
         // edge or consumer-root change. An interruption can retain extra work;
         // it cannot expose a still-referenced original to disposal.
         for output in &ledger.outputs {
-            let previous = before.get(&output.id).and_then(|r| r.output.as_ref());
+            let previous = before.get(&output.id).and_then(Option::as_ref);
             for target in output
                 .references
                 .iter()
-                .filter(|id| previous.is_none_or(|o| !o.references.contains(id)))
+                .filter(|id| previous.is_none_or(|references| !references.contains(id)))
             {
                 let record = objects
                     .get_mut(target)

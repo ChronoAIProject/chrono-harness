@@ -1,27 +1,57 @@
 //! Snapshot transport, not dependency discovery or a governance verdict.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{verified_identifiers as identifiers, verus};
+#[cfg(verus_keep_ghost)]
+#[path = "../../identifiers/src/lib.rs"]
+mod identifiers;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// All current capture and composition paths use the same exact blob identity.
+pub fn blob_identity_matches(actual: &str, actual_length: u64,
+    expected: &str, expected_length: u64) -> (matches: bool)
+    ensures matches == (actual@ == expected@ && actual_length == expected_length),
+{
+    identifiers::equal_text(actual, expected) && actual_length == expected_length
+}
+}
+
 mod composition;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{copy_hashed, facts, file_identity, json, no_symlink_parents, wire};
+#[cfg(not(verus_keep_ghost))]
 pub use chrono_judge_registration::inputs::{
     SNAPSHOT_SCHEMA, SNAPSHOT_SCHEMA_V2, SNAPSHOT_SCHEMA_V3,
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_registration::{
     Registrations,
     inputs::{Retained, observe_file, retained_shape, snapshot_schema_for, snapshot_shape},
 };
+#[cfg(not(verus_keep_ghost))]
 pub use composition::{Manifest as CompositionManifest, Source as CompositionSource, compose};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     fs,
     io::Write,
     path::{Path, PathBuf},
 };
+#[cfg(not(verus_keep_ghost))]
+const BLOB_DIRECTORY: &str = ".chrono-harness/state/inputs/blobs";
+
+#[cfg(not(verus_keep_ghost))]
 fn state(root: &Path, path: &str) -> Result<PathBuf, String> {
     if !chrono_harness::verified_paths::valid_host_state_path(path.as_bytes()) {
         return Err("E_INPUT_PATH: output/reference must be within host state".into());
     }
     no_symlink_parents(root, path)
 }
+#[cfg(not(verus_keep_ghost))]
 fn publish(root: &Path, path: &str, v: &Value) -> Result<(), String> {
     let target = state(root, path)?;
     let bytes = wire::canonical(v)?;
@@ -38,9 +68,9 @@ fn publish(root: &Path, path: &str, v: &Value) -> Result<(), String> {
     tmp.persist_noclobber(&target).map_err(|e| e.to_string())?;
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 fn store(root: &Path, input: &Path) -> Result<Value, String> {
-    let directory = ".chrono-harness/state/inputs/blobs";
-    let dir = state(root, directory)?;
+    let dir = state(root, BLOB_DIRECTORY)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if !fs::metadata(input)
         .map_err(|e| format!("E_INPUT_READ: {}: {e}", input.display()))?
@@ -55,21 +85,35 @@ fn store(root: &Path, input: &Path) -> Result<Value, String> {
     }
     let mut tmp = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
     let (sha256, length) = copy_hashed(file, &mut tmp)?;
-    let path = format!("{directory}/{sha256}");
+    publish_blob(root, tmp, sha256, length)
+}
+// The caller hashes all bytes written to its private temporary file before publication.
+#[cfg(not(verus_keep_ghost))]
+fn publish_blob(
+    root: &Path,
+    tmp: tempfile::NamedTempFile,
+    sha256: String,
+    length: u64,
+) -> Result<Value, String> {
+    let path = format!("{BLOB_DIRECTORY}/{sha256}");
     let target = state(root, &path)?;
     if target.exists() {
-        if file_identity(&target)? != (sha256.clone(), length) {
+        let observed = file_identity(&target)?;
+        if !blob_identity_matches(&observed.0, observed.1, &sha256, length) {
             return Err("E_INPUT_BLOB: existing content does not match its address".into());
         }
     } else if let Err(error) = tmp.persist_noclobber(&target) {
-        if error.error.kind() != std::io::ErrorKind::AlreadyExists
-            || file_identity(&target)? != (sha256.clone(), length)
-        {
+        if error.error.kind() != std::io::ErrorKind::AlreadyExists {
+            return Err(format!("E_INPUT_BLOB: {error}"));
+        }
+        let observed = file_identity(&target)?;
+        if !blob_identity_matches(&observed.0, observed.1, &sha256, length) {
             return Err(format!("E_INPUT_BLOB: {error}"));
         }
     }
     Ok(value!({"blob":path,"sha256":sha256,"length":length}))
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<Value, String> {
     capture_selected(
         root,
@@ -79,6 +123,7 @@ pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<
         &chrono_harness::prepared::Selection::All,
     )
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn capture_selected(
     root: &Path,
     config: &str,
@@ -156,6 +201,7 @@ pub fn capture_selected(
     Ok(snapshot)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn transport(from: &Path, snapshot: &str, to: &Path) -> Result<Value, String> {
     let bytes = fs::read(state(from, snapshot)?).map_err(|e| e.to_string())?;
     let mut v = json(&bytes)?;
@@ -180,6 +226,7 @@ fn transport(from: &Path, snapshot: &str, to: &Path) -> Result<Value, String> {
     }
     Ok(v)
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn pair(
     root: &Path,
     base_root: &Path,
@@ -195,6 +242,7 @@ pub fn pair(
     publish(root, output, &v)?;
     Ok(v)
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
     if args == ["--version"] {
         return Ok(format!("chrono-inputs {}\n", env!("CARGO_PKG_VERSION")));

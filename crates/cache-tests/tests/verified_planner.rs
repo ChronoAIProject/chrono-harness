@@ -29,6 +29,740 @@ mod probe;
 
 verus! {
 
+fn record_publication_case(failure: u8, identity: usize, raw: &str,
+    temporary: &str, parent_path: &str, stage_error: &str)
+    requires failure <= 7,
+{
+    let encode = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<String, String>))
+        ensures publication_event.ensures((trace, 1, identity, raw), out.0),
+            match out.1 {
+                Err(error) => failure == 1 && error@ == stage_error@,
+                Ok(value) => failure != 1 && value@ == raw@,
+            },
+    {
+        (publication_event(trace, 1, identity, raw),
+            if failure == 1 { Err(stage_error.to_string()) } else { Ok(raw.to_string()) })
+    };
+    let write = |trace: PublicationTrace, bytes: &String|
+        -> (out: (PublicationTrace, Result<String, String>))
+        ensures out.0@.len() == trace@.len() + 1 && out.0@.drop_last() == trace@
+            && out.0@.last().0 == 2 && out.0@.last().1 == identity && out.0@.last().2@ == bytes@,
+            match out.1 {
+                Err(error) => failure == 2 && error@ == stage_error@,
+                Ok(value) => failure != 2 && value@ == temporary@,
+            },
+    {
+        (publication_event(trace, 2, identity, bytes.as_str()),
+            if failure == 2 { Err(stage_error.to_string()) } else { Ok(temporary.to_string()) })
+    };
+    let link = |trace: PublicationTrace, path: &String|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1 && out.0@.drop_last() == trace@
+            && out.0@.last().0 == 3 && out.0@.last().1 == identity && out.0@.last().2@ == path@,
+            match out.1 {
+                Err(error) => failure == 3 && error@ == stage_error@,
+                Ok(()) => failure != 3,
+            },
+    {
+        (publication_event(trace, 3, identity, path.as_str()),
+            if failure == 3 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let remove = |trace: PublicationTrace, path: &String|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1 && out.0@.drop_last() == trace@
+            && out.0@.last().0 == 4 && out.0@.last().1 == identity && out.0@.last().2@ == path@,
+            match out.1 {
+                Err(error) => failure == 4 && error@ == stage_error@,
+                Ok(()) => failure != 4,
+            },
+    {
+        (publication_event(trace, 4, identity, path.as_str()),
+            if failure == 4 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let parent = |trace: PublicationTrace| -> (out: (PublicationTrace, Option<String>))
+        ensures publication_event.ensures((trace, 5, identity, parent_path), out.0),
+            match out.1 {
+                None => failure == 5,
+                Some(value) => failure != 5 && value@ == parent_path@,
+            },
+    {
+        (publication_event(trace, 5, identity, parent_path),
+            if failure == 5 { None } else { Some(parent_path.to_string()) })
+    };
+    let open = |trace: PublicationTrace, path: String|
+        -> (out: (PublicationTrace, Result<usize, String>))
+        ensures out.0@.len() == trace@.len() + 1 && out.0@.drop_last() == trace@
+            && out.0@.last().0 == 6 && out.0@.last().1 == identity && out.0@.last().2@ == path@,
+            match out.1 {
+                Err(error) => failure == 6 && error@ == stage_error@,
+                Ok(file) => failure != 6 && file == identity,
+            },
+    {
+        (publication_event(trace, 6, identity, path.as_str()),
+            if failure == 6 { Err(stage_error.to_string()) } else { Ok(identity) })
+    };
+    let sync = |trace: PublicationTrace, file: usize|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 7, file, raw), out.0),
+            match out.1 {
+                Err(error) => failure == 7 && error@ == stage_error@,
+                Ok(()) => failure != 7,
+            },
+    {
+        (publication_event(trace, 7, file, raw),
+            if failure == 7 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let initial = publication_event(Vec::new(), 99, identity, stage_error);
+    let (trace, result) = policy::record_cache_attempt(initial,
+        encode, write, link, remove, parent, open, sync);
+    let calls = if failure == 0 { 7usize } else { failure as usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == identity);
+    expect_restore_text(trace[0].2.as_str(), stage_error);
+    expect_cache_true(trace[1].0 == 1 && trace[1].1 == identity);
+    expect_restore_text(trace[1].2.as_str(), raw);
+    if calls >= 2 {
+        expect_cache_true(trace[2].0 == 2 && trace[2].1 == identity);
+        expect_restore_text(trace[2].2.as_str(), raw);
+    }
+    if calls >= 3 {
+        expect_cache_true(trace[3].0 == 3 && trace[3].1 == identity);
+        expect_restore_text(trace[3].2.as_str(), temporary);
+    }
+    if calls >= 4 {
+        expect_cache_true(trace[4].0 == 4 && trace[4].1 == identity);
+        expect_restore_text(trace[4].2.as_str(), temporary);
+    }
+    if calls >= 5 {
+        expect_cache_true(trace[5].0 == 5 && trace[5].1 == identity);
+        expect_restore_text(trace[5].2.as_str(), parent_path);
+    }
+    if calls >= 6 {
+        expect_cache_true(trace[6].0 == 6 && trace[6].1 == identity);
+        expect_restore_text(trace[6].2.as_str(), parent_path);
+    }
+    if calls >= 7 {
+        expect_cache_true(trace[7].0 == 7 && trace[7].1 == identity);
+        expect_restore_text(trace[7].2.as_str(), raw);
+    }
+    match result {
+        Ok(()) => expect_cache_true(failure == 0),
+        Err(error) => {
+            expect_cache_true(failure != 0);
+            expect_restore_text(error.as_str(), if failure == 5 {
+                "E_CACHE_ATTEMPT: record parent"
+            } else { stage_error });
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn record_publication_keeps_every_stage_prefix_and_payload() {
+    let mut failure = 0u8;
+    while failure <= 7
+        invariant failure <= 8,
+        decreases 8 - failure,
+    {
+        record_publication_case(failure, 0, "", "", "", "");
+        record_publication_case(failure, usize::MAX, "raw/λ\0\n", "writing/λ\0\n",
+            "parent/λ\0\n", "stage; error/λ\0\n");
+        record_publication_case(failure, 0, "raw", "different temporary", "different parent", "error");
+        failure += 1;
+    }
+}
+
+fn attempt_finalization_case(terminal: bool, original_failure: bool, failure: u8,
+    identity: usize, original_error: &str, stage_error: &str)
+    requires failure <= 4,
+{
+    let record = |trace: PublicationTrace, actual: &Result<usize, String>|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 1,
+            match actual {
+                Ok(value) => out.0@.last().1 == *value && out.0@.last().2@ == ""@,
+                Err(error) => out.0@.last().1 == 0 && out.0@.last().2@ == error@,
+            },
+            match out.1 {
+                Err(error) => failure == 1 && error@ == stage_error@,
+                Ok(()) => failure != 1,
+            },
+    {
+        let (value, text) = match actual {
+            Ok(value) => (*value, ""), Err(error) => (0, error.as_str()),
+        };
+        (publication_event(trace, 1, value, text),
+            if failure == 1 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let digest = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<usize, String>))
+        ensures publication_event.ensures((trace, 2, identity, stage_error), out.0),
+            match out.1 {
+                Err(error) => failure == 2 && error@ == stage_error@,
+                Ok(value) => failure != 2 && value == identity,
+            },
+    {
+        (publication_event(trace, 2, identity, stage_error),
+            if failure == 2 { Err(stage_error.to_string()) } else { Ok(identity) })
+    };
+    let seal = |trace: PublicationTrace, hash: &usize|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 3, *hash, stage_error), out.0),
+            match out.1 {
+                Err(error) => failure == 3 && error@ == stage_error@,
+                Ok(()) => failure != 3,
+            },
+    {
+        (publication_event(trace, 3, *hash, stage_error),
+            if failure == 3 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let release = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 4, identity, original_error), out.0),
+            match out.1 {
+                Err(error) => failure == 4 && error@ == stage_error@,
+                Ok(()) => failure != 4,
+            },
+    {
+        (publication_event(trace, 4, identity, original_error),
+            if failure == 4 { Err(stage_error.to_string()) } else { Ok(()) })
+    };
+    let result = if original_failure { Err(original_error.to_string()) } else { Ok(identity) };
+    let initial = publication_event(Vec::new(), 99, identity, original_error);
+    let (state, result) = policy::finalize_cache_attempt(initial, terminal, result, record, digest, seal, release);
+    let trace = match state {
+        policy::CacheAttemptStage::BeforeSeal(trace) => {
+            expect_cache_true(failure == 1 || !terminal || failure == 2);
+            trace
+        },
+        policy::CacheAttemptStage::AfterSeal(trace) => {
+            expect_cache_true(terminal && failure != 1 && failure != 2);
+            trace
+        },
+    };
+    let calls = if failure == 1 || !terminal { 1usize }
+        else if failure == 2 { 2usize }
+        else if failure == 3 || !original_failure { 3usize } else { 4usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == identity);
+    expect_restore_text(trace[0].2.as_str(), original_error);
+    expect_cache_true(trace[1].0 == 1);
+    expect_cache_true(trace[1].1 == if original_failure { 0 } else { identity });
+    expect_restore_text(trace[1].2.as_str(), if original_failure { original_error } else { "" });
+    if calls > 1 {
+        expect_cache_true(trace[2].0 == 2 && trace[2].1 == identity);
+        expect_restore_text(trace[2].2.as_str(), stage_error);
+    }
+    if calls > 2 {
+        expect_cache_true(trace[3].0 == 3 && trace[3].1 == identity);
+        expect_restore_text(trace[3].2.as_str(), stage_error);
+    }
+    if calls > 3 {
+        expect_cache_true(trace[4].0 == 4 && trace[4].1 == identity);
+        expect_restore_text(trace[4].2.as_str(), original_error);
+    }
+    match result {
+        Ok(actual) => {
+            expect_cache_true(!original_failure && failure != 1
+                && (!terminal || (failure != 2 && failure != 3)));
+            expect_cache_true(actual == identity);
+        },
+        Err(policy::CacheAttemptFailure::Recording(actual, original)) => {
+            expect_cache_true(failure == 1);
+            expect_restore_text(actual.as_str(), stage_error);
+            match original {
+                Some(error) => {
+                    expect_cache_true(original_failure);
+                    expect_restore_text(error.as_str(), original_error);
+                },
+                None => expect_cache_true(!original_failure),
+            }
+        },
+        Err(policy::CacheAttemptFailure::Sealing(actual, original)) => {
+            expect_cache_true(terminal && failure == 3);
+            expect_restore_text(actual.as_str(), stage_error);
+            match original {
+                Some(error) => {
+                    expect_cache_true(original_failure);
+                    expect_restore_text(error.as_str(), original_error);
+                },
+                None => expect_cache_true(!original_failure),
+            }
+        },
+        Err(policy::CacheAttemptFailure::Original(actual)) => {
+            expect_cache_true((terminal && failure == 2)
+                || (original_failure && failure != 1 && (!terminal || failure != 3)));
+            let expected = if terminal && (failure == 2 || failure == 4) { stage_error } else { original_error };
+            expect_restore_text(actual.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn attempt_finalization_keeps_results_and_stops_after_the_first_failed_stage() {
+    let mut failure = 0u8;
+    while failure <= 4
+        invariant failure <= 5,
+        decreases 5 - failure,
+    {
+        attempt_finalization_case(false, false, failure, usize::MAX, "original/λ\0\n", "stage/λ\0\n");
+        attempt_finalization_case(false, true, failure, usize::MAX, "original/λ\0\n", "stage/λ\0\n");
+        attempt_finalization_case(true, false, failure, 0, "", "");
+        attempt_finalization_case(true, true, failure, 0, "original/λ\0\n", "stage/λ\0\n");
+        attempt_finalization_case(false, true, failure, 0, "", "");
+        attempt_finalization_case(true, true, failure, usize::MAX, "", "");
+        failure += 1;
+    }
+}
+
+fn attempt_finalization_diagnostic_case(kind: u8, relative: &str, original: &str, publication: &str)
+    requires kind <= 4,
+{
+    let error = if kind == 0 { policy::CacheAttemptFailure::Original(original.to_string()) }
+        else if kind == 1 { policy::CacheAttemptFailure::Recording(publication.to_string(), None) }
+        else if kind == 2 { policy::CacheAttemptFailure::Recording(publication.to_string(), Some(original.to_string())) }
+        else if kind == 3 { policy::CacheAttemptFailure::Sealing(publication.to_string(), None) }
+        else { policy::CacheAttemptFailure::Sealing(publication.to_string(), Some(original.to_string())) };
+    let parts = policy::cache_attempt_failure_fragments(relative, &error);
+    let expected = if kind == 0 { [original, "", "", "", "", "", ""] }
+        else if kind == 1 { ["E_CACHE_ATTEMPT: result publication: ", publication, "; original ", relative, "", "", ""] }
+        else if kind == 2 { [original, "; result publication: ", publication, "; attempt ", relative, "", ""] }
+        else if kind == 3 { ["", "", "E_CACHE_ATTEMPT: terminal publication: ", publication, "; original ", relative, "/result.json"] }
+        else { [original, "; ", "E_CACHE_ATTEMPT: terminal publication: ", publication, "; original ", relative, "/result.json"] };
+    expect_restore_text(parts[0], expected[0]);
+    expect_restore_text(parts[1], expected[1]);
+    expect_restore_text(parts[2], expected[2]);
+    expect_restore_text(parts[3], expected[3]);
+    expect_restore_text(parts[4], expected[4]);
+    expect_restore_text(parts[5], expected[5]);
+    expect_restore_text(parts[6], expected[6]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn attempt_finalization_diagnostics_keep_every_fragment_and_empty_error_presence() {
+    let mut kind = 0u8;
+    while kind <= 4
+        invariant kind <= 5,
+        decreases 5 - kind,
+    {
+        attempt_finalization_diagnostic_case(kind, "attempt/λ\0\n", "original; error\0\n", "publication; error\0\n");
+        attempt_finalization_diagnostic_case(kind, "", "", "");
+        kind += 1;
+    }
+}
+
+fn original_result_case(present: bool, null: bool, has_error: bool,
+    payload: &String, raw_error: &str)
+{
+    let plan = if present { Some(payload) } else { None };
+    let error = if has_error { Some(raw_error) } else { None };
+    match policy::replay_cache_result(plan, null, error) {
+        Ok(actual) => {
+            expect_cache_true(present && !null && !has_error);
+            expect_restore_text(actual.as_str(), payload.as_str());
+        },
+        Err(actual) => {
+            expect_cache_true(!present || null || has_error);
+            let expected = if (!present || null) && has_error { raw_error }
+                else { "E_CACHE_ATTEMPT: invalid original result; no redispatch" };
+            expect_restore_text(actual.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_result_requires_exactly_one_plan_or_original_error() {
+    let payload = "plan/λ\0\n".to_string();
+    let empty = "".to_string();
+    let mut choice = 0u8;
+    while choice < 8
+        invariant choice <= 8,
+        decreases 8 - choice,
+    {
+        original_result_case(choice >= 4, choice % 4 >= 2, choice % 2 == 1,
+            &payload, "original/λ\0\n");
+        original_result_case(choice >= 4, choice % 4 >= 2, choice % 2 == 1,
+            &empty, "");
+        choice += 1;
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_diagnostic_keeps_full_original_failure_and_address_in_order() {
+    let parts = policy::cache_publication_error_fragments(
+        "attempt/λ\0\n", "publication; failed\0\n", Some("original; error/λ\0\n"));
+    expect_restore_text(parts[0], "original; error/λ\0\n");
+    expect_restore_text(parts[1], "; ");
+    expect_restore_text(parts[2], "E_CACHE_ATTEMPT: terminal publication: ");
+    expect_restore_text(parts[3], "publication; failed\0\n");
+    expect_restore_text(parts[4], "; original ");
+    expect_restore_text(parts[5], "attempt/λ\0\n");
+    expect_restore_text(parts[6], "/result.json");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_diagnostic_distinguishes_no_original_error_from_an_empty_one() {
+    let absent = policy::cache_publication_error_fragments("", "", None);
+    let empty = policy::cache_publication_error_fragments("", "", Some(""));
+    expect_restore_text(absent[0], "");
+    expect_restore_text(absent[1], "");
+    expect_restore_text(empty[0], "");
+    expect_restore_text(empty[1], "; ");
+    expect_restore_text(absent[2], "E_CACHE_ATTEMPT: terminal publication: ");
+    expect_restore_text(empty[2], "E_CACHE_ATTEMPT: terminal publication: ");
+    expect_restore_text(absent[3], "");
+    expect_restore_text(empty[3], "");
+    expect_restore_text(absent[4], "; original ");
+    expect_restore_text(empty[4], "; original ");
+    expect_restore_text(absent[5], "");
+    expect_restore_text(empty[5], "");
+    expect_restore_text(absent[6], "/result.json");
+    expect_restore_text(empty[6], "/result.json");
+}
+
+fn inventory_case(failure: u8, identity: usize, raw_error: &str)
+    requires failure <= 4,
+{
+    let adoption = if failure == 1 { Err(raw_error.to_string()) }
+        else if failure == 2 { Ok(None) } else { Ok(Some(identity)) };
+    let probe = |trace: PublicationTrace, inventory: &usize|
+        -> (out: (PublicationTrace, bool))
+        ensures publication_event.ensures((trace, 10, *inventory, ""), out.0),
+            out.1 == (failure != 3),
+    {
+        (publication_event(trace, 10, *inventory, ""), failure != 3)
+    };
+    let plan = |trace: PublicationTrace, inventory: &usize|
+        -> (out: (PublicationTrace, bool))
+        ensures publication_event.ensures((trace, 11, *inventory, ""), out.0),
+            out.1 == (failure != 3 && failure != 4),
+    {
+        (publication_event(trace, 11, *inventory, ""), failure != 3 && failure != 4)
+    };
+    let initial = publication_event(Vec::new(), 99, identity, raw_error);
+    let (trace, result) = policy::admit_attempt_inventory(initial, adoption, probe, plan);
+    let calls = if failure == 1 || failure == 2 { 0usize }
+        else if failure == 3 { 1usize } else { 2usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == identity);
+    expect_restore_text(trace[0].2.as_str(), raw_error);
+    if calls > 0 { expect_cache_true(trace[1].0 == 10 && trace[1].1 == identity); }
+    if calls > 1 { expect_cache_true(trace[2].0 == 11 && trace[2].1 == identity); }
+    match result {
+        Ok(actual) => { expect_cache_true(failure == 0 && actual == identity); },
+        Err(error) => {
+            expect_cache_true(failure > 0);
+            let expected = if failure == 1 { raw_error }
+                else if failure == 2 {
+                    "E_CACHE_ATTEMPT: host must adopt retention/v2 for cache probe originals"
+                } else {
+                    "E_CACHE_ATTEMPT: adopted policy requires cache-probe-attempt and cache-plan terminal_limits"
+                };
+            expect_restore_text(error.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn inventory_preserves_the_original_identity_errors_and_limit_lookup_order() {
+    let mut failure = 0u8;
+    while failure <= 4
+        invariant failure <= 5,
+        decreases 5 - failure,
+    {
+        inventory_case(failure, usize::MAX, "original/λ\0\n");
+        inventory_case(failure, 0, "");
+        failure += 1;
+    }
+}
+
+type ReleaseTrace = Vec<(u8, usize, usize, String)>;
+
+fn release_event(mut trace: ReleaseTrace, event: u8, inventory: usize, lease: usize, owner: &str)
+    -> (out: ReleaseTrace)
+    ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+        out@.last().0 == event, out@.last().1 == inventory,
+        out@.last().2 == lease, out@.last().3@ == owner@,
+{
+    let ghost previous = trace@;
+    trace.push((event, inventory, lease, owner.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    trace
+}
+
+fn release_case(has_originals: bool, failure: u8, inventory: usize, lease: usize,
+    owner_id: &str, raw_error: &str)
+    requires failure <= 7,
+{
+    let adopt = |trace: ReleaseTrace| -> (out: (ReleaseTrace, Result<usize, String>))
+        ensures release_event.ensures((trace, 1, 0, 0, ""), out.0),
+            match out.1 {
+                Err(error) => failure == 1 && error@ == raw_error@,
+                Ok(value) => failure != 1 && value == inventory,
+            },
+    {
+        (release_event(trace, 1, 0, 0, ""),
+            if failure == 1 { Err(raw_error.to_string()) } else { Ok(inventory) })
+    };
+    let confirm = |trace: ReleaseTrace, actual: &usize|
+        -> (out: (ReleaseTrace, Result<bool, String>))
+        ensures release_event.ensures((trace, 2, *actual, 0, ""), out.0),
+            match out.1 {
+                Err(error) => 0 < failure <= 2 && error@ == raw_error@,
+                Ok(bound) => !(0 < failure <= 2) && bound == (failure != 3),
+            },
+    {
+        (release_event(trace, 2, *actual, 0, ""),
+            if 0 < failure && failure <= 2 { Err(raw_error.to_string()) }
+            else { Ok(failure != 3) })
+    };
+    let owner = |trace: ReleaseTrace, actual: &usize|
+        -> (out: (ReleaseTrace, Result<Option<String>, String>))
+        ensures release_event.ensures((trace, 3, *actual, 0, ""), out.0),
+            match out.1 {
+                Err(error) => 0 < failure <= 4 && error@ == raw_error@,
+                Ok(None) => failure == 5,
+                Ok(Some(id)) => !(0 < failure <= 5) && id@ == owner_id@,
+            },
+    {
+        (release_event(trace, 3, *actual, 0, ""),
+            if 0 < failure && failure <= 4 { Err(raw_error.to_string()) }
+            else if failure == 5 { Ok(None) }
+            else { Ok(Some(owner_id.to_string())) })
+    };
+    let consume = |trace: ReleaseTrace, actual: &usize, id: &String|
+        -> (out: (ReleaseTrace, Result<usize, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 4, out.0@.last().1 == *actual,
+            out.0@.last().2 == 0, out.0@.last().3@ == id@,
+            match out.1 {
+                Err(error) => 0 < failure <= 6 && error@ == raw_error@,
+                Ok(value) => !(0 < failure <= 6) && value == lease,
+            },
+    {
+        (release_event(trace, 4, *actual, 0, id.as_str()),
+            if 0 < failure && failure <= 6 { Err(raw_error.to_string()) } else { Ok(lease) })
+    };
+    let release = |trace: ReleaseTrace, actual: &usize, id: &String, actual_lease: usize|
+        -> (out: (ReleaseTrace, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 5, out.0@.last().1 == *actual,
+            out.0@.last().2 == actual_lease, out.0@.last().3@ == id@,
+            match out.1 {
+                Err(error) => failure > 0 && error@ == raw_error@,
+                Ok(()) => failure == 0,
+            },
+    {
+        (release_event(trace, 5, *actual, actual_lease, id.as_str()),
+            if failure > 0 { Err(raw_error.to_string()) } else { Ok(()) })
+    };
+    let initial = release_event(Vec::new(), 99, inventory, lease, owner_id);
+    let (trace, result) = policy::release_cache_plan(initial, has_originals,
+        adopt, confirm, owner, consume, release);
+    let calls = if !has_originals { 0usize }
+        else if failure == 1 { 1usize }
+        else if failure == 2 || failure == 3 { 2usize }
+        else if failure == 4 || failure == 5 { 3usize }
+        else if failure == 6 { 4usize }
+        else { 5usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == inventory && trace[0].2 == lease);
+    expect_restore_text(trace[0].3.as_str(), owner_id);
+    if calls > 0 { expect_cache_true(trace[1].0 == 1); }
+    if calls > 1 { expect_cache_true(trace[2].0 == 2 && trace[2].1 == inventory); }
+    if calls > 2 { expect_cache_true(trace[3].0 == 3 && trace[3].1 == inventory); }
+    if calls > 3 {
+        expect_cache_true(trace[4].0 == 4 && trace[4].1 == inventory && trace[4].2 == 0);
+        expect_restore_text(trace[4].3.as_str(), owner_id);
+    }
+    if calls > 4 {
+        expect_cache_true(trace[5].0 == 5 && trace[5].1 == inventory && trace[5].2 == lease);
+        expect_restore_text(trace[5].3.as_str(), owner_id);
+    }
+    match result {
+        Ok(()) => expect_cache_true(!has_originals || failure == 0),
+        Err(error) => {
+            expect_cache_true(has_originals && failure > 0);
+            let expected = if failure == 3 {
+                "E_CACHE_ATTEMPT: consumer plan publication not bound"
+            } else if failure == 5 {
+                "E_CACHE_ATTEMPT: plan owner missing"
+            } else { raw_error };
+            expect_restore_text(error.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn release_skips_absent_originals_and_preserves_inventory_owner_and_lease() {
+    release_case(false, 0, 0, 0, "", "");
+    release_case(false, 1, usize::MAX, usize::MAX, "owner/λ\0\n", "first/λ\0\n");
+    release_case(false, 7, 17, 29, "unused", "last");
+    release_case(true, 0, 0, usize::MAX, "", "");
+    release_case(true, 0, usize::MAX, 0, "owner/λ\0\n", "unused");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn release_stops_at_each_original_error_unbound_observation_and_missing_owner() {
+    let mut failure = 1u8;
+    while failure <= 7
+        invariant 1 <= failure <= 8,
+        decreases 8 - failure,
+    {
+        release_case(true, failure, usize::MAX, 0, "owner/λ\0\n", "original/λ\0\n");
+        release_case(true, failure, 0, usize::MAX, "", "");
+        failure += 1;
+    }
+}
+
+type PublicationTrace = Vec<(u8, usize, String)>;
+
+fn publication_event(mut trace: PublicationTrace, event: u8, inventory: usize, raw: &str)
+    -> (out: PublicationTrace)
+    ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+        out@.last().0 == event, out@.last().1 == inventory, out@.last().2@ == raw@,
+{
+    let ghost previous = trace@;
+    trace.push((event, inventory, raw.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    trace
+}
+
+fn publication_case(has_originals: bool, failure: u8, payload: &str, raw_error: &str,
+    inventory: usize)
+    requires failure <= 8,
+{
+    let validate = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 1, 0, ""), out.0),
+            match out.1 {
+                Err(error) => failure == 1 && error@ == raw_error@,
+                Ok(()) => failure != 1,
+            },
+    {
+        (publication_event(trace, 1, 0, ""),
+            if failure == 1 { Err(raw_error.to_string()) } else { Ok(()) })
+    };
+    let encode = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<String, String>))
+        ensures publication_event.ensures((trace, 2, 0, ""), out.0),
+            match out.1 {
+                Err(error) => 0 < failure <= 2 && error@ == raw_error@,
+                Ok(raw) => !(0 < failure <= 2) && raw@ == payload@,
+            },
+    {
+        (publication_event(trace, 2, 0, ""),
+            if 0 < failure && failure <= 2 { Err(raw_error.to_string()) }
+            else { Ok(payload.to_string()) })
+    };
+    let publish = |trace: PublicationTrace, raw: &String|
+        -> (out: (PublicationTrace, Result<bool, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 3, out.0@.last().1 == 0, out.0@.last().2@ == raw@,
+            match out.1 {
+                Err(error) => 0 < failure <= 3 && error@ == raw_error@,
+                Ok(published) => !(0 < failure <= 3) && published == (failure != 4),
+            },
+    {
+        (publication_event(trace, 3, 0, raw.as_str()),
+            if 0 < failure && failure <= 3 { Err(raw_error.to_string()) }
+            else { Ok(failure != 4) })
+    };
+    let adopt = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<usize, String>))
+        ensures publication_event.ensures((trace, 4, 0, ""), out.0),
+            match out.1 {
+                Err(error) => 0 < failure <= 5 && error@ == raw_error@,
+                Ok(value) => !(0 < failure <= 5) && value == inventory,
+            },
+    {
+        (publication_event(trace, 4, 0, ""),
+            if 0 < failure && failure <= 5 { Err(raw_error.to_string()) }
+            else { Ok(inventory) })
+    };
+    let confirm = |trace: PublicationTrace, actual: &usize, raw: &String|
+        -> (out: (PublicationTrace, Result<bool, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 5, out.0@.last().1 == *actual, out.0@.last().2@ == raw@,
+            match out.1 {
+                Err(error) => 0 < failure <= 6 && error@ == raw_error@,
+                Ok(confirmed) => !(0 < failure <= 6) && confirmed == (failure != 7),
+            },
+    {
+        (publication_event(trace, 5, *actual, raw.as_str()),
+            if 0 < failure && failure <= 6 { Err(raw_error.to_string()) }
+            else { Ok(failure != 7) })
+    };
+    let bind = |trace: PublicationTrace, actual: usize|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 6, actual, ""), out.0),
+            match out.1 {
+                Err(error) => failure > 0 && error@ == raw_error@,
+                Ok(()) => failure == 0,
+            },
+    {
+        (publication_event(trace, 6, actual, ""),
+            if failure > 0 { Err(raw_error.to_string()) } else { Ok(()) })
+    };
+    let initial = publication_event(Vec::new(), 99, inventory, payload);
+    let (trace, result) = policy::publish_cache_plan(initial, has_originals,
+        validate, encode, publish, adopt, confirm, bind);
+    let calls = if !has_originals { 0usize }
+        else if failure == 1 { 1usize }
+        else if failure == 2 { 2usize }
+        else if failure == 3 || failure == 4 { 3usize }
+        else if failure == 5 { 4usize }
+        else if failure == 6 || failure == 7 { 5usize }
+        else { 6usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == inventory);
+    expect_restore_text(trace[0].2.as_str(), payload);
+    if calls > 0 { expect_cache_true(trace[1].0 == 1); }
+    if calls > 1 { expect_cache_true(trace[2].0 == 2); }
+    if calls > 2 {
+        expect_cache_true(trace[3].0 == 3);
+        expect_restore_text(trace[3].2.as_str(), payload);
+    }
+    if calls > 3 { expect_cache_true(trace[4].0 == 4); }
+    if calls > 4 {
+        expect_cache_true(trace[5].0 == 5 && trace[5].1 == inventory);
+        expect_restore_text(trace[5].2.as_str(), payload);
+    }
+    if calls > 5 { expect_cache_true(trace[6].0 == 6 && trace[6].1 == inventory); }
+    match result {
+        Ok(published) => {
+            expect_cache_true(!has_originals || failure == 0);
+            expect_cache_true(published == has_originals);
+        },
+        Err(error) => {
+            expect_cache_true(has_originals && failure > 0);
+            let expected = if failure == 4 {
+                "E_CACHE_ATTEMPT: cache-plan scope must be adopted"
+            } else if failure == 7 {
+                "E_CACHE_ATTEMPT: plan publication unfinished; original attempt retained; no redispatch"
+            } else { raw_error };
+            expect_restore_text(error.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_skips_absent_originals_and_preserves_complete_success() {
+    publication_case(false, 0, "", "", 0);
+    publication_case(false, 1, "raw/λ\0\n", "first/λ\0\n", usize::MAX);
+    publication_case(false, 8, "unused", "last", 17);
+    publication_case(true, 0, "", "", 0);
+    publication_case(true, 0, "raw/λ\0\n", "unused", usize::MAX);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_stops_at_every_original_error_and_false_observation() {
+    let mut failure = 1u8;
+    while failure <= 8
+        invariant 1 <= failure <= 9,
+        decreases 9 - failure,
+    {
+        publication_case(true, failure, "raw/λ\0\n", "original/λ\0\n", usize::MAX);
+        publication_case(true, failure, "", "", 0);
+        failure += 1;
+    }
+}
+
 proof fn recovery_utf8_concat(left: Seq<char>, right: Seq<char>)
     ensures vstd::utf8::encode_utf8(left + right)
         == vstd::utf8::encode_utf8(left) + vstd::utf8::encode_utf8(right),
