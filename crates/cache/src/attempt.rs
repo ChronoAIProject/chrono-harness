@@ -34,6 +34,182 @@ pub fn confirmed_probe(launch_matches: bool, exit_code: i32, exit_signal: Option
     ensures terminal == (launch_matches && (exit_code >= 0 || exit_signal.is_some()) && owned_work_joined),
 { launch_matches && (exit_code >= 0 || exit_signal.is_some()) && owned_work_joined }
 
+pub open spec fn attempt_inventory_result<S, I, P, C>(
+    initial: S, adoption: Result<Option<I>, String>, probe: P, plan: C,
+    out: (S, Result<I, String>),
+) -> bool
+    where P: FnOnce(S, &I) -> (S, bool),
+        C: FnOnce(S, &I) -> (S, bool),
+{
+    match adoption {
+        Err(error) => out == (initial, Err::<I, String>(error)),
+        Ok(None) => out.0 == initial && match out.1 {
+            Err(error) => error@ ==
+                "E_CACHE_ATTEMPT: host must adopt retention/v2 for cache probe originals"@,
+            _ => false,
+        },
+        Ok(Some(inventory)) => exists|probed: S, present: bool|
+            #[trigger] probe.ensures((initial, &inventory), (probed, present))
+            && if !present {
+                out.0 == probed && match out.1 {
+                    Err(error) => error@ ==
+                        "E_CACHE_ATTEMPT: adopted policy requires cache-probe-attempt and cache-plan terminal_limits"@,
+                    _ => false,
+                }
+            } else {
+                exists|planned: S, present: bool|
+                    #[trigger] plan.ensures((probed, &inventory), (planned, present))
+                    && out.0 == planned && if present {
+                        out.1 == Ok::<I, String>(inventory)
+                    } else {
+                        match out.1 {
+                            Err(error) => error@ ==
+                                "E_CACHE_ATTEMPT: adopted policy requires cache-probe-attempt and cache-plan terminal_limits"@,
+                            _ => false,
+                        }
+                    }
+            },
+    }
+}
+
+/// 库存采用与两类终态额度按原短路顺序准入；成功交回同一库存。
+pub fn admit_attempt_inventory<S, I, P, C>(
+    state: S, adoption: Result<Option<I>, String>, probe: P, plan: C,
+) -> (out: (S, Result<I, String>))
+    where P: FnOnce(S, &I) -> (S, bool),
+        C: FnOnce(S, &I) -> (S, bool),
+    requires forall|state: S, inventory: &I| probe.requires((state, inventory)),
+        forall|state: S, inventory: &I| plan.requires((state, inventory)),
+    ensures attempt_inventory_result(state, adoption, probe, plan, out),
+{
+    let inventory = match adoption {
+        Err(error) => return (state, Err(error)),
+        Ok(None) => return (state, Err(
+            "E_CACHE_ATTEMPT: host must adopt retention/v2 for cache probe originals".to_string())),
+        Ok(Some(inventory)) => inventory,
+    };
+    let ghost initial = state;
+    let (state, present) = probe(state, &inventory);
+    let ghost probed = state;
+    let ghost probe_present = present;
+    assert(probe.ensures((initial, &inventory), (probed, probe_present)));
+    if !present {
+        return (state, Err(
+            "E_CACHE_ATTEMPT: adopted policy requires cache-probe-attempt and cache-plan terminal_limits".to_string()));
+    }
+    let (state, present) = plan(state, &inventory);
+    assert(plan.ensures((probed, &inventory), (state, present)));
+    if !present {
+        return (state, Err(
+            "E_CACHE_ATTEMPT: adopted policy requires cache-probe-attempt and cache-plan terminal_limits".to_string()));
+    }
+    (state, Ok(inventory))
+}
+
+pub open spec fn cache_plan_release_result<S, I, L, A, C, O, U, R>(
+    initial: S, has_originals: bool, adopt: A, confirm: C, owner: O,
+    consume: U, release: R, out: (S, Result<(), String>),
+) -> bool
+    where A: FnOnce(S) -> (S, Result<I, String>),
+        C: FnOnce(S, &I) -> (S, Result<bool, String>),
+        O: FnOnce(S, &I) -> (S, Result<Option<String>, String>),
+        U: FnOnce(S, &I, &String) -> (S, Result<L, String>),
+        R: FnOnce(S, &I, &String, L) -> (S, Result<(), String>),
+{
+    if !has_originals {
+        out == (initial, Ok::<(), String>(()))
+    } else {
+        exists|adopted: S, adoption: Result<I, String>|
+            #[trigger] adopt.ensures((initial,), (adopted, adoption))
+            && match adoption {
+                Err(error) => out == (adopted, Err::<(), String>(error)),
+                Ok(inventory) => exists|confirmed: S, confirmation: Result<bool, String>|
+                    #[trigger] confirm.ensures((adopted, &inventory), (confirmed, confirmation))
+                    && match confirmation {
+                        Err(error) => out == (confirmed, Err::<(), String>(error)),
+                        Ok(false) => out.0 == confirmed && match out.1 {
+                            Err(error) => error@ ==
+                                "E_CACHE_ATTEMPT: consumer plan publication not bound"@,
+                            _ => false,
+                        },
+                        Ok(true) => exists|observed: S, observation: Result<Option<String>, String>|
+                            #[trigger] owner.ensures((confirmed, &inventory), (observed, observation))
+                            && match observation {
+                                Err(error) => out == (observed, Err::<(), String>(error)),
+                                Ok(None) => out.0 == observed && match out.1 {
+                                    Err(error) => error@ == "E_CACHE_ATTEMPT: plan owner missing"@,
+                                    _ => false,
+                                },
+                                Ok(Some(id)) => exists|consumed: S, consumption: Result<L, String>|
+                                    #[trigger] consume.ensures((observed, &inventory, &id), (consumed, consumption))
+                                    && match consumption {
+                                        Err(error) => out == (consumed, Err::<(), String>(error)),
+                                        Ok(lease) => release.ensures((consumed, &inventory, &id, lease), out),
+                                    },
+                            },
+                    },
+            }
+    }
+}
+
+/// 只在确认同一原件、取得当前所有者及其读取租约后释放引用；首错不丢失。
+pub fn release_cache_plan<S, I, L, A, C, O, U, R>(
+    state: S, has_originals: bool, adopt: A, confirm: C, owner: O, consume: U, release: R,
+) -> (out: (S, Result<(), String>))
+    where A: FnOnce(S) -> (S, Result<I, String>),
+        C: FnOnce(S, &I) -> (S, Result<bool, String>),
+        O: FnOnce(S, &I) -> (S, Result<Option<String>, String>),
+        U: FnOnce(S, &I, &String) -> (S, Result<L, String>),
+        R: FnOnce(S, &I, &String, L) -> (S, Result<(), String>),
+    requires forall|state: S| adopt.requires((state,)),
+        forall|state: S, inventory: &I| confirm.requires((state, inventory)),
+        forall|state: S, inventory: &I| owner.requires((state, inventory)),
+        forall|state: S, inventory: &I, id: &String| consume.requires((state, inventory, id)),
+        forall|state: S, inventory: &I, id: &String, lease: L|
+            release.requires((state, inventory, id, lease)),
+    ensures cache_plan_release_result(state, has_originals, adopt, confirm, owner,
+        consume, release, out),
+{
+    if !has_originals { return (state, Ok(())); }
+    let ghost initial = state;
+    let (state, adoption) = adopt(state);
+    let ghost adopted = state;
+    let ghost adoption_result = adoption;
+    assert(adopt.ensures((initial,), (adopted, adoption_result)));
+    let inventory = match adoption {
+        Err(error) => return (state, Err(error)), Ok(inventory) => inventory,
+    };
+    let (state, confirmation) = confirm(state, &inventory);
+    let ghost confirmed = state;
+    let ghost confirmation_result = confirmation;
+    assert(confirm.ensures((adopted, &inventory), (confirmed, confirmation_result)));
+    match confirmation {
+        Err(error) => return (state, Err(error)),
+        Ok(false) => return (state, Err(
+            "E_CACHE_ATTEMPT: consumer plan publication not bound".to_string())),
+        Ok(true) => (),
+    }
+    let (state, observation) = owner(state, &inventory);
+    let ghost observed = state;
+    let ghost owner_result = observation;
+    assert(owner.ensures((confirmed, &inventory), (observed, owner_result)));
+    let id = match observation {
+        Err(error) => return (state, Err(error)),
+        Ok(None) => return (state, Err("E_CACHE_ATTEMPT: plan owner missing".to_string())),
+        Ok(Some(id)) => id,
+    };
+    let (state, consumption) = consume(state, &inventory, &id);
+    let ghost consumed = state;
+    let ghost consumption_result = consumption;
+    assert(consume.ensures((observed, &inventory, &id), (consumed, consumption_result)));
+    let lease = match consumption {
+        Err(error) => return (state, Err(error)), Ok(lease) => lease,
+    };
+    let out = release(state, &inventory, &id, lease);
+    assert(release.ensures((consumed, &inventory, &id, lease), out));
+    out
+}
+
 pub open spec fn cache_plan_publication_result<S, T, I, V, E, P, A, C, B>(
     initial: S, has_originals: bool, validate: V, encode: E, publish: P,
     adopt: A, confirm: C, bind: B, out: (S, Result<bool, String>),
@@ -180,14 +356,13 @@ mod runtime {
     const STORE: &str = ".chrono-harness/state/cache-probes";
 
     fn inventory(root: &Path) -> Result<Inventory, String> {
-        let state = Inventory::adopted(root)?
-            .ok_or("E_CACHE_ATTEMPT: host must adopt retention/v2 for cache probe originals")?;
-        if state.terminal_limits(PRODUCER).is_none()
-            || state.terminal_limits("cache-plan").is_none()
-        {
-            return Err("E_CACHE_ATTEMPT: adopted policy requires cache-probe-attempt and cache-plan terminal_limits".into());
-        }
-        Ok(state)
+        decision::admit_attempt_inventory(
+            (),
+            Inventory::adopted(root),
+            |(), state: &Inventory| ((), state.terminal_limits(PRODUCER).is_some()),
+            |(), state: &Inventory| ((), state.terminal_limits("cache-plan").is_some()),
+        )
+        .1
     }
     fn timestamp() -> Result<u64, String> {
         Ok(SystemTime::now()
@@ -604,23 +779,37 @@ mod runtime {
 
     pub(crate) fn release_plan(root: &Path, path: &str, raw: &[u8]) -> Result<(), String> {
         let plan: Value = decode(raw)?;
-        if !plan["inputs"]
+        let has_originals = plan["inputs"]
             .as_object()
             .ok_or("E_CACHE_ATTEMPT: inputs")?
             .values()
-            .any(|input| input["declaration"]["kind"] == "command")
-        {
-            return Ok(());
-        }
-        let state = inventory(root)?;
-        if !state.published_original(path, &sha256(raw), raw.len() as u64)? {
-            return Err("E_CACHE_ATTEMPT: consumer plan publication not bound".into());
-        }
-        let status = state.producer_status("cache-plan", Some(path))?;
-        let id = status["records"][0]["id"]
-            .as_str()
-            .ok_or("E_CACHE_ATTEMPT: plan owner missing")?;
-        let _use = state.consume(id)?;
-        state.reference(&format!("consumer:publication-recheck:{id}"), &[])
+            .any(|input| input["declaration"]["kind"] == "command");
+        decision::release_cache_plan(
+            (),
+            has_originals,
+            |()| ((), inventory(root)),
+            |(), state: &Inventory| {
+                (
+                    (),
+                    state.published_original(path, &sha256(raw), raw.len() as u64),
+                )
+            },
+            |(), state: &Inventory| {
+                (
+                    (),
+                    state
+                        .producer_status("cache-plan", Some(path))
+                        .map(|status| status["records"][0]["id"].as_str().map(str::to_owned)),
+                )
+            },
+            |(), state: &Inventory, id: &String| ((), state.consume(id.as_str())),
+            |(), state: &Inventory, id: &String, _lease| {
+                (
+                    (),
+                    state.reference(&format!("consumer:publication-recheck:{id}"), &[]),
+                )
+            },
+        )
+        .1
     }
 }
