@@ -1,3 +1,81 @@
+diff --git a/source/rust_verify/src/rust_to_vir_expr.rs b/source/rust_verify/src/rust_to_vir_expr.rs
+index 3a7bca9..a52ec9d 100644
+--- a/source/rust_verify/src/rust_to_vir_expr.rs
++++ b/source/rust_verify/src/rust_to_vir_expr.rs
+@@ -633,7 +633,11 @@ pub(crate) fn patexpr_to_vir<'tcx>(
+     let tcx = bctx.ctxt.tcx;
+     match pat_expr.kind {
+         PatExprKind::Lit { lit, negated } => {
+-            patexpr_unsupported_type_err(bctx, span, pat)?;
++            // Literal strings are matched by their complete contents, not SMT reference equality.
++            // The pattern lowering uses the existing string and slice length/index operations.
++            if !matches!(lit.node, LitKind::Str(..) | LitKind::ByteStr(..)) {
++                patexpr_unsupported_type_err(bctx, span, pat)?;
++            }
+             Ok(PatternX::Expr(lit_to_vir(bctx, span, lit, negated, pat_typ, None)?))
+         }
+         PatExprKind::Path(qpath) => {
+diff --git a/source/vir/src/patterns.rs b/source/vir/src/patterns.rs
+index 44cb4e7..9dcebc2 100644
+--- a/source/vir/src/patterns.rs
++++ b/source/vir/src/patterns.rs
+@@ -185,7 +185,55 @@ fn pattern_to_exprs_rec(
+         }
+         PatternX::Expr(e) => {
+             let expr = read_place(&place);
+-            Ok(mk_eq(&pattern.span, &expr, e))
++            match &e.x {
++                ExprX::Const(Constant::StrSlice(lit)) => {
++                    let actual_len = SpannedTyped::new(
++                        &pattern.span,
++                        &int_typ(),
++                        ExprX::Unary(UnaryOp::StrLen, expr.clone()),
++                    );
++                    let expected_len = mk_int_lit_from_usize(&pattern.span, lit.chars().count());
++                    let mut conjuncts = vec![mk_eq(&pattern.span, &actual_len, &expected_len)];
++                    let char_typ = Arc::new(TypX::Int(IntRange::Char));
++                    for (i, c) in lit.chars().enumerate() {
++                        let idx = mk_int_lit_from_usize(&pattern.span, i);
++                        let actual = SpannedTyped::new(
++                            &pattern.span,
++                            &char_typ,
++                            ExprX::Binary(BinaryOp::StrGetChar, expr.clone(), idx),
++                        );
++                        let expected = SpannedTyped::new(
++                            &pattern.span,
++                            &char_typ,
++                            ExprX::Const(Constant::Char(c)),
++                        );
++                        conjuncts.push(mk_eq(&pattern.span, &actual, &expected));
++                    }
++                    Ok(conjoin(&pattern.span, &conjuncts))
++                }
++                ExprX::Const(Constant::ByteStr(lit)) => {
++                    // Reuse ordinary slice/array pattern lowering, including its exact length test.
++                    let (_, elem_typ) = array_kind_of_typ(&pattern.typ);
++                    let pats = lit
++                        .iter()
++                        .map(|b| {
++                            let e = SpannedTyped::new(
++                                &pattern.span,
++                                &elem_typ,
++                                ExprX::Const(Constant::Int((*b).into())),
++                            );
++                            SpannedTyped::new(&pattern.span, &elem_typ, PatternX::Expr(e))
++                        })
++                        .collect();
++                    let expanded = SpannedTyped::new(
++                        &pattern.span,
++                        &pattern.typ,
++                        PatternX::Slice(Arc::new(pats)),
++                    );
++                    pattern_to_exprs_rec(ctx, &expanded, place, bindings, in_immut)
++                }
++                _ => Ok(mk_eq(&pattern.span, &expr, e)),
++            }
+         }
+         PatternX::Range(lower, upper) => {
+             let expr = read_place(&place);
 diff --git a/source/rust_verify_test/tests/literal_patterns.rs b/source/rust_verify_test/tests/literal_patterns.rs
 new file mode 100644
 index 0000000..e0d7f08
