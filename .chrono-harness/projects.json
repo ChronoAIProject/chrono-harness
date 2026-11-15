@@ -5320,6 +5320,8 @@
             "serde_lossy",
             "--test",
             "serde_expected",
+            "--test",
+            "serde_unexpected",
             "--",
             "--test-threads=1"
           ]
