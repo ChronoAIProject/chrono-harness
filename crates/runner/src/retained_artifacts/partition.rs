@@ -1844,15 +1844,10 @@ impl Inventory {
                 observation
                     .as_ref()
                     .is_some_and(|(name, _)| *name == role.role),
-                ledger
-                    .roots
-                    .get(&role.role)
-                    .into_iter()
-                    .flatten()
-                    .eq(role
-                        .ids
-                        .iter()
-                        .filter(|id| !gate.maintenance || objects.contains_key(*id))),
+                ledger.roots.get(&role.role).into_iter().flatten().eq(role
+                    .ids
+                    .iter()
+                    .filter(|id| !gate.maintenance || objects.contains_key(*id))),
             ) {
                 return Err("observation membership requires its domain transition".into());
             }

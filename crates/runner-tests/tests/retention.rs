@@ -2050,9 +2050,7 @@ fn killed_creation_intent_recovers_on_ordinary_entry_without_a_callback() {
     child.kill().unwrap();
     assert!(!child.wait().unwrap().success());
     for _ in 0..4 {
-        if maintenance(h.path())["remaining_outputs"]
-            == 0
-        {
+        if maintenance(h.path())["remaining_outputs"] == 0 {
             break;
         }
     }
