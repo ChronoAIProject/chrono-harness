@@ -2574,7 +2574,7 @@ impl Inventory {
             .map(|n| (l.cursor + n) % l.outputs.len().max(1))
             .collect();
         for index in account_order {
-            if gate.retained_dependencies().contains(&l.outputs[index].id) {
+            if !gate.accounts_output(&l.outputs[index].id) {
                 continue;
             }
             if !self.metadata_room()
