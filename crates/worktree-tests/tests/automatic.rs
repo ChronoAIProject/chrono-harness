@@ -629,6 +629,9 @@ fn ordinary_handoff_keeps_each_sealed_reports_inputs_out_of_the_callers_relation
     }
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let h = EnrollmentOriginalsFixture::imported();
+    // Ordinary use admits an existing path before opening its enrollment.
+    // Keep the checkout unqualified so only predecessor recovery can succeed.
+    fs::create_dir(&h.target).unwrap();
     let policy_path = h.root.join(POLICY_PATH);
     let previous_policy = fs::read(&policy_path).unwrap();
     let mut policy = json(&previous_policy).unwrap();
@@ -695,7 +698,7 @@ fn ordinary_handoff_keeps_each_sealed_reports_inputs_out_of_the_callers_relation
         ]);
         assert_ne!(
             output.exit_code, 0,
-            "an absent checkout cannot execute work"
+            "an unqualified checkout cannot execute unregistered work"
         );
         let report = json(output.stdout.as_bytes()).unwrap_or_else(|error| {
             panic!("{error}: stdout={} stderr={}", output.stdout, output.stderr)
