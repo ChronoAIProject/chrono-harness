@@ -34,13 +34,13 @@ pub use start_verification::select_report_input_scope;
 mod automatic_verification;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::{
-    MissingCacheObservation, absence_probe_required, absent_attachment_conflict,
-    known_absent_enrollment, missing_cache_observation,
+    MissingCacheObservation, absence_probe_required, absent_attachment_conflict, admission_handoff,
+    known_absent_enrollment, missing_cache_observation, publish_enrollment_record,
 };
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::{
-    MissingCacheObservation, absence_probe_required, absent_attachment_conflict,
-    known_absent_enrollment, missing_cache_observation,
+    MissingCacheObservation, absence_probe_required, absent_attachment_conflict, admission_handoff,
+    known_absent_enrollment, missing_cache_observation, publish_enrollment_record,
 };
 
 #[cfg(not(verus_keep_ghost))]
@@ -104,6 +104,15 @@ mod cli_status_owner;
 pub use cli_status_owner::successful_report_status;
 
 verus! {
+
+/// 普通消费交接不改变观察、导入、迁移或部署的现有资格边界。
+pub fn ordinary_admission(operation: &str) -> (selected: bool)
+    ensures selected <==> (operation@ == "use"@ || operation@ == "check"@
+        || operation@ == "bootstrap"@),
+{
+    equal_text(operation, "use") || equal_text(operation, "check")
+        || equal_text(operation, "bootstrap")
+}
 
 /// An address left by failed admission has no checkout policy consumer.
 pub fn enrolled_policy_required(entries: usize) -> (required: bool)
