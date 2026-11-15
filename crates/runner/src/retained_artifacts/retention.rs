@@ -2312,25 +2312,6 @@ impl Inventory {
         )
     }
 
-    /// One explicit, bounded maintenance action through the current custodian.
-    /// Overflow only shortens terminal eligibility; ordinary guards still own
-    /// whether any original can actually be removed.
-    pub fn maintain_producer(&self, producer: &str) -> Result<Value, String> {
-        self.maintain_producer_at(producer, now()?)
-    }
-    pub fn maintain_producer_at(&self, producer: &str, observed: u64) -> Result<Value, String> {
-        if !self.policy.producers.contains_key(producer) {
-            return Err("unregistered retained producer".into());
-        }
-        let round = self.maintain_at(observed)?;
-        let quota = &round["terminal_quotas"][producer];
-        Ok(
-            json!({"schema":"chrono-retained-producer-maintenance/v1","producer":producer,
-            "quota_scope_complete":quota["scope_complete"],"quota_errors":quota["errors"],
-            "quota_expired":quota["expired"],"terminal_limits":self.policy.terminal_limits.get(producer),
-            "round":round,"completion":"not-established"}),
-        )
-    }
     fn terminal_quota(&self, producer: &str, observed: u64) -> Result<Value, String> {
         let (mut outputs, mut complete, mut errors) = self.producer_snapshot(producer)?;
         outputs.sort_by(|a, b| b.expires.cmp(&a.expires).then_with(|| b.id.cmp(&a.id)));
