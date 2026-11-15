@@ -1899,7 +1899,7 @@ fn compiler_source_batch_preserves_aliases_order_and_rejects_incomplete_or_wrong
     let a = String::from_utf8(BoundSources.digest(&first)).unwrap();
     let b = String::from_utf8(BoundSources.digest(&second)).unwrap();
     let dependency = Some(Ok(format!(
-        "out.d: a/../root other ./root\n\nout: a/../root other ./root\n\na/../root:\n\nother:\n\n./root:\n\n# checksum:sha256={a} file_len:6 a/../root\n# checksum:sha256={b} file_len:6 other\n# checksum:sha256={a} file_len:6 ./root\n"
+        "out.d: a/../root other ./root\n\nout: a/../root other ./root\n\na/../root:\nother:\n./root:\n\n# checksum:sha256={a} file_len:6 a/../root\n# checksum:sha256={b} file_len:6 other\n# checksum:sha256={a} file_len:6 ./root\n"
     ).into_bytes()));
     let registry = |other: bool| {
         Ok(policy::sources::source_registry(
