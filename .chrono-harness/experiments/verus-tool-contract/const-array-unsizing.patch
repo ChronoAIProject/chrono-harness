@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/source/rust_verify_test/tests/const_array_unsizing.rs
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,66 @@
 +#![feature(rustc_private)]
 +#[macro_use]
 +mod common;
@@ -46,10 +46,24 @@
 +test_verify_one_file_with_options! {
 +    #[test] exec_slice_keeps_contents
 +    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
 +        fn contents() {
 +            let values = [3u8, 5u8];
 +            let slice: &[u8] = &values;
 +            assert(slice@ == seq![3u8, 5u8]);
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] const_empty_slice_is_empty
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        use vstd::prelude::*;
++        const EMPTY: &[u8] = &[];
++        verus! {
++            proof fn empty() {
++                assert(EMPTY@ == Seq::<u8>::empty());
++            }
 +        }
 +    } => Ok(())
 +}
