@@ -75,7 +75,7 @@
 +            let (mut generic_params, generic_bounds) = gen_generics(state,
 +                &base.x.typ_params.iter().map(|(x, _)| x.clone()).collect(), &base.x.typ_bounds, None);
 +            let t_args: Vec<_> = generic_params.iter().map(|p| Box::new(TypX::TypParam(p.name.clone()))).collect();
-+            let output_name = state.typ_param("dyn_callable_output&%".to_owned(), None);
++            let output_name = state.typ_param("DynCallableOutput".to_owned(), None);
 +            generic_params.push(GenericParam { name: output_name.clone(), const_typ: None });
 +            let output = Box::new(TypX::TypParam(output_name));
 +            let output_assoc = state.typ_param("Output".to_owned(), None);
@@ -242,8 +242,8 @@
 +    paths.sort_by_key(crate::ast_util::path_as_friendly_rust_name);
 +    for principal in paths {
 +        let Some(principal_kind) = ClosureKind::from_trait_path(&principal) else { continue };
-+        let args_name = Arc::new("dyn_callable_args&%".to_owned());
-+        let output_name = Arc::new("dyn_callable_output&%".to_owned());
++        let args_name = Arc::new("DynCallableArgs".to_owned());
++        let output_name = Arc::new("DynCallableOutput".to_owned());
 +        let typ_params = Arc::new(vec![args_name.clone(), output_name.clone()]);
 +        let args = Arc::new(TypX::TypParam(args_name));
 +        let output = Arc::new(TypX::TypParam(output_name));
@@ -433,3 +433,22 @@
              reach_type(ctxt, state, &typ_to_reached_type(typ));
              reach_bound_trait(ctxt, state, trait_path);
              state.dyn_traits.insert(trait_path.clone());
+--- a/source/rust_verify_test/tests/traits_dyn.rs
++++ b/source/rust_verify_test/tests/traits_dyn.rs
+@@ -635,12 +635,12 @@
+     } => Ok(())
+ }
+ 
+-test_verify_one_file! {
+-    #[test] dyn_unsupported2 verus_code! {
+-        trait T {}
++test_verify_one_file_with_options! {
++    #[test] dyn_callable_output ["vstd"] => verus_code! {
++        use vstd::prelude::*;
+         fn test(d: &dyn Fn() -> ()) {
+         }
+-    } => Err(err) => assert_vir_error_msg(err, "Verus does not currently support dyn with more than one trait")
++    } => Ok(())
+ }
+ 
+ test_verify_one_file! {
