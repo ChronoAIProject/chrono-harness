@@ -76,12 +76,32 @@ index 44cb4e7..9dcebc2 100644
          }
          PatternX::Range(lower, upper) => {
              let expr = read_place(&place);
+diff --git a/source/vir/src/prune.rs b/source/vir/src/prune.rs
+index 70addaa..56f7c88 100644
+--- a/source/vir/src/prune.rs
++++ b/source/vir/src/prune.rs
+@@ -641,6 +641,15 @@ fn traverse_reachable(ctxt: &Ctxt, state: &mut State) {
+             };
+             let fp = |state: &mut State, _: &mut VisitorScopeMap, pat: &Pattern| {
+                 match &pat.x {
++                    PatternX::Expr(expr)
++                        if matches!(&expr.x, ExprX::Const(crate::ast::Constant::ByteStr(_))) =>
++                    {
++                        // Literal patterns become length/index tests after this first pruning pass.
++                        if array_kind_of_typ(&pat.typ).0 == ArrayKind::Slice {
++                            reach_function(ctxt, state, &fn_slice_index());
++                            reach_function(ctxt, state, &fn_slice_len());
++                        }
++                    }
+                     PatternX::Slice(..) => match array_kind_of_typ(&pat.typ).0 {
+                         ArrayKind::Array => {
+                             reach_function(ctxt, state, &fn_array_update());
 diff --git a/source/rust_verify_test/tests/literal_patterns.rs b/source/rust_verify_test/tests/literal_patterns.rs
 new file mode 100644
-index 0000000..e0d7f08
+index 0000000..56df6b3
 --- /dev/null
 +++ b/source/rust_verify_test/tests/literal_patterns.rs
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,181 @@
 +#![feature(rustc_private)]
 +#[macro_use]
 +mod common;
@@ -100,12 +120,18 @@ index 0000000..e0d7f08
 +                (r == 2) <==> s@ == seq!['λ', '\0', '中'],
 +                r <= 3,
 +        {
-+            match s {
++            let r = match s {
 +                "" => 0,
 +                "unit" => 1,
 +                "λ\0中" => 2,
 +                _ => 3,
++            };
++            proof {
++                if r == 0 { assert(s@ =~= seq![]); }
++                if r == 1 { assert(s@ =~= seq!['u', 'n', 'i', 't']); }
++                if r == 2 { assert(s@ =~= seq!['λ', '\0', '中']); }
 +            }
++            r
 +        }
 +    } => Ok(())
 +}
@@ -162,12 +188,18 @@ index 0000000..e0d7f08
 +                (r == 2) <==> s@ == seq![0u8, 255u8],
 +                r <= 3,
 +        {
-+            match s {
++            let r = match s {
 +                b"" => 0,
 +                b"unit" => 1,
 +                b"\0\xff" => 2,
 +                _ => 3,
++            };
++            proof {
++                if r == 0 { assert(s@ =~= seq![]); }
++                if r == 1 { assert(s@ =~= seq![117u8, 110u8, 105u8, 116u8]); }
++                if r == 2 { assert(s@ =~= seq![0u8, 255u8]); }
 +            }
++            r
 +        }
 +    } => Ok(())
 +}
@@ -180,10 +212,14 @@ index 0000000..e0d7f08
 +        fn classify(s: &[u8; 2]) -> (r: bool)
 +            ensures r <==> s@ == seq![0u8, 255u8],
 +        {
-+            match s {
++            let r = match s {
 +                b"\0\xff" => true,
 +                _ => false,
++            };
++            proof {
++                if r { assert(s@ =~= seq![0u8, 255u8]); }
 +            }
++            r
 +        }
 +    } => Ok(())
 +}
@@ -213,14 +249,37 @@ index 0000000..e0d7f08
 +        use vstd::prelude::*;
 +        broadcast use vstd::string::group_string_axioms;
 +
-+        fn nested(s: Option<&str>, enabled: bool) -> (r: bool)
++        fn nested_or(s: Option<&str>) -> (r: bool)
++            ensures r <==> s is Some
++                && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b']),
++        {
++            let r = match s {
++                Some("a" | "b") => true,
++                _ => false,
++            };
++            proof {
++                if r {
++                    assert(s->Some_0@ =~= seq!['a'] || s->Some_0@ =~= seq!['b']);
++                }
++            }
++            r
++        }
++
++        fn nested_guard(s: Option<&str>, enabled: bool) -> (r: bool)
 +            ensures r <==> enabled && s is Some
 +                && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b']),
 +        {
-+            match s {
-+                Some("a" | "b") if enabled => true,
++            let r = match s {
++                Some("a") if enabled => true,
++                Some("b") if enabled => true,
 +                _ => false,
++            };
++            proof {
++                if r {
++                    assert(s->Some_0@ =~= seq!['a'] || s->Some_0@ =~= seq!['b']);
++                }
 +            }
++            r
 +        }
 +    } => Ok(())
 +}
