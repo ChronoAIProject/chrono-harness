@@ -304,5 +304,8 @@ Serialize 的方法依赖 Serializer，后者的关联状态方法又依赖 Seri
 增加第七项独立拒绝预期，并沿同一回归运行完整 `traits_extend_ensures` 库存，核原循环、
 spec／proof 限制及后置条件边界；不修改工具算法、Serde bounds 或原安全断言。
 
+真实派生的纯表达式失败同时保留所属规格函数的名称和位置，复用现有错误的次级标签。
+该诊断只补充原错误上下文，不改变纯表达式准入或派生的证明义务。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。
