@@ -33,9 +33,9 @@ projects.json 中的实际输出地址登记到 cleanup.json，采用 `finish-di
 
 **本候选同时修改产品和宿主政策，尚未完成部署验收。** `terminal_limits` 是当前保管者的可选、按 producer 声明的维护目标，每项包含正数 `keep_seconds`、`max_count`、`max_bytes`，以及非负的 `metadata_keep_seconds`。宿主本次为 `instructions-operation` 采用一天、32 项和 64 MiB；instructions 正文已实际退役后的元数据期限设为 0，仍须通过原引用、退役凭据和读取者排除才移除；其他 producer 的原期限和准入不变。独立目录可由该生产者明确传入随产品编译的 fallback 政策；磁盘政策始终优先，出现或改变后仍须正式迁移已有绑定。
 
-`producer_status` 读取当前逐对象声明；精确路径没有原件时只报告 `unavailable-or-retired`。显式 `maintain` 先作有界的生产者库存观察，再让超限终态缩短资格期限，最后调用同一个现有维护负责方。数量与字节判断使用 `verified_release::terminal_budget`；不完整观察仍可使已观察集合中确定超限的旧终态到期，但不作全库配额结论；已退役元数据及时回收，避免旧空记录挡住后续有界观察。每轮仍守现有节点、时间和字节边界，保留根、活使用凭据、未知未结发布、源码及身份变化继续阻止删除。终态目标可能因这些真实义务暂时超限，不代表准入失败或已经回收。
+`producer_status` 读取当前逐对象声明；精确路径没有原件时只报告 `unavailable-or-retired`。`maintain_producer` 先作有界的生产者库存观察，再让超限终态缩短资格期限，最后调用同一个现有维护负责方。数量与字节判断使用 `verified_release::terminal_budget`；不完整观察仍可使已观察集合中确定超限的旧终态到期，但不作全库配额结论；已退役元数据及时回收，避免旧空记录挡住后续有界观察。每轮仍守现有节点、时间和字节边界，保留根、活使用凭据、未知未结发布、源码及身份变化继续阻止删除。终态目标可能因这些真实义务暂时超限，不代表准入失败或已经回收。
 
-指令维护直接返回现有 `chrono-output-retention-round/v2` 原报告，配额观察从 `terminal_quotas[producer]` 读取，轮次错误从 `accounting_errors` 读取。原来的 `maintain_producer`／`maintain_producer_at` 仅包装同一维护轮次并重复投影字段，已移除；调用方使用 `maintain`／`maintain_at`，不再读取 `round` 或 `quota_*` 外层副本。指令入口仍先核自己的明确终态政策并恢复待决事务，维护范围和原回收判断不变。
+生产者维护结果只保留报告格式、实际配额观察和原维护轮次。生产者身份与终态政策由调用参数和 `producer_status` 负责；是否完成工作由 `round.completed_work` 如实声明。维护结果不再复制 `producer`、`terminal_limits` 或外层 `completion`，现有配额、错误和轮次读取路径保留。
 
 `plan_rooted` 在创建原件前持久绑定领域恢复根。intent 明确的 `recovery_role` 仍持有该输出时，通用维护不代替领域丢弃创建状态；领域用原对象租约续接同一空目录，修复后封存原结果，再解除原根。封存本轮未完成时，下次只推进原封存，不重跑业务写入。`observed_return` 单独记录外层实际收到的 evaluator Result；原发布事实和未观察进程退出不被改写。IO 组合、迁移与平台行为仍待独立验收；具体使用链和入口见[指令发布说明](instructions.md)。
 

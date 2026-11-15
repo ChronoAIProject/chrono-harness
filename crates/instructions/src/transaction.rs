@@ -1073,11 +1073,11 @@ pub(super) fn maintain(host: &Path) -> Result<Value, String> {
     let _exclusive = DirectoryLease::acquire_local(&store, true, None)?
         .ok_or("instructions operation busy on this host")?;
     recover(&root, &Fault::default())?;
-    let report = inventory(&root)?.maintain()?;
-    if report["terminal_quotas"][PRODUCER]["errors"]
+    let report = inventory(&root)?.maintain_producer(PRODUCER)?;
+    if report["quota_errors"]
         .as_array()
         .is_some_and(|errors| !errors.is_empty())
-        || report["accounting_errors"]
+        || report["round"]["accounting_errors"]
             .as_array()
             .is_some_and(|errors| !errors.is_empty())
     {

@@ -1905,28 +1905,31 @@ fn maintain_until(
     let mut rounds = Vec::new();
     for _ in 0..32 {
         let result = match observed {
-            Some(now) => state.maintain_at(now),
-            None => state.maintain(),
+            Some(now) => state.maintain_producer_at(OP_PRODUCER, now),
+            None => state.maintain_producer(OP_PRODUCER),
         }
         .unwrap();
         assert!(
-            result["terminal_quotas"][OP_PRODUCER]["errors"]
+            result["quota_errors"].as_array().unwrap().is_empty(),
+            "{result}"
+        );
+        assert!(
+            result["round"]["accounting_errors"]
                 .as_array()
                 .unwrap()
                 .is_empty(),
             "{result}"
         );
         assert!(
-            result["accounting_errors"].as_array().unwrap().is_empty(),
+            result["round"]["nodes"].as_u64().unwrap() <= 256,
             "{result}"
         );
-        assert!(result["nodes"].as_u64().unwrap() <= 256, "{result}");
         rounds.push(result);
         if complete() {
             assert!(
                 rounds
                     .iter()
-                    .any(|r| r["removed_logical_bytes"].as_u64().unwrap() > 0),
+                    .any(|r| r["round"]["removed_logical_bytes"].as_u64().unwrap() > 0),
                 "no observed physical progress: {rounds:?}"
             );
             return rounds;
@@ -1978,17 +1981,12 @@ fn terminal_count_and_bytes_are_maintenance_targets_with_truthful_retired_querie
                             .exists()
                 })
         });
+        assert!(rounds.iter().any(|r| r["quota_scope_complete"] == true));
         assert!(
             rounds
                 .iter()
-                .any(|r| r["terminal_quotas"][OP_PRODUCER]["scope_complete"] == true)
+                .any(|r| !r["quota_expired"].as_array().unwrap().is_empty())
         );
-        assert!(rounds.iter().any(|r| {
-            !r["terminal_quotas"][OP_PRODUCER]["expired"]
-                .as_array()
-                .unwrap()
-                .is_empty()
-        }));
         let status = chrono_instructions::status(&host.root, None).unwrap();
         assert_eq!(status["scope_complete"], true, "{status}");
         assert_eq!(
@@ -2042,16 +2040,22 @@ fn age_and_quota_maintenance_preserve_live_consumers_and_unresolved_attempts() {
         .join(status["records"][0]["path"].as_str().unwrap());
     state.reference("test-reader", &[id.into()]).unwrap();
     let live = state.consume(id).unwrap();
-    let result = state.maintain_at(u64::MAX - 1).unwrap();
+    let result = state
+        .maintain_producer_at(OP_PRODUCER, u64::MAX - 1)
+        .unwrap();
     assert!(original.exists(), "{result}");
     state.reference("test-reader", &[]).unwrap();
-    let result = state.maintain_at(u64::MAX - 1).unwrap();
+    let result = state
+        .maintain_producer_at(OP_PRODUCER, u64::MAX - 1)
+        .unwrap();
     assert!(original.exists(), "live read capability: {result}");
     drop(live);
     maintain_until(&state, Some(u64::MAX - 1), || !original.exists());
     assert!(!original.exists());
     let paused = PausedOperation::start(&host, "before-prepare", "generate");
-    state.maintain_at(u64::MAX - 1).unwrap();
+    state
+        .maintain_producer_at(OP_PRODUCER, u64::MAX - 1)
+        .unwrap();
     assert!(
         state
             .rooted_original(OP_PRODUCER, "instructions-publication-recovery")
