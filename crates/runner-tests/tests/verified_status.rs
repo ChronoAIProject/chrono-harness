@@ -5061,6 +5061,9 @@ fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
         assert forall|key: policy::GitIndexStage| #[trigger] stages@.contains_key(key)
             implies key.stage.spec_bytes() != "1".spec_bytes() by {
             assert(key == policy::GitIndexStage { path: a, stage: "0" });
+            assert(key.stage@ != "1"@);
+            vstd::utf8::encode_utf8_decode_utf8(key.stage@);
+            vstd::utf8::encode_utf8_decode_utf8("1"@);
         }
     }
     let out = policy::record_git_index_stage(&mut stages, a, "1");
@@ -5072,6 +5075,9 @@ fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
             implies key.stage.spec_bytes() != "2".spec_bytes() by {
             assert(key == policy::GitIndexStage { path: a, stage: "0" }
                 || key == policy::GitIndexStage { path: a, stage: "1" });
+            assert(key.stage@ != "2"@);
+            vstd::utf8::encode_utf8_decode_utf8(key.stage@);
+            vstd::utf8::encode_utf8_decode_utf8("2"@);
         }
     }
     let out = policy::record_git_index_stage(&mut stages, a, "2");
