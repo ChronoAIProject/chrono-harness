@@ -1,7 +1,7 @@
 diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
 --- a/source/vstd/serde_specs.rs
 +++ b/source/vstd/serde_specs.rs
-@@ -684,6 +684,26 @@
+@@ -684,6 +684,28 @@
 
  #[verifier::external_type_specification]
  pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
@@ -10,10 +10,12 @@ diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
 +pub struct ExContent<'de>(serde::__private229::de::Content<'de>);
 +
 +#[verifier::external_type_specification]
++#[verifier::external_body]
 +#[verifier::reject_recursive_types(T)]
 +pub struct ExTaggedContentVisitor<T>(serde::__private229::de::TaggedContentVisitor<T>);
 +
 +#[verifier::external_type_specification]
++#[verifier::external_body]
 +#[verifier::reject_recursive_types(E)]
 +pub struct ExContentDeserializer<'de, E>(serde::__private229::de::ContentDeserializer<'de, E>);
 +
