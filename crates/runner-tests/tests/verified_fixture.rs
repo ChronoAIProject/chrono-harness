@@ -2,6 +2,8 @@
 #![allow(unexpected_cfgs)]
 #[path = "../../worktree-tests/tests/support/cargo_model.rs"]
 mod cargo;
+#[path = "../../worktree-tests/tests/support/consumer.rs"]
+mod worktree_consumer;
 #[cfg(verus_keep_ghost)]
 #[path = "support/cli_child.rs"]
 mod cli_child;
@@ -34,6 +36,14 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_child_requires_success_and_joined_work() {
+    expect(worktree_consumer::maintenance_child_complete(Some(0), true));
+    expect(!worktree_consumer::maintenance_child_complete(Some(1), true));
+    expect(!worktree_consumer::maintenance_child_complete(None, true));
+    expect(!worktree_consumer::maintenance_child_complete(Some(0), false));
+}
+
 #[cfg(verus_keep_ghost)]
 fn bounded_fixture_recovery_preserves_the_original_eight_round_limit() {
     expect(retention::fixture_recovery_has_room(0));

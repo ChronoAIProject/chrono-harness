@@ -1,6 +1,24 @@
+//! Rust 业务子程序；维护提示仍须核对成功退出及全部自有工作已等待。
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn maintenance_child_complete(exit_code: Option<i32>, joined: bool) -> (complete: bool)
+    ensures complete == (exit_code == Some(0i32) && joined),
+{
+    exit_code == Some(0i32) && joined
+}
+}
+
+#[cfg(not(any(verus_keep_ghost, test)))]
 mod cargo_model;
+#[cfg(not(any(verus_keep_ghost, test)))]
 #[path = "../../../runner-tests/tests/support/git_model.rs"]
 mod git_model;
+#[cfg(not(any(verus_keep_ghost, test)))]
 use std::{
     fs,
     io::{self, Write},
@@ -11,8 +29,10 @@ use std::{
     time::Duration,
 };
 
+#[cfg(not(any(verus_keep_ghost, test)))]
 const STATE: &str = ".chrono-harness/state";
 
+#[cfg(not(any(verus_keep_ghost, test)))]
 fn mark(name: &str, bytes: impl AsRef<[u8]>) {
     fs::create_dir_all(STATE).unwrap();
     let pending = Path::new(STATE).join(format!(".{name}-{}.tmp", std::process::id()));
@@ -20,16 +40,19 @@ fn mark(name: &str, bytes: impl AsRef<[u8]>) {
     fs::rename(pending, Path::new(STATE).join(name)).unwrap();
 }
 
+#[cfg(not(any(verus_keep_ghost, test)))]
 fn wait(name: &str) {
     while !Path::new(STATE).join(name).exists() {
         thread::sleep(Duration::from_millis(20));
     }
 }
 
+#[cfg(not(any(verus_keep_ghost, test)))]
 fn exec(mut command: Command) -> ! {
     panic!("fixture exec failed: {}", command.exec());
 }
 
+#[cfg(not(any(verus_keep_ghost, test)))]
 fn main() -> ExitCode {
     let invocation = std::env::args_os().next().unwrap();
     match Path::new(&invocation).file_name().and_then(|s| s.to_str()) {
@@ -93,8 +116,10 @@ fn main() -> ExitCode {
                 &digest,
             )
             .unwrap();
-            assert_eq!(result.exit_code, 0);
-            assert!(result.owned_work_joined);
+            assert!(maintenance_child_complete(
+                Some(result.exit_code),
+                result.owned_work_joined,
+            ));
             io::stdout().write_all(&result.stdout_bytes).unwrap();
             io::stderr().write_all(&result.stderr_bytes).unwrap();
         }
