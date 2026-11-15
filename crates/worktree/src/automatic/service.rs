@@ -931,21 +931,25 @@ fn run_service(
     activate: impl FnOnce() -> Result<UnixDatagram, String>,
 ) -> Result<Value, String> {
     let (policy, _) = signal::adopted(&root)?.ok_or("maintenance service policy is not adopted")?;
-    let Some(executor) = singleton(&root, &policy.state_directory)? else {
-        let request = signal::request_adopted(&root, "service-competition");
-        return Ok(
-            value!({"status":if request["accepted"] == true {"maintenance-requested"} else {"failed"},
-            "maintenance_request":request,"round_completion":"not-established"}),
-        );
-    };
     let socket = activate()?;
     validate_activation(&socket, &policy.socket_path(&root)?, named_activation)?;
+    let mut executor = None;
     serve(&socket, &policy, |trigger, missed| {
+        if executor.is_none() {
+            executor = singleton(&root, &policy.state_directory)?;
+        }
+        let Some(executor) = executor.as_ref() else {
+            // Consume activation hints through the existing finite batch and
+            // native wait. Durable owner state and the next event/timer retain
+            // responsibility; sending to this socket would reactivate us.
+            eprintln!("maintenance executor busy; no round started; existing owner state retained");
+            return Ok(());
+        };
         let report = round(
             &root,
             &config_path,
             trigger,
-            Some(&executor),
+            Some(executor),
             Some(missed),
             None,
         )?;
