@@ -5387,6 +5387,30 @@
             "--version"
           ]
         },
+        "verus-source-vstd-refresh": {
+          "operation": "investigate.verus-source.vstd-refresh",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus-source-vstd-refresh.json"
+          ]
+        },
+        "verus-source-vstd-invalidate": {
+          "operation": "investigate.verus-source.vstd-invalidate",
+          "tool": "cargo",
+          "argv": [
+            "-Zunstable-options",
+            "-C",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source",
+            "clean",
+            "--manifest-path",
+            "vstd/Cargo.toml",
+            "--release",
+            "--package",
+            "vstd"
+          ]
+        },
         "verus-source-vstd": {
           "operation": "investigate.verus-source.vstd",
           "tool": "cargo",

@@ -67,6 +67,14 @@ Serde derive；完整根、严格参数、编译和 dep-info 保留。所选 Ser
 原 Cargo 产物记录；依赖变化后须重新核实际记录和字节，不能静默选择另一个库。
 该实验方法不登记正式 `output_contract`，普通退出成功不绕过原资格检查。
 
+补丁改变验证器字节但保留上游版本号时，原 Cargo 版本指纹可能仍命中旧 vstd。
+此时先核本实验固定源码、目标 manifest／package、原工具及输出身份，并确认自有
+构建与使用方全部结束；再执行登记的 `investigate.verus-source.vstd-refresh`。
+它使用 Cargo `clean --package vstd --release`，只失效本实验的 vstd 编译输出，
+随后委托原 `investigate.verus-source.vstd` 方法重建。源码、下载、lock、工具链、
+验证器和其它依赖缓存继续复用；原报告按已有引用保留。这是工具变化后的显式准备，
+普通重复构建不清理 vstd。实际重建和原流须分别核验，新增成本未知。
+
 固定上游的 Map／Set 类型已保证有限，旧 BTreeMap 有限性公理已删除。真实 tree／index
 解析循环改为显式保持 domain 有限的不变量，从空库存和每次插入传递该性质；不改变
 生产控制流、规格结果或必要证明，也不增加版本分支。完整根仍按上述同一入口复验。
