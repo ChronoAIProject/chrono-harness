@@ -18,6 +18,42 @@ diff --git a/source/vir/src/ast_to_sst_func.rs b/source/vir/src/ast_to_sst_func.
      let body_exp = state.finalize_exp(ctx, &body_exp)?;
      state.finalize()?;
 
+diff --git a/source/rust_verify_test/tests/consts.rs b/source/rust_verify_test/tests/consts.rs
+--- a/source/rust_verify_test/tests/consts.rs
++++ b/source/rust_verify_test/tests/consts.rs
+@@ -2,6 +2,32 @@
+ #[macro_use]
+ mod common;
+ use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] placeholder_const_checks_executable_initialization
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        const _: () = {
++            let mut value: u8 = 6;
++            value += 1;
++            assert!(value == 7);
++        };
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] named_const_keeps_pure_specification_requirement
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        use vstd::prelude::*;
++        const NAMED: u8 = {
++            let mut value: u8 = 6;
++            value += 1;
++            value
++        };
++        verus! {
++            proof fn consume() { assert(NAMED == 7); }
++        }
++    } => Err(err) => assert_vir_error_msg(err, "expected pure mathematical expression")
++}
+
+ test_verify_one_file! {
+     #[test] test_const_eval1 verus_code!{
 diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
 --- a/source/vstd/serde_specs.rs
 +++ b/source/vstd/serde_specs.rs
