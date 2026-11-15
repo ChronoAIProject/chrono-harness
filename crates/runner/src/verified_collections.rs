@@ -40,7 +40,8 @@ pub fn btree_set_compare_invariant<K: Ord>(set: &BTreeSet<K>)
 {
     let iterator = set.iter();
     proof {
-        vstd::laws_cmp::lemma_ref_obeys_cmp_spec::<K>();
+        broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+        assert(vstd::laws_cmp::obeys_cmp::<&K>());
         let rows = iterator.remaining();
         vstd::std_specs::btree::axiom_increasing_seq_meaning(rows);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
