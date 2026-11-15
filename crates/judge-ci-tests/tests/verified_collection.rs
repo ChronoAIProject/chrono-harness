@@ -19,6 +19,8 @@ use policy::source_verifier::identifiers as source_identifiers;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
+#[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
 verus! {
@@ -721,6 +723,331 @@ fn object_shape_error_messages_keep_empty_unicode_nul_and_newline_names() {
     let prefix = source_identifiers::equal_text(expected[0], "expected object");
     let suffix = source_identifiers::equal_text(expected[1], "");
     expect_continuity_bool(prefix && suffix);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_absence_checks_fields_before_the_boolean_value() {
+    proof {
+        reveal_strlit("absent"); reveal_strlit("bytes");
+        assert("absent"@[0] != "bytes"@[0]);
+        reveal(policy::retained_selection);
+    }
+    let observed = policy::RetainedObservation {
+        object: true, keys: vec!["absent", "bytes"], absent: Some(Some(false)),
+        bytes: Some(7u64), blob: None, digest: None, length: None,
+    };
+    proof {
+        assert(policy::retained_mode(observed) == 0);
+        assert(policy::retained_field_failure(observed, policy::ObjectFieldError::Unknown("bytes")));
+    }
+    let result = policy::select_retained(observed);
+    match result {
+        Err(policy::RetainedError::Fields(policy::ObjectFieldError::Unknown(name))) => {
+            let exact = source_identifiers::equal_text(name, "bytes");
+            expect_continuity_bool(exact);
+        },
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+fn retained_decode(calls: Vec<u64>, input: u64) -> (out: (Vec<u64>, Result<Vec<u8>, ()>))
+    ensures out.0@ == calls@.push(input),
+        match out.1 {
+            Ok(bytes) => input != 0 && bytes@ == seq![0u8, 255u8],
+            Err(()) => input == 0,
+        },
+{
+    let mut calls = calls;
+    calls.push(input);
+    if input == 0 { (calls, Err(())) } else { (calls, Ok(vec![0u8, 255u8])) }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_absence_requires_true_and_never_decodes_bytes() {
+    proof {
+        reveal(policy::retained_selection);
+        reveal(policy::retained_decoding);
+    }
+    let valid = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["absent"], absent: Some(Some(true)),
+        bytes: None, blob: None, digest: None, length: None,
+    };
+    proof { assert(policy::retained_fields_ok(valid)); }
+    let (calls, result) = policy::parse_retained(Vec::new(), valid, retained_decode);
+    expect_continuity_bool(calls.len() == 0);
+    match result {
+        Ok(policy::Retained::Absent) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+    let invalid = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["absent"], absent: Some(None),
+        bytes: None, blob: None, digest: None, length: None,
+    };
+    proof { assert(policy::retained_fields_ok(invalid)); }
+    let (calls, result) = policy::parse_retained(Vec::new(), invalid, retained_decode);
+    expect_continuity_bool(calls.len() == 0);
+    match result {
+        Err(policy::RetainedError::Absent) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+    let false_value = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["absent"], absent: Some(Some(false)),
+        bytes: None, blob: None, digest: None, length: None,
+    };
+    proof { assert(policy::retained_fields_ok(false_value)); }
+    match policy::select_retained(false_value) {
+        Err(policy::RetainedError::Absent) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_bytes_and_blob_must_have_exactly_one_present_key() {
+    let both = policy::RetainedObservation {
+        object: true, keys: vec!["bytes", "blob"], absent: None,
+        bytes: Some(u64::MAX), blob: Some(None), digest: None, length: None,
+    };
+    let (calls, result) = policy::parse_retained(Vec::new(), both, retained_decode);
+    expect_continuity_bool(calls.len() == 0);
+    match result {
+        Err(policy::RetainedError::Representation) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+    let neither = policy::RetainedObservation::<u64> {
+        object: false, keys: Vec::new(), absent: None,
+        bytes: None, blob: None, digest: None, length: None,
+    };
+    let (calls, result) = policy::parse_retained(Vec::new(), neither, retained_decode);
+    expect_continuity_bool(calls.len() == 0);
+    match result {
+        Err(policy::RetainedError::Representation) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+fn retained_bytes_preserve_decoder_calls_and_original_output(input: u64) {
+    proof {
+        reveal(policy::retained_selection);
+        reveal(policy::retained_decoding);
+    }
+    let observed = policy::RetainedObservation {
+        object: true, keys: vec!["bytes"], absent: None,
+        bytes: Some(input), blob: None, digest: None, length: None,
+    };
+    proof {
+        assert(policy::retained_mode(observed) == 1);
+        assert(policy::retained_fields_ok(observed));
+    }
+    let (calls, result) = policy::parse_retained(vec![31u64], observed, retained_decode);
+    expect_continuity_bool(calls.len() == 2 && calls[0] == 31 && calls[1] == input);
+    match result {
+        Ok(policy::Retained::Bytes(bytes)) => {
+            expect_continuity_bool(input != 0 && bytes.len() == 2 && bytes[0] == 0 && bytes[1] == 255);
+        },
+        Err(policy::RetainedError::Bytes) => { expect_continuity_bool(input == 0); },
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_bytes_decode_once_after_fields_and_keep_success_or_failure() {
+    proof {
+        reveal(policy::retained_selection);
+        reveal(policy::retained_decoding);
+    }
+    retained_bytes_preserve_decoder_calls_and_original_output(0);
+    retained_bytes_preserve_decoder_calls_and_original_output(1);
+    retained_bytes_preserve_decoder_calls_and_original_output(u64::MAX);
+    proof {
+        reveal_strlit("bytes"); reveal_strlit("unexpected");
+        assert("bytes"@.len() != "unexpected"@.len());
+    }
+    let unknown = policy::RetainedObservation {
+        object: true, keys: vec!["bytes", "unexpected"], absent: None,
+        bytes: Some(0u64), blob: None, digest: None, length: None,
+    };
+    proof {
+        assert(policy::retained_mode(unknown) == 1);
+        assert(policy::retained_field_failure(unknown, policy::ObjectFieldError::Unknown("unexpected")));
+    }
+    let (calls, result) = policy::parse_retained(Vec::new(), unknown, retained_decode);
+    expect_continuity_bool(calls.len() == 0);
+    match result {
+        Err(policy::RetainedError::Fields(policy::ObjectFieldError::Unknown(name))) => {
+            let exact = source_identifiers::equal_text(name, "unexpected");
+            expect_continuity_bool(exact);
+        },
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_blob_requires_fields_before_path_digest_or_length_checks() {
+    proof {
+        reveal_strlit("blob"); reveal_strlit("sha256"); reveal_strlit("length");
+        reveal_strlit("unknown");
+        assert("blob"@.len() != "sha256"@.len());
+        assert("blob"@.len() != "length"@.len());
+        assert("sha256"@[0] != "length"@[0]);
+        assert("unknown"@.len() != "blob"@.len());
+        assert("unknown"@.len() != "sha256"@.len());
+        assert("unknown"@.len() != "length"@.len());
+        reveal(policy::retained_selection);
+        reveal(policy::retained_decoding);
+    }
+    let missing = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["blob", "unknown"], absent: None,
+        bytes: None, blob: Some(None), digest: None, length: None,
+    };
+    proof {
+        assert(policy::retained_mode(missing) == 2);
+        assert(policy::retained_field_failure(missing, policy::ObjectFieldError::Missing("sha256")));
+    }
+    let (calls, result) = policy::parse_retained(Vec::new(), missing, retained_decode);
+    expect_continuity_bool(calls.len() == 0);
+    match result {
+        Err(policy::RetainedError::Fields(policy::ObjectFieldError::Missing(name))) => {
+            let exact = source_identifiers::equal_text(name, "sha256");
+            expect_continuity_bool(exact);
+        },
+        _ => { expect_continuity_bool(false); },
+    }
+    let unknown = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["blob", "sha256", "length", "unknown", ""], absent: None,
+        bytes: None, blob: Some(None), digest: None, length: None,
+    };
+    let result = policy::select_retained(unknown);
+    match result {
+        Err(policy::RetainedError::Fields(policy::ObjectFieldError::Unknown(name))) => {
+            let exact = source_identifiers::equal_text(name, "unknown");
+            expect_continuity_bool(exact);
+        },
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+fn retained_blob_boundaries(path: &str, digest: &str, length: u64)
+    requires policy::result_types::paths::host_state_path(path.spec_bytes()),
+        source_identifiers::digest_format(digest.spec_bytes()),
+{
+    let success = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["length", "sha256", "blob"], absent: None,
+        bytes: None, blob: Some(Some(path)), digest: Some(digest), length: Some(length),
+    };
+    let (calls, result) = policy::parse_retained(Vec::new(), success, retained_decode);
+    expect_continuity_bool(calls.len() == 0);
+    match result {
+        Ok(policy::Retained::Blob { path: actual_path, digest: actual_digest, length: actual_length }) => {
+            let same_path = source_identifiers::equal_text(actual_path, path);
+            let same_digest = source_identifiers::equal_text(actual_digest, digest);
+            expect_continuity_bool(same_path && same_digest && actual_length == length);
+        },
+        _ => { expect_continuity_bool(false); },
+    }
+    let bad_path = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["blob", "sha256", "length"], absent: None,
+        bytes: None, blob: Some(None), digest: None, length: None,
+    };
+    match policy::select_retained(bad_path) {
+        Err(policy::RetainedError::Path) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+    let bad_digest = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["blob", "sha256", "length"], absent: None,
+        bytes: None, blob: Some(Some(path)), digest: Some(""), length: None,
+    };
+    proof { reveal_strlit(""); vstd::utf8::is_ascii_chars_encode_utf8(""@); }
+    match policy::select_retained(bad_digest) {
+        Err(policy::RetainedError::Digest) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+    let bad_length = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["blob", "sha256", "length"], absent: None,
+        bytes: None, blob: Some(Some(path)), digest: Some(digest), length: None,
+    };
+    match policy::select_retained(bad_length) {
+        Err(policy::RetainedError::Length) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_blob_checks_path_then_digest_then_length_and_preserves_boundary_values() {
+    let path = ".chrono-harness/state/x";
+    let digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    proof {
+        reveal_strlit(".chrono-harness/state/x");
+        reveal_strlit("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        vstd::utf8::is_ascii_chars_encode_utf8(path@);
+        vstd::utf8::is_ascii_chars_encode_utf8(digest@);
+        let path_bytes = seq![46u8,99,104,114,111,110,111,45,104,97,114,110,101,115,115,47,115,116,97,116,101,47,120];
+        let digest_bytes = seq![48u8,49,50,51,52,53,54,55,56,57,97,98,99,100,101,102,
+            48,49,50,51,52,53,54,55,56,57,97,98,99,100,101,102,
+            48,49,50,51,52,53,54,55,56,57,97,98,99,100,101,102,
+            48,49,50,51,52,53,54,55,56,57,97,98,99,100,101,102];
+        assert(path.spec_bytes() =~= path_bytes);
+        assert(digest.spec_bytes() =~= digest_bytes);
+        assert(policy::result_types::paths::host_state_path(path_bytes)) by (compute);
+        assert(source_identifiers::digest_format(digest_bytes)) by (compute);
+    }
+    retained_blob_boundaries(path, digest, 0);
+    retained_blob_boundaries(path, digest, u64::MAX);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_nonobject_precedes_fields_and_invalid_paths_precede_other_values() {
+    let nonobject = policy::RetainedObservation {
+        object: false, keys: vec!["unknown"], absent: Some(None),
+        bytes: Some(7u64), blob: Some(None), digest: None, length: None,
+    };
+    let (calls, result) = policy::parse_retained(Vec::new(), nonobject, retained_decode);
+    expect_continuity_bool(calls.len() == 0);
+    match result {
+        Err(policy::RetainedError::Fields(policy::ObjectFieldError::ExpectedObject)) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+    let bad_path = policy::RetainedObservation::<u64> {
+        object: true, keys: vec!["blob", "sha256", "length"], absent: None,
+        bytes: None, blob: Some(Some("")), digest: None, length: None,
+    };
+    proof { reveal_strlit(""); vstd::utf8::is_ascii_chars_encode_utf8(""@); }
+    match policy::select_retained(bad_path) {
+        Err(policy::RetainedError::Path) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+fn retained_error_has_exact_parts(error: policy::RetainedError, head: &str, suffix: &str)
+    requires head@ == policy::retained_error_head(error),
+        suffix@ == policy::retained_error_suffix(error),
+{
+    let parts = error.parts();
+    let prefix = source_identifiers::equal_text(parts[0], "E_INPUT_BLOB: ");
+    let body = source_identifiers::equal_text(parts[1], head);
+    let field = source_identifiers::equal_text(parts[2], suffix);
+    expect_continuity_bool(prefix && body && field);
+}
+
+fn retained_error_preserves_any_field_name(name: &str) {
+    retained_error_has_exact_parts(policy::RetainedError::Fields(policy::ObjectFieldError::Missing(name)),
+        "missing field ", name);
+    retained_error_has_exact_parts(policy::RetainedError::Fields(policy::ObjectFieldError::Unknown(name)),
+        "unknown field ", name);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_errors_keep_the_prefix_category_and_full_original_field_name() {
+    retained_error_preserves_any_field_name("");
+    retained_error_preserves_any_field_name("字段\0原文\nfield");
+    retained_error_has_exact_parts(policy::RetainedError::Fields(policy::ObjectFieldError::ExpectedObject),
+        "expected object", "");
+    retained_error_has_exact_parts(policy::RetainedError::Representation,
+        "expected exactly one bytes or blob representation", "");
+    retained_error_has_exact_parts(policy::RetainedError::Absent, "absent must be true", "");
+    retained_error_has_exact_parts(policy::RetainedError::Bytes, "invalid retained byte array", "");
+    retained_error_has_exact_parts(policy::RetainedError::Path, "reference must be within host state", "");
+    retained_error_has_exact_parts(policy::RetainedError::Digest, "invalid digest", "");
+    retained_error_has_exact_parts(policy::RetainedError::Length, "invalid length", "");
 }
 
 } // verus!
