@@ -52,7 +52,18 @@ pub fn launch_cookie(index: usize, generation: usize) -> (cookie: Option<usize>)
     if index >= LAUNCH_CAPACITY || generation == 0 || generation > MAX_LAUNCH_GENERATION {
         return None;
     }
-    Some(generation * 8192 + index * 2)
+    let cookie = generation * 8192 + index * 2;
+    proof {
+        assert(cookie < usize::MAX);
+        assert((cookie as int) % 2 == 0);
+        assert((cookie as int) / 2 == generation as int * 4096 + index as int);
+        assert(((cookie as int) / 2) % 4096 == index as int);
+        assert((cookie as int) / 8192 == generation as int);
+        assert((cookie as int + 1) / 2 == generation as int * 4096 + index as int);
+        assert(((cookie as int + 1) / 2) % 4096 == index as int);
+        assert((cookie as int + 1) / 8192 == generation as int);
+    }
+    Some(cookie)
 }
 
 pub open spec fn output_limit(bytes: usize) -> bool {
