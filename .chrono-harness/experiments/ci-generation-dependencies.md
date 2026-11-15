@@ -583,6 +583,8 @@ AC 另有可复核的输入缺口：固定成功报告 `use-53527-17946336134117
 
 **产品和宿主政策同时修改。** runner 的实际 Cargo JSON／dep-info、根库发布别名、host 宏输入由原 `proved_build::dependencies` 负责；组件生产仍使用已校验 Verus 归档、同一外部 JSON 合同源码、现役 tar／patch／Verus 与原执行器。`runner-build.json` 只记录可移植配方；原 AC 报告、本机路径与一次运行的摘要不再充当跟踪政策。新组件另建受保护 state 槽位，原 AC／AE 不覆盖。当前组件原件由 `check-original` 的逐对象使用方保护，调用方在最后实际消费和诊断结束后释放，七日内复核；可重建 target 仍复用 finish-dispose。
 
+依赖生产沿固定 Cargo 1.95 的 [host-config 合同](https://github.com/rust-lang/cargo/blob/rust-1.95.0/src/doc/src/reference/unstable.md#host-config)，在原 `prepare` 调用中显式采用 `-Zhost-config`、`-Ztarget-applies-to-host` 和 `target-applies-to-host=false`，将相同的 binary dep-info／SHA-256 参数交给已绑定原生平台的 host 与目标库。真实宏和主机工具的输入 checksum 须由该次编译产生并由原 collector 核验；不能从参数存在推定成功。该修正不补造 warm 产物的原生产者，也不授予 build-script、原生工具、编译后端或 SDK 的完整资格。构建、输入核验及同源证明仍沿原登记操作验收，新增成本未知。
+
 prepare 的成功只表示已完成登记的依赖观察和当前输入组件生产；fresh、host 无 checksum、构建脚本、native、backend／SDK 等资格缺口如实留在 observation，不授予正式资格。四项登记 raw 调查消费同一原件及实际依赖字节，缺失、漂移、歧义或错绑继续失败。raw 不要求尚未实现的 typed 资格作为永久启动门；`verified_verifier` 的 source-only guard、`ProofAdmission`、整 crate、严格 flags、lifetime、全部仓内证明义务保留。正式 DELTA 仍会拒绝缺失资格，raw 退出 0 不能代替它。
 
 新增承重逻辑和独立预期仍归原 Rust 源／配对测试及已登记的整 crate Verus 根，登记不等于已证明。适用入口为候选 bootstrap、正式 DELTA，以及现役 `chrono-worktree use` 的 prepare、raw 消费和独立验证操作；全部保留原线程、时限、输出限制及未过滤测试。新增构建、证明、IO、存储及维护成本 unknown；实际结果归 ignored 原件，不在本文手填通过。

@@ -366,8 +366,8 @@ pub fn collect(
                 )
             })?;
         } else {
-            // Explicit --target does not apply target rustflags to host macro units.
-            // Preserve their real dep-info and current bytes, without granting origin qualification.
+            // Preserve real dep-info without granting origin qualification when
+            // the compiler did not emit the registered input checksums.
             unresolved.push(format!(
                 "host unit has no compiler checksum producer: {}:{}",
                 artifact.package_id, artifact.target.name
@@ -1009,12 +1009,15 @@ pub(super) fn run(
         }
         let graph_raw = original_stream(root, &metadata.stdout)?;
         let graph: Value = chrono_harness::json(&graph_raw)?;
+        let checksum_flags = "[\"-Zbinary-dep-depinfo\",\"-Zchecksum-hash-algorithm=sha256\"]";
         let operation = execution::run_operation(
             root,
             directory,
             1,
             &method(vec![
                 "build".into(),
+                "-Zhost-config".into(),
+                "-Ztarget-applies-to-host".into(),
                 "--lib".into(),
                 "--locked".into(),
                 "--profile=dev".into(),
@@ -1028,8 +1031,11 @@ pub(super) fn run(
                 "--jobs".into(),
                 "1".into(),
                 "--config".into(),
-                "build.rustflags=[\"-Zbinary-dep-depinfo\",\"-Zchecksum-hash-algorithm=sha256\"]"
-                    .into(),
+                "target-applies-to-host=false".into(),
+                "--config".into(),
+                format!("host.{target}.rustflags={checksum_flags}"),
+                "--config".into(),
+                format!("build.rustflags={checksum_flags}"),
             ]),
             Path::new(&tools.cargo.path),
             &environment,
