@@ -29,6 +29,201 @@ mod probe;
 
 verus! {
 
+fn inventory_case(failure: u8, identity: usize, raw_error: &str)
+    requires failure <= 4,
+{
+    let adoption = if failure == 1 { Err(raw_error.to_string()) }
+        else if failure == 2 { Ok(None) } else { Ok(Some(identity)) };
+    let probe = |trace: PublicationTrace, inventory: &usize|
+        -> (out: (PublicationTrace, bool))
+        ensures publication_event.ensures((trace, 10, *inventory, ""), out.0),
+            out.1 == (failure != 3),
+    {
+        (publication_event(trace, 10, *inventory, ""), failure != 3)
+    };
+    let plan = |trace: PublicationTrace, inventory: &usize|
+        -> (out: (PublicationTrace, bool))
+        ensures publication_event.ensures((trace, 11, *inventory, ""), out.0),
+            out.1 == (failure != 3 && failure != 4),
+    {
+        (publication_event(trace, 11, *inventory, ""), failure != 3 && failure != 4)
+    };
+    let initial = publication_event(Vec::new(), 99, identity, raw_error);
+    let (trace, result) = policy::admit_attempt_inventory(initial, adoption, probe, plan);
+    let calls = if failure == 1 || failure == 2 { 0usize }
+        else if failure == 3 { 1usize } else { 2usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == identity);
+    expect_restore_text(trace[0].2.as_str(), raw_error);
+    if calls > 0 { expect_cache_true(trace[1].0 == 10 && trace[1].1 == identity); }
+    if calls > 1 { expect_cache_true(trace[2].0 == 11 && trace[2].1 == identity); }
+    match result {
+        Ok(actual) => { expect_cache_true(failure == 0 && actual == identity); },
+        Err(error) => {
+            expect_cache_true(failure > 0);
+            let expected = if failure == 1 { raw_error }
+                else if failure == 2 {
+                    "E_CACHE_ATTEMPT: host must adopt retention/v2 for cache probe originals"
+                } else {
+                    "E_CACHE_ATTEMPT: adopted policy requires cache-probe-attempt and cache-plan terminal_limits"
+                };
+            expect_restore_text(error.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn inventory_preserves_the_original_identity_errors_and_limit_lookup_order() {
+    let mut failure = 0u8;
+    while failure <= 4
+        invariant failure <= 5,
+        decreases 5 - failure,
+    {
+        inventory_case(failure, usize::MAX, "original/λ\0\n");
+        inventory_case(failure, 0, "");
+        failure += 1;
+    }
+}
+
+type ReleaseTrace = Vec<(u8, usize, usize, String)>;
+
+fn release_event(mut trace: ReleaseTrace, event: u8, inventory: usize, lease: usize, owner: &str)
+    -> (out: ReleaseTrace)
+    ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+        out@.last().0 == event, out@.last().1 == inventory,
+        out@.last().2 == lease, out@.last().3@ == owner@,
+{
+    let ghost previous = trace@;
+    trace.push((event, inventory, lease, owner.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    trace
+}
+
+fn release_case(has_originals: bool, failure: u8, inventory: usize, lease: usize,
+    owner_id: &str, raw_error: &str)
+    requires failure <= 7,
+{
+    let adopt = |trace: ReleaseTrace| -> (out: (ReleaseTrace, Result<usize, String>))
+        ensures release_event.ensures((trace, 1, 0, 0, ""), out.0),
+            match out.1 {
+                Err(error) => failure == 1 && error@ == raw_error@,
+                Ok(value) => failure != 1 && value == inventory,
+            },
+    {
+        (release_event(trace, 1, 0, 0, ""),
+            if failure == 1 { Err(raw_error.to_string()) } else { Ok(inventory) })
+    };
+    let confirm = |trace: ReleaseTrace, actual: &usize|
+        -> (out: (ReleaseTrace, Result<bool, String>))
+        ensures release_event.ensures((trace, 2, *actual, 0, ""), out.0),
+            match out.1 {
+                Err(error) => 0 < failure <= 2 && error@ == raw_error@,
+                Ok(bound) => !(0 < failure <= 2) && bound == (failure != 3),
+            },
+    {
+        (release_event(trace, 2, *actual, 0, ""),
+            if 0 < failure && failure <= 2 { Err(raw_error.to_string()) }
+            else { Ok(failure != 3) })
+    };
+    let owner = |trace: ReleaseTrace, actual: &usize|
+        -> (out: (ReleaseTrace, Result<Option<String>, String>))
+        ensures release_event.ensures((trace, 3, *actual, 0, ""), out.0),
+            match out.1 {
+                Err(error) => 0 < failure <= 4 && error@ == raw_error@,
+                Ok(None) => failure == 5,
+                Ok(Some(id)) => !(0 < failure <= 5) && id@ == owner_id@,
+            },
+    {
+        (release_event(trace, 3, *actual, 0, ""),
+            if 0 < failure && failure <= 4 { Err(raw_error.to_string()) }
+            else if failure == 5 { Ok(None) }
+            else { Ok(Some(owner_id.to_string())) })
+    };
+    let consume = |trace: ReleaseTrace, actual: &usize, id: &String|
+        -> (out: (ReleaseTrace, Result<usize, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 4, out.0@.last().1 == *actual,
+            out.0@.last().2 == 0, out.0@.last().3@ == id@,
+            match out.1 {
+                Err(error) => 0 < failure <= 6 && error@ == raw_error@,
+                Ok(value) => !(0 < failure <= 6) && value == lease,
+            },
+    {
+        (release_event(trace, 4, *actual, 0, id.as_str()),
+            if 0 < failure && failure <= 6 { Err(raw_error.to_string()) } else { Ok(lease) })
+    };
+    let release = |trace: ReleaseTrace, actual: &usize, id: &String, actual_lease: usize|
+        -> (out: (ReleaseTrace, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 5, out.0@.last().1 == *actual,
+            out.0@.last().2 == actual_lease, out.0@.last().3@ == id@,
+            match out.1 {
+                Err(error) => failure > 0 && error@ == raw_error@,
+                Ok(()) => failure == 0,
+            },
+    {
+        (release_event(trace, 5, *actual, actual_lease, id.as_str()),
+            if failure > 0 { Err(raw_error.to_string()) } else { Ok(()) })
+    };
+    let initial = release_event(Vec::new(), 99, inventory, lease, owner_id);
+    let (trace, result) = policy::release_cache_plan(initial, has_originals,
+        adopt, confirm, owner, consume, release);
+    let calls = if !has_originals { 0usize }
+        else if failure == 1 { 1usize }
+        else if failure == 2 || failure == 3 { 2usize }
+        else if failure == 4 || failure == 5 { 3usize }
+        else if failure == 6 { 4usize }
+        else { 5usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == inventory && trace[0].2 == lease);
+    expect_restore_text(trace[0].3.as_str(), owner_id);
+    if calls > 0 { expect_cache_true(trace[1].0 == 1); }
+    if calls > 1 { expect_cache_true(trace[2].0 == 2 && trace[2].1 == inventory); }
+    if calls > 2 { expect_cache_true(trace[3].0 == 3 && trace[3].1 == inventory); }
+    if calls > 3 {
+        expect_cache_true(trace[4].0 == 4 && trace[4].1 == inventory && trace[4].2 == 0);
+        expect_restore_text(trace[4].3.as_str(), owner_id);
+    }
+    if calls > 4 {
+        expect_cache_true(trace[5].0 == 5 && trace[5].1 == inventory && trace[5].2 == lease);
+        expect_restore_text(trace[5].3.as_str(), owner_id);
+    }
+    match result {
+        Ok(()) => expect_cache_true(!has_originals || failure == 0),
+        Err(error) => {
+            expect_cache_true(has_originals && failure > 0);
+            let expected = if failure == 3 {
+                "E_CACHE_ATTEMPT: consumer plan publication not bound"
+            } else if failure == 5 {
+                "E_CACHE_ATTEMPT: plan owner missing"
+            } else { raw_error };
+            expect_restore_text(error.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn release_skips_absent_originals_and_preserves_inventory_owner_and_lease() {
+    release_case(false, 0, 0, 0, "", "");
+    release_case(false, 1, usize::MAX, usize::MAX, "owner/λ\0\n", "first/λ\0\n");
+    release_case(false, 7, 17, 29, "unused", "last");
+    release_case(true, 0, 0, usize::MAX, "", "");
+    release_case(true, 0, usize::MAX, 0, "owner/λ\0\n", "unused");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn release_stops_at_each_original_error_unbound_observation_and_missing_owner() {
+    let mut failure = 1u8;
+    while failure <= 7
+        invariant 1 <= failure <= 8,
+        decreases 8 - failure,
+    {
+        release_case(true, failure, usize::MAX, 0, "owner/λ\0\n", "original/λ\0\n");
+        release_case(true, failure, 0, usize::MAX, "", "");
+        failure += 1;
+    }
+}
+
 type PublicationTrace = Vec<(u8, usize, String)>;
 
 fn publication_event(mut trace: PublicationTrace, event: u8, inventory: usize, raw: &str)
