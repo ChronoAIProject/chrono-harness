@@ -42,11 +42,11 @@ pub fn launch_cookie(index: usize, generation: usize) -> (cookie: Option<usize>)
         cookie.is_some() ==> {
             &&& cookie.unwrap() as int == generation as int * 8192 + index as int * 2
             &&& cookie.unwrap() < usize::MAX
-            &&& cookie.unwrap() % 2 == 0
-            &&& (cookie.unwrap() / 2) % LAUNCH_CAPACITY == index
-            &&& cookie.unwrap() / (LAUNCH_CAPACITY * 2) == generation
-            &&& ((cookie.unwrap() + 1) / 2) % LAUNCH_CAPACITY == index
-            &&& (cookie.unwrap() + 1) / (LAUNCH_CAPACITY * 2) == generation
+            &&& (cookie.unwrap() as int) % 2 == 0
+            &&& ((cookie.unwrap() as int) / 2) % (LAUNCH_CAPACITY as int) == index as int
+            &&& (cookie.unwrap() as int) / (LAUNCH_CAPACITY as int * 2) == generation as int
+            &&& ((cookie.unwrap() as int + 1) / 2) % (LAUNCH_CAPACITY as int) == index as int
+            &&& (cookie.unwrap() as int + 1) / (LAUNCH_CAPACITY as int * 2) == generation as int
         },
 {
     if index >= LAUNCH_CAPACITY || generation == 0 || generation > MAX_LAUNCH_GENERATION {
