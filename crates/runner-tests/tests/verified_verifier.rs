@@ -2083,3 +2083,112 @@ fn coverage_diagnostic_preserves_the_complete_utf8_and_nul_path() {
         "E_VERUS_COVERAGE: declared root differs from the invoked root: 路径 é\0suffix"
     );
 }
+
+#[cfg(not(verus_keep_ghost))]
+fn continuity_batch_endpoint(root: &str) -> policy::sources::continuity::Endpoint {
+    use policy::sources::continuity as c;
+    c::Endpoint {
+        projects: vec![c::ProjectRoot {
+            id: "host".into(),
+            root: root.into(),
+        }],
+        files: (0..66)
+            .map(|i| c::FileObservation {
+                path: format!("{root}/{i}.rs"),
+                metadata: vec![1],
+                mode: "100644".into(),
+                kind: "blob".into(),
+                registered: true,
+                classified: false,
+            })
+            .collect(),
+        outputs: Vec::new(),
+        reference_syntax: Vec::new(),
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn continuity_acquires_only_comparable_unknown_sources_in_two_complete_requests() {
+    use policy::sources::continuity as c;
+    let base = continuity_batch_endpoint("old");
+    let mut current = continuity_batch_endpoint("new");
+    current.files[1].classified = true;
+    current.files[2].metadata = vec![2];
+    current.files[3].mode = "100755".into();
+    current.files[4].registered = false;
+    current.files[5].kind = "tree".into();
+    let mut paths = vec![
+        "new/65.rs".into(),
+        "missing".into(),
+        "new/0.rs".into(),
+        "new/65.rs".into(),
+    ];
+    paths.extend((1..65).map(|i| format!("new/{i}.rs")));
+    let mut expected = vec![65, 0, 65];
+    expected.extend(6..65);
+    let mut calls = Vec::new();
+    c::acquire_sources(&base, &current, &paths, |base, paths| {
+        calls.push((base, paths.to_vec()));
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        calls,
+        vec![
+            (
+                true,
+                expected.iter().map(|i| format!("old/{i}.rs")).collect()
+            ),
+            (
+                false,
+                expected.iter().map(|i| format!("new/{i}.rs")).collect()
+            ),
+        ]
+    );
+
+    // A copied path still exists at the candidate; it cannot enter either request.
+    current.files.push(c::FileObservation {
+        path: "old/0.rs".into(),
+        metadata: vec![1],
+        mode: "100644".into(),
+        kind: "blob".into(),
+        registered: true,
+        classified: false,
+    });
+    c::acquire_sources(&base, &current, &vec!["new/0.rs".into()], |_, _| {
+        panic!("a copy must not trigger source acquisition")
+    })
+    .unwrap();
+    c::acquire_sources(&base, &current, &Vec::new(), |_, _| {
+        panic!("an empty selection must not trigger source acquisition")
+    })
+    .unwrap();
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn continuity_batch_preserves_acquisition_errors_and_stops_after_failure() {
+    use policy::sources::continuity as c;
+    let base = continuity_batch_endpoint("old");
+    let current = continuity_batch_endpoint("new");
+    let paths = vec!["new/0.rs".into()];
+    for failed_base in [true, false] {
+        let mut calls = Vec::new();
+        let error = c::acquire_sources(&base, &current, &paths, |base, paths| {
+            calls.push((base, paths.to_vec()));
+            if base == failed_base {
+                Err("original acquisition error".into())
+            } else {
+                Ok(())
+            }
+        })
+        .unwrap_err();
+        assert_eq!(error, "original acquisition error");
+        assert_eq!(calls.len(), if failed_base { 1 } else { 2 });
+        assert_eq!(calls[0], (true, vec!["old/0.rs".into()]));
+        if !failed_base {
+            assert_eq!(calls[1], (false, vec!["new/0.rs".into()]));
+        }
+    }
+}

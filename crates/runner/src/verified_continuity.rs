@@ -900,6 +900,19 @@ pub open spec fn comparable(old: &FileObservation, new: &FileObservation, base: 
             && absent(current.files@, vstd::utf8::encode_utf8(old.path@))))
 }
 
+/// 与实际判断共用读取条件；已分类、错误模式、元数据变化和复制均不读取源码。
+pub fn needs_source(old: &FileObservation, new: &FileObservation, base: &Endpoint, current: &Endpoint)
+    -> (yes: bool)
+    ensures yes == (!new.classified && comparable(old, new, base, current)),
+{
+    !new.classified && old.registered && new.registered && is_regular(old) && is_regular(new)
+        && super::super::equal_text(old.mode.as_str(), new.mode.as_str())
+        && equal_bytes(old.metadata.as_slice(), new.metadata.as_slice())
+        && (super::super::equal_text(old.path.as_str(), new.path.as_str())
+            || (path_absent(&base.files, new.path.as_str().as_bytes())
+                && path_absent(&current.files, old.path.as_str().as_bytes())))
+}
+
 /// 完整返回合同：每条选择路径的来源、拒绝、原 IO 错误及准入字节均由固定输入决定。
 pub open spec fn assessment<I: Read>(base: &Endpoint, current: &Endpoint, path: Seq<u8>, io: &I)
     -> Result<AssessmentView, Seq<char>>
@@ -942,11 +955,7 @@ fn assess_path<I: Read>(base: &Endpoint, current: &Endpoint, path: &[u8], io: &I
     if let (Some(a), Some(b)) = (a, b) {
         let old = &base.files[a]; let new = &current.files[b];
         let history = Some(Origin { previous: old.path.clone(), current: new.path.clone() });
-        if new.classified || !old.registered || !new.registered || !is_regular(old) || !is_regular(new)
-            || !super::super::equal_text(old.mode.as_str(), new.mode.as_str())
-            || !equal_bytes(old.metadata.as_slice(), new.metadata.as_slice())
-            || (!super::super::equal_text(old.path.as_str(), new.path.as_str())
-                && (!path_absent(&base.files, path) || !path_absent(&current.files, origin.as_slice()))) {
+        if !needs_source(old, new, base, current) {
             return Ok(Assessment { origin: history, record: None });
         }
         let left = match io.blob(true, old.path.as_str()) { Ok(value) => value, Err(error) => { return Err(error); } };
@@ -1152,6 +1161,41 @@ pub fn observe_endpoint(
     ))
 }
 
+/// 固定 Reader 的输入适配：只预取实际比较需要的两端路径，随后由原判断消费缓存。
+/// 批量传输失败保留原错误；这里不产生连续性或证明资格。
+#[cfg(not(verus_keep_ghost))]
+pub fn acquire_sources(
+    base: &Endpoint,
+    current: &Endpoint,
+    paths: &Vec<String>,
+    mut acquire: impl FnMut(bool, &[String]) -> Result<(), String>,
+) -> Result<(), String> {
+    let mut previous = Vec::new();
+    let mut candidate = Vec::new();
+    for path in paths {
+        let Some(origin) = relocate(path.as_bytes(), &current.projects, &base.projects) else {
+            continue;
+        };
+        let (Some(a), Some(b)) = (
+            find_file(&base.files, &origin),
+            find_file(&current.files, path.as_bytes()),
+        ) else {
+            continue;
+        };
+        let old = &base.files[a];
+        let new = &current.files[b];
+        if needs_source(old, new, base, current) {
+            previous.push(old.path.clone());
+            candidate.push(new.path.clone());
+        }
+    }
+    if !previous.is_empty() {
+        acquire(true, &previous)?;
+        acquire(false, &candidate)?;
+    }
+    Ok(())
+}
+
 /// 所有调用方使用此固定两端接口；完整计划与分类库存共用它的同一结果。
 #[cfg(not(verus_keep_ghost))]
 pub fn observe(
@@ -1185,5 +1229,14 @@ pub fn observe(
         base: previous.map(|row| row.0).unwrap_or(candidate.0),
         candidate: candidate.0,
     };
+    if let Some(base) = &base {
+        if reader.can_reuse_oid(io.base) && reader.can_reuse_oid(io.candidate) {
+            acquire_sources(base, &current, paths, |base, paths| {
+                reader
+                    .blobs(root, select_endpoint(base, io.base, io.candidate), paths)
+                    .map(|_| ())
+            })?;
+        }
+    }
     assess_optional(base.as_ref(), &current, paths, &io)
 }
