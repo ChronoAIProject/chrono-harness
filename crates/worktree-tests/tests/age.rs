@@ -887,7 +887,10 @@ fn empty_aged_cache_preserves_working_source_until_an_effect_is_needed() {
         assert_eq!(git(&target, &["rev-parse", "HEAD"]), original_head);
         assert_eq!(git(&target, &["write-tree"]), original_index);
         assert_eq!(fs::read(target.join("payload")).unwrap(), b"working source");
-        assert_eq!(fs::read(&evidence).unwrap(), b"required failure original\0\xff");
+        assert_eq!(
+            fs::read(&evidence).unwrap(),
+            b"required failure original\0\xff"
+        );
         let current = entry(&h, &target);
         assert!(current["terminal"].is_null(), "{current}");
         assert!(target.exists());
@@ -900,7 +903,10 @@ fn empty_aged_cache_preserves_working_source_until_an_effect_is_needed() {
     assert!(!target.join("output λ").exists());
     assert_eq!(fs::read(target.join("payload")).unwrap(), b"working source");
     assert_ne!(git(&target, &["rev-parse", "HEAD"]), original_head);
-    assert_eq!(fs::read(&evidence).unwrap(), b"required failure original\0\xff");
+    assert_eq!(
+        fs::read(&evidence).unwrap(),
+        b"required failure original\0\xff"
+    );
 }
 
 #[test]
