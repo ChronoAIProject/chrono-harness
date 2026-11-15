@@ -93,6 +93,8 @@ Serde derive；完整根、严格参数、编译和 dep-info 保留。所选 Ser
 Borrow 实现显式给出同源 BorrowSpec，字符串借用直接委托标准 String 实现。
 树条目只由 Git 行解析构造、由字段比较和快照导出消费，没有序列化／反序列化
 调用方；删除其未使用的两个 Serde 派生，不为该无消费者的输入路径增加终止假设。
+借用迭代器的 remaining 是 prophetic，不能充当终止度量；三处库存循环使用实际
+map 基数减已输出数量，原剩余序列只连接内容和顺序，不进入 decreases。
 
 同一固定 vstd 的 Vec 与 BTreeMap 迭代器改用 `IteratorSpec::remaining`，不再提供旧的
 位置／完整库存二元 view。真实循环以剩余序列等于原库存的未消费后缀连接完整前缀规格；

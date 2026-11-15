@@ -1878,11 +1878,12 @@ fn tree_rows(tree: &Tree) -> (rows: Vec<(&TreePath, &TreeEntry)>)
     loop
         invariant
             rows.len() <= all.len(),
+            all.len() == tree@.len(),
             iterator.remaining() == all.subrange(rows.len() as int, all.len() as int),
             rows@ == all.take(rows.len() as int),
             all.unref().to_set() == tree@.kv_pairs(),
             vstd::std_specs::btree::increasing_seq(all.map_values(|row: (&TreePath, &TreeEntry)| *row.0)),
-        decreases all.len() - rows.len(),
+        decreases tree@.len() - rows.len(),
     {
         match iterator.next() {
             None => {
@@ -2369,7 +2370,7 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
             keys@ == all.take(keys.len() as int).unref(),
             all.unref().to_set() == stages@.dom(), all.len() == stages@.len(),
             vstd::std_specs::btree::increasing_seq(all),
-        decreases all.len() - keys.len(),
+        decreases stages@.len() - keys.len(),
     {
         match iterator.next() {
             None => {
@@ -2973,7 +2974,7 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
             all.len() == changes@.len(),
             vstd::std_specs::btree::increasing_seq(all),
             forall|i: int| 0 <= i < paths.len() ==> (#[trigger] paths@[i])@ == all[i]@,
-        decreases all.len() - paths.len(),
+        decreases changes@.len() - paths.len(),
     {
         match iterator.next() {
             Some(key) => { paths.push(key.text.clone()); },
