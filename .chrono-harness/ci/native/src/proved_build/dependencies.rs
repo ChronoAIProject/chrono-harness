@@ -697,7 +697,7 @@ pub fn component_archive(
         .ok_or("invalid archive checksum record")?;
     let archive = profile::path(root, &config.archive, b".chrono-harness/bin/")?;
     let archive_id = identity(&archive)?;
-    if archive_id.sha256 != expected {
+    if !crate::verified_bindings::archive_matches(archive_id.sha256.as_bytes(), expected.as_bytes()) {
         return Err("E_VERUS_DEPENDENCIES: installed Verus archive checksum differs".into());
     }
     Ok((archive, archive_id))

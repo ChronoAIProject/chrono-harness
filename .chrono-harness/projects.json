@@ -5329,6 +5329,8 @@
             "--test",
             "serde_deserialization",
             "--test",
+            "serde_tagged_content",
+            "--test",
             "constructor_function_values",
             "--test",
             "fndef_types",
