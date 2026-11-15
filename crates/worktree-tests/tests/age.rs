@@ -360,8 +360,25 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     let created = fs::metadata(&target).unwrap().created().unwrap();
     let original = git(&target, &["rev-parse", "HEAD"]);
     fs::write(target.join("payload"), "reflog-only-source").unwrap();
+    let reflog_ancestor = commit(&target);
+    fs::write(target.join("payload"), "reflog-only-tip").unwrap();
     let reflog_only = commit(&target);
     git(&target, &["reset", "--hard", &original]);
+    fs::write(target.join("payload"), "independent-reflog-source").unwrap();
+    let independent = commit(&target);
+    git(&target, &["reset", "--hard", &original]);
+    // A previous report may still consume an ancestor ref. Avoid creating new
+    // redundant refs without deleting or rewriting those already published.
+    let old_reference = format!(
+        "refs/heads/preserved/age/{}/reflog-{original}",
+        sha256(
+            entry(&h, &target)["ownership"]["id"]
+                .as_str()
+                .unwrap()
+                .as_bytes()
+        )
+    );
+    git(&h.root, &["update-ref", &old_reference, &original]);
     fs::write(target.join("payload"), "staged-original").unwrap();
     git(&target, &["add", "payload"]);
     fs::write(target.join("payload"), "current-source").unwrap();
@@ -406,12 +423,29 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     let original_result = drain_report(result);
     let saved = &original_result["source_preservation"];
     assert_eq!(saved["original_head"], original);
-    assert!(
+    assert_eq!(
         saved["reflog_refs"]
             .as_object()
             .unwrap()
             .values()
-            .any(|v| v == &value!(reflog_only))
+            .map(|value| value.as_str().unwrap())
+            .collect::<std::collections::BTreeSet<_>>(),
+        [reflog_only.as_str(), independent.as_str()]
+            .into_iter()
+            .collect()
+    );
+    assert_eq!(git(&h.root, &["rev-parse", &old_reference]), original);
+    assert_eq!(
+        git(
+            &h.root,
+            &[
+                "merge-base",
+                "--is-ancestor",
+                &reflog_ancestor,
+                &reflog_only
+            ]
+        ),
+        ""
     );
     let show = |reference: &Value, path: &str| {
         git(

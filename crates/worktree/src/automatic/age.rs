@@ -136,11 +136,28 @@ impl Manager {
         let original_ref = format!("{prefix}head-{head}");
         self.retained_branch(r, &original_ref, &head)?;
         let reflog = r.text(&e.path, &["reflog", "show", "--format=%H", "HEAD"])?;
-        let mut reflog_refs = BTreeMap::new();
-        for commit in reflog.lines().collect::<BTreeSet<_>>() {
+        let commits: Vec<_> = reflog
+            .lines()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .filter(|commit| *commit != head)
+            .collect();
+        for commit in &commits {
             facts::full_oid(commit)?;
-            let reference = format!("{prefix}reflog-{commit}");
-            reflog_refs.insert(reference, commit.to_owned());
+        }
+        let mut reflog_refs = BTreeMap::new();
+        // The retained HEAD already covers its ancestors. Keep argv below 9 KiB
+        // even for SHA-256 OIDs instead of passing an unbounded reflog to Git.
+        for batch in commits.chunks(128) {
+            let mut args = vec!["merge-base", "--independent", &head];
+            args.extend_from_slice(batch);
+            for commit in r.text(&e.path, &args)?.lines() {
+                facts::full_oid(commit)?;
+                if commit != head {
+                    let reference = format!("{prefix}reflog-{commit}");
+                    reflog_refs.insert(reference, commit.to_owned());
+                }
+            }
         }
         if !reflog_refs.is_empty() {
             let retained = r.text(
