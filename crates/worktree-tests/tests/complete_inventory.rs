@@ -375,6 +375,7 @@ fn linked_retention_host(name: &str) -> (Host, PathBuf) {
     let target = h.parent.join(name);
     let (code, report, error) = h.invoke("feature", name, &target);
     assert_eq!(code, 0, "{report} {error}");
+    fs::create_dir_all(target.join(".chrono-harness/state/worktrees")).unwrap();
     (h, target)
 }
 
