@@ -21,33 +21,41 @@ use vstd::prelude::*;
 use vstd::string::StringSliceAdditionalSpecFns;
 
 #[cfg(not(verus_keep_ghost))]
-pub const SNAPSHOT_SCHEMA: &str = "chrono-input-snapshot/v1";
-#[cfg(not(verus_keep_ghost))]
-pub const SNAPSHOT_SCHEMA_V2: &str = "chrono-input-snapshot/v2";
-#[cfg(not(verus_keep_ghost))]
-pub const SNAPSHOT_SCHEMA_V3: &str = "chrono-input-snapshot/v3";
-
-#[cfg(not(verus_keep_ghost))]
 pub fn snapshot_schema(config: &Value) -> &'static str {
-    if matches!(config["schema_version"].as_u64(), Some(2 | 3 | 4)) {
-        SNAPSHOT_SCHEMA_V2
-    } else {
-        SNAPSHOT_SCHEMA
-    }
+    select_snapshot_schema(config["schema_version"].as_u64(), false)
 }
 #[cfg(not(verus_keep_ghost))]
 pub fn snapshot_schema_for(r: &Registrations) -> &'static str {
-    if r.selection().is_some() {
-        SNAPSHOT_SCHEMA_V3
-    } else {
-        snapshot_schema(r.config())
-    }
+    select_snapshot_schema(
+        r.config()["schema_version"].as_u64(),
+        r.selection().is_some(),
+    )
 }
 
 #[cfg(not(verus_keep_ghost))]
 pub use chrono_harness::input_file::observe_file;
 
 verus! {
+
+pub const SNAPSHOT_SCHEMA: &'static str = "chrono-input-snapshot/v1";
+pub const SNAPSHOT_SCHEMA_V2: &'static str = "chrono-input-snapshot/v2";
+pub const SNAPSHOT_SCHEMA_V3: &'static str = "chrono-input-snapshot/v3";
+
+/// 选择器优先使用 v3；直接配置仅在版本 2、3、4 时使用 v2。
+pub fn select_snapshot_schema(version: Option<u64>, selected: bool) -> (schema: &'static str)
+    ensures schema@ == if selected { "chrono-input-snapshot/v3"@ }
+        else if version == Some(2u64) || version == Some(3u64) || version == Some(4u64) {
+            "chrono-input-snapshot/v2"@
+        } else { "chrono-input-snapshot/v1"@ },
+{
+    if selected { SNAPSHOT_SCHEMA_V3 }
+    else {
+        match version {
+            Some(2) | Some(3) | Some(4) => SNAPSHOT_SCHEMA_V2,
+            _ => SNAPSHOT_SCHEMA,
+        }
+    }
+}
 
 /// Parse the retained representation without reading or repairing its contents.
 pub enum Retained<'a, B = Vec<u8>> {
