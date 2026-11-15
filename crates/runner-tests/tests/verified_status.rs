@@ -3673,6 +3673,7 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
     let rows = [b, a];
     match policy::parse_git_tree_rows(&rows) {
         Ok(tree) => {
+            assert(tree@.len() == 2) by { reveal(policy::git_tree_prefix_map); }
             expect_status_true(tree.len() == 2);
             proof {
                 assert forall|i: int| #![trigger policy::git_tree_row_at(rows@, i)]
@@ -3693,7 +3694,10 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
         Err(_) => { panic!(); },
     }
     match policy::parse_git_tree_rows(&[]) {
-        Ok(tree) => expect_status_true(tree.len() == 0),
+        Ok(tree) => {
+            assert(tree@.len() == 0) by { reveal(policy::git_tree_prefix_map); }
+            expect_status_true(tree.len() == 0);
+        },
         Err(_) => { panic!(); },
     }
 }
