@@ -402,10 +402,23 @@ fn replace_file(path: &Path, temporary: &Path, raw: &[u8]) -> std::io::Result<()
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
     }
+    let began = Instant::now();
     let mut f = options.open(temporary)?;
     f.write_all(raw)?;
+    let written_micros = began.elapsed().as_micros() as u64;
     f.sync_all()?;
+    let synced_micros = began.elapsed().as_micros() as u64;
     fs::rename(temporary, path)?;
+    let replaced_micros = began.elapsed().as_micros() as u64;
+    tracing::debug!(
+        event_id = "retention.metadata.replace",
+        path = %path.display(),
+        bytes = raw.len(),
+        written_micros,
+        synced_micros,
+        replaced_micros,
+        "retention metadata replacement returned"
+    );
     Ok(())
 }
 
