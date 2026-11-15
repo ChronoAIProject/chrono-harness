@@ -190,5 +190,22 @@ crate 别名。上游逐项翻译器已经接受 `ExternCrate`，语句翻译器
 **工具接口合同与宿主回归登记同时修改。** 源码只在该接口的自然所有者处增加标准库声明，
 完整 workflow 根、真实派生、其他外部合同及正式资格仍需各自验收。
 
+## Serde UTF-8 转换的外部接口
+
+完整 workflow 根的实际派生代码调用 Serde 1.0.229 的
+`serde::__private229::from_utf8_lossy`。固定依赖源码在当前 std／alloc 配置下直接
+转发 `String::from_utf8_lossy`，返回 `Cow<'_, str>`；vstd 已有该 Cow 类型和完整文本 view，
+不另造字符串或 JSON 模型。`serde-lossy.patch` 先登记三项 Rust／Verus 预期：
+原字节及原返回值可转交，不能无依据断言结果文本为空或非空。两个负例必须实际收到
+`assertion failed`；未支持错误不算预期拒绝。
+
+回归沿原完整库存增加 `serde_lossy`，保留严格选项、单测试线程和两证明线程。
+通过上游既有 `VERUS_EXTRA_ARGS` 连接实际 runner Cargo 原件选定的同一 Serde rlib
+及其依赖目录；相对地址以 Cargo 测试包工作目录为准，实际解析仍须由原执行结果核验。
+不扫描或猜测产物 hash，依赖变化后须重新核实际 Cargo 记录；不以此实验授予正式资格。
+
+**外部接口合同与宿主回归登记同时修改。** 成本仍未知，复用当前源码、下载及编译缓存，
+没有完整根、原派生、实际输入绑定或正式采用豁免。先核三项原失败，再实现接口并重建。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。

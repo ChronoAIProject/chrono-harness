@@ -5316,6 +5316,8 @@
             "std",
             "--test",
             "formatter_write",
+            "--test",
+            "serde_lossy",
             "--",
             "--test-threads=1"
           ]

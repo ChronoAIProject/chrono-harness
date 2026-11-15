@@ -23,7 +23,7 @@
   "rust_incremental": true,
   "environment": {
     "RUSTC_BOOTSTRAP": "1",
-    "VERUS_EXTRA_ARGS": "--num-threads 2"
+    "VERUS_EXTRA_ARGS": "--num-threads 2 --extern serde=../../runner-dependencies/debug/deps/libserde-da85fb7ff7ebe563.rlib -L dependency=../../runner-dependencies/debug/deps"
   },
   "host_environment": {
     "CARGO_HOME": ".chrono-harness/cache/bootstrap-owner-tooling/cargo",
