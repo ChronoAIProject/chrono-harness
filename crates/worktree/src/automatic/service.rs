@@ -443,6 +443,7 @@ fn run_round(
                 &path,
                 false,
                 false,
+                true,
             )?
             .ok_or("cleanup policy disappeared")?;
             owner.restore_absent_policy(r)?;
@@ -469,6 +470,7 @@ fn run_round(
                 &path,
                 false,
                 false,
+                true,
             )?
             .ok_or("cleanup policy disappeared")?;
             owner.restore_absent_policy(r)?;
@@ -491,6 +493,7 @@ fn run_round(
                     &inputs.anchor_config_bytes,
                     token,
                     &path,
+                    false,
                     false,
                     false,
                 )

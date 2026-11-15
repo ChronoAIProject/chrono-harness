@@ -239,7 +239,12 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
     if !isolated_capability_test("retired_metadata_does_not_exclude_a_populated_parent_address") {
         return;
     }
-    let h = host(256, 16);
+    let mut h = host(256, 16);
+    h.disable_cleanup(true);
+    eprintln!(
+        "retention fixture originals (retired_metadata_does_not_exclude_a_populated_parent_address): {}",
+        h.path().display()
+    );
     let policy_path = h.path().join(POLICY_PATH);
     let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
     policy["metadata_keep_seconds"] = json!(0);
@@ -269,7 +274,13 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
         chrono_harness::ownership::DirectoryLease::acquire(&parent_address, false, None)
             .unwrap()
             .unwrap();
-    let round = owner.maintain_explicit().unwrap();
+    use chrono_diagnostics::logging::{Level, Logger};
+    let logger = Logger::new("retention-fixture", Level::DEBUG, std::io::stderr());
+    // 本例只核共享父路径下的退役，不依赖维护与元数据更新是否跨过秒边界。
+    let round = logger
+        .run(|| owner.maintain_originals_at(std::slice::from_ref(&id), u64::MAX))
+        .unwrap();
+    logger.finish().expect("retired metadata diagnostics");
     assert!(!h.path().join(obsolete).exists(), "{round}");
     assert!(
         !h.path()
@@ -286,6 +297,7 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
     parent_reader.stable().unwrap();
     drop(parent_reader);
     current.complete(json!({"exit": 0})).unwrap();
+    h.disable_cleanup(false);
 }
 #[cfg(not(verus_keep_ghost))]
 fn maintenance(root: &Path) -> Value {
@@ -841,6 +853,67 @@ fn actual_enrollment_width_preserves_370_originals_under_256_descriptors() {
         .reference_paths("actual-enrollment", &[])
         .unwrap();
     assert!(ledger(h.path())["roots"].get("actual-enrollment").is_none());
+}
+
+#[test]
+fn durable_consumer_shrink_prunes_stale_members_without_admitting_new_outputs() {
+    if !isolated_capability_test(
+        "durable_consumer_shrink_prunes_stale_members_without_admitting_new_outputs",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(4);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let inventory = inventory(h.path());
+    let mut paths = Vec::new();
+    for n in 0..5 {
+        let path = format!(".chrono-harness/state/fixtures/committed-handoff-{n}.json");
+        fs::write(h.path().join(&path), n.to_string()).unwrap();
+        Inventory::adopted(h.path())
+            .unwrap()
+            .unwrap()
+            .begin("fixture", &path, json!(null))
+            .unwrap()
+            .complete(json!({"exit":0}))
+            .unwrap();
+        paths.push(path);
+    }
+    let role = "durable-current-inputs";
+    inventory.reference_paths(role, &paths[..4]).unwrap();
+    let before = ledger(h.path());
+    assert!(
+        inventory
+            .reference_paths(role, &paths[3..])
+            .unwrap_err()
+            .contains("related retention graph capacity")
+    );
+    assert_eq!(ledger(h.path())["roots"][role], before["roots"][role]);
+    // The domain has durably stopped reading the first three originals.
+    // Pruning cannot install the newly requested fifth output.
+    inventory.prune_reference_paths(role, &paths[3..]).unwrap();
+    let pruned = ledger(h.path());
+    let fourth = pruned["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["path"] == paths[3])
+        .unwrap()["id"]
+        .clone();
+    assert_eq!(pruned["roots"][role], json!([fourth]));
+    // An interrupted caller resumes admission using the ordinary bounded API.
+    inventory.reference_paths(role, &paths[3..]).unwrap();
+    assert_eq!(ledger(h.path())["roots"][role].as_array().unwrap().len(), 2);
+    inventory.prune_reference_paths(role, &paths[3..]).unwrap();
+    assert_eq!(ledger(h.path())["roots"][role].as_array().unwrap().len(), 2);
+    for path in paths {
+        assert!(
+            h.path().join(path).exists(),
+            "membership updates never dispose originals"
+        );
+    }
 }
 
 #[test]
@@ -3989,19 +4062,24 @@ fn published_output_scope_keeps_child_reports_without_accumulating_their_inputs(
     }
     // Each child has four actual capabilities. The parent holds one live
     // report capability, with three durable edges to the child reports.
-    assert_eq!(maintain_fixture_to(h.path(), 14), 14);
+    use chrono_diagnostics::logging::{Level, Logger};
+    let logger = Logger::new("retention-fixture", Level::DEBUG, std::io::stderr());
+    assert_eq!(logger.run(|| maintain_fixture_to(h.path(), 14)), 14);
     assert!(!h.path().join(unrelated).exists());
     for path in groups.iter().flatten().chain(reports.iter()) {
         assert!(h.path().join(path).is_dir());
     }
     parent.complete(json!({"exit": 0})).unwrap();
     drop(caller);
-    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
+    assert_eq!(logger.run(|| maintain_fixture_to(h.path(), 1)), 1);
     assert!(h.path().join(&unknown).is_dir());
     inventory(h.path())
         .reference_paths("unfinished-domain-owner", &[])
         .unwrap();
-    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+    assert_eq!(logger.run(|| maintain_fixture_to(h.path(), 0)), 0);
+    logger
+        .finish()
+        .expect("published output retention diagnostics");
     h.disable_cleanup(false);
 }
 
