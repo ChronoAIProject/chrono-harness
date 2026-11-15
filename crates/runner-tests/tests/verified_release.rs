@@ -23,6 +23,116 @@ mod retention_frontier;
 
 verus! {
 
+spec fn fixture_edge(rows: Seq<(String, Vec<String>)>, source: Seq<char>, target: Seq<char>) -> bool {
+    exists|i: int, j: int| 0 <= i < rows.len() && 0 <= j < rows[i].1@.len()
+        && rows[i].0@ == source && (#[trigger] rows[i].1@[j])@ == target
+}
+
+fn reference_fixture<'a>(rows: &'a [(String, Vec<String>)], source: &str, target: &str)
+    -> (found: bool)
+    ensures found == fixture_edge(rows@, source@, target@),
+{
+    let observe = |row: &'a (String, Vec<String>)| -> (out: (&'a str, &'a [String]))
+        ensures out.0@ == row.0@, out.1@ == row.1@,
+    { (row.0.as_str(), row.1.as_slice()) };
+    let found = policy::objects_reference(rows, source, target, observe);
+    proof {
+        let trace = choose|trace: Seq<(&str, &[String])>| policy::output_reference_trace(
+            rows, observe, source@, target@, found, trace);
+        assert forall|i: int| 0 <= i < trace.len() implies
+            trace[i].0@ == rows@[i].0@ && trace[i].1@ == rows@[i].1@ by {
+            assert(observe.ensures((&rows@[i],), trace[i]));
+        }
+        if found {
+            let i = trace.len() - 1;
+            let j = choose|j: int| 0 <= j < trace[i].1@.len()
+                && trace[i].1@[j]@ == target@;
+            assert(rows@[i].0@ == source@ && rows@[i].1@[j]@ == target@);
+            assert(fixture_edge(rows@, source@, target@));
+        } else {
+            assert forall|i: int, j: int| 0 <= i < rows.len() && 0 <= j < rows@[i].1@.len()
+                implies rows@[i].0@ != source@ || rows@[i].1@[j]@ != target@ by {
+                assert(!policy::output_edge_matches(trace[i], source@, target@));
+            }
+        }
+    }
+    found
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn output_references_require_both_complete_source_and_complete_target() {
+    proof {
+        reveal_strlit("source"); reveal_strlit("other"); reveal_strlit("target");
+        reveal_strlit("absent");
+        assert("source"@[0] != "other"@[0]);
+        assert("source"@[0] != "absent"@[0]);
+        assert("target"@[0] != "absent"@[0]);
+    }
+    let empty = reference_fixture(&Vec::new(), "source", "target");
+    expect_true(!empty);
+    let rows = vec![
+        ("other".to_owned(), vec!["target".to_owned()]),
+        ("source".to_owned(), vec!["absent".to_owned()]),
+    ];
+    let crossed = reference_fixture(&rows, "source", "target");
+    let present = reference_fixture(&rows, "other", "target");
+    let missing_source = reference_fixture(&rows, "absent", "target");
+    assert(rows@[0].0@ == "other"@ && rows@[0].1@[0]@ == "target"@);
+    assert(fixture_edge(rows@, "other"@, "target"@));
+    assert(!crossed);
+    assert(!missing_source);
+    expect_true(!crossed && present && !missing_source);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn output_references_search_every_duplicate_source_and_reference_position() {
+    proof {
+        reveal_strlit("source"); reveal_strlit("other"); reveal_strlit("target");
+        reveal_strlit("before"); reveal_strlit("after");
+        assert("target"@[0] != "before"@[0] && "target"@[0] != "after"@[0]);
+        assert("source"@[0] != "other"@[0]);
+    }
+    let rows = vec![
+        ("source".to_owned(), Vec::new()),
+        ("other".to_owned(), vec!["target".to_owned()]),
+        ("source".to_owned(), vec!["before".to_owned(), "target".to_owned(), "after".to_owned()]),
+        ("source".to_owned(), vec!["target".to_owned(), "target".to_owned()]),
+    ];
+    let target = reference_fixture(&rows, "source", "target");
+    let final_reference = reference_fixture(&rows, "source", "after");
+    let empty_row = vec![("source".to_owned(), Vec::new())];
+    let empty_first = reference_fixture(&empty_row, "source", "target");
+    assert(rows@[2].0@ == "source"@ && rows@[2].1@[1]@ == "target"@);
+    assert(fixture_edge(rows@, "source"@, "target"@));
+    assert(rows@[2].0@ == "source"@ && rows@[2].1@[2]@ == "after"@);
+    assert(fixture_edge(rows@, "source"@, "after"@));
+    expect_true(target && final_reference && !empty_first);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn output_references_preserve_empty_unicode_nul_and_case_sensitive_ids() {
+    proof {
+        reveal_strlit(""); reveal_strlit("source: é\0full\nend");
+        reveal_strlit("target: 中\0tail\nend"); reveal_strlit("Source: é\0full\nend");
+        reveal_strlit("target: 中\0tail\nEnd");
+        assert("source: é\0full\nend"@[0] != "Source: é\0full\nend"@[0]);
+        assert("target: 中\0tail\nend"@[15] != "target: 中\0tail\nEnd"@[15]);
+    }
+    let rows = vec![
+        ("".to_owned(), vec!["".to_owned()]),
+        ("source: é\0full\nend".to_owned(), vec!["target: 中\0tail\nend".to_owned()]),
+    ];
+    let empty_ids = reference_fixture(&rows, "", "");
+    let full_ids = reference_fixture(&rows, "source: é\0full\nend", "target: 中\0tail\nend");
+    let source_case = reference_fixture(&rows, "Source: é\0full\nend", "target: 中\0tail\nend");
+    let target_case = reference_fixture(&rows, "source: é\0full\nend", "target: 中\0tail\nEnd");
+    assert(rows@[0].0@ == ""@ && rows@[0].1@[0]@ == ""@);
+    assert(fixture_edge(rows@, ""@, ""@));
+    assert(rows@[1].0@ == "source: é\0full\nend"@ && rows@[1].1@[0]@ == "target: 中\0tail\nend"@);
+    assert(fixture_edge(rows@, "source: é\0full\nend"@, "target: 中\0tail\nend"@));
+    expect_true(empty_ids && full_ids && !source_case && !target_case);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn recovery_accounting_never_substitutes_for_domain_completion() {
     expect_true(!accounting::accounting_releases(false, false));
