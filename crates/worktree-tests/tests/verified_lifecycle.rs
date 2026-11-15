@@ -260,6 +260,102 @@ pub(crate) fn expect_stage(actual: policy::CleanupStage, expected: policy::Clean
     expect(equal);
 }
 
+fn expect_cleanup_outcome(out: policy::CleanupOutcome, cache: bool, cleaned: bool,
+    stage: policy::CleanupStage)
+    requires out.cache == cache, out.cleaned == cleaned, out.stage == stage,
+{
+    expect(out.cache == cache);
+    expect(out.cleaned == cleaned);
+    expect_stage(out.stage, stage);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn terminal_cache_results_preserve_completion_and_actual_removal_priority() {
+    use policy::CleanupStage::*;
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("active"); reveal_strlit("terminal"); reveal_strlit("cleaned");
+        reveal_strlit("failed"); reveal_strlit("verified-absent"); reveal_strlit("already-absent");
+        reveal_strlit("preserved"); reveal_strlit("");
+        reveal_strlit("reusable-source-preserved");
+        reveal_strlit("expired-checkout-verified-absent-source-branches-retained");
+        assert("active"@.len() != "terminal"@.len());
+        assert("failed"@.len() != "cleaned"@.len());
+        assert("preserved"@.len() != "verified-absent"@.len());
+        assert("preserved"@.len() != "already-absent"@.len());
+        assert("reusable-source-preserved"@.len()
+            != "expired-checkout-verified-absent-source-branches-retained"@.len());
+    }
+    let terminal = policy::observed_cleanup_result(false, "terminal",
+        Some("reusable-source-preserved"), Some("cleaned"), Some("preserved"));
+    expect_cleanup_outcome(terminal, true, true, Retained);
+    let pending = policy::observed_cleanup_result(true, "active",
+        Some("reusable-source-preserved"), Some("cleaned"), Some("verified-absent"));
+    expect_cleanup_outcome(pending, true, true, CachesReleased);
+    let removed = policy::observed_cleanup_result(true, "terminal",
+        Some("reusable-source-preserved"), Some("cleaned"), Some("verified-absent"));
+    expect_cleanup_outcome(removed, true, true, Disposed);
+    let already_absent = policy::observed_cleanup_result(false, "terminal",
+        Some("reusable-source-preserved"), Some("cleaned"), Some("already-absent"));
+    expect_cleanup_outcome(already_absent, true, true, Disposed);
+    let failed = policy::observed_cleanup_result(true, "terminal",
+        Some("reusable-source-preserved"), Some("failed"), Some("verified-absent"));
+    expect_cleanup_outcome(failed, true, false, Failed);
+    let expired = policy::observed_cleanup_result(true, "active",
+        Some("expired-checkout-verified-absent-source-branches-retained"), Some("cleaned"),
+        Some("verified-absent"));
+    expect_cleanup_outcome(expired, false, true, Disposed);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cleanup_observations_keep_missing_unknown_and_complete_text_distinct() {
+    use policy::CleanupStage::*;
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit(""); reveal_strlit("terminal"); reveal_strlit("cleaned");
+        reveal_strlit("verified-absent"); reveal_strlit("already-absent");
+        reveal_strlit("reusable-source-preserved");
+        reveal_strlit("expired-checkout-verified-absent-source-branches-retained");
+        reveal_strlit("unknown λ\0\n"); reveal_strlit("terminal\0");
+        reveal_strlit("cleaned\0"); reveal_strlit("verified-absent\n");
+        reveal_strlit("reusable-source-preserved\0");
+        reveal_strlit("expired-checkout-verified-absent-source-branches-retained\n");
+        assert(""@.len() != "reusable-source-preserved"@.len());
+        assert(""@.len() != "expired-checkout-verified-absent-source-branches-retained"@.len());
+        assert(""@.len() != "cleaned"@.len());
+        assert(""@.len() != "verified-absent"@.len());
+        assert(""@.len() != "already-absent"@.len());
+        assert("unknown λ\0\n"@.len() != "terminal"@.len());
+        assert("terminal\0"@.len() != "terminal"@.len());
+        assert("cleaned\0"@.len() != "cleaned"@.len());
+        assert("verified-absent\n"@.len() != "verified-absent"@.len());
+        assert("verified-absent\n"@.len() != "already-absent"@.len());
+        assert("reusable-source-preserved\0"@.len() != "reusable-source-preserved"@.len());
+        assert("expired-checkout-verified-absent-source-branches-retained\n"@.len()
+            != "expired-checkout-verified-absent-source-branches-retained"@.len());
+    }
+    let missing = policy::observed_cleanup_result(false, "terminal", None, None, None);
+    expect_cleanup_outcome(missing, false, false, Failed);
+    let pending = policy::observed_cleanup_result(true, "unknown λ\0\n", None,
+        Some("cleaned"), None);
+    expect_cleanup_outcome(pending, true, true, CachesReleased);
+    let terminal = policy::observed_cleanup_result(true, "terminal", None,
+        Some("cleaned"), None);
+    expect_cleanup_outcome(terminal, true, true, Retained);
+    let empty = policy::observed_cleanup_result(false, "", Some(""), Some("cleaned"), Some(""));
+    expect_cleanup_outcome(empty, false, true, Retained);
+    let age_suffix = policy::observed_cleanup_result(false, "terminal",
+        Some("reusable-source-preserved\0"), Some("cleaned"), Some("verified-absent\n"));
+    expect_cleanup_outcome(age_suffix, false, true, Retained);
+    let expired_suffix = policy::observed_cleanup_result(true, "terminal\0",
+        Some("expired-checkout-verified-absent-source-branches-retained\n"),
+        Some("cleaned"), Some("verified-absent"));
+    expect_cleanup_outcome(expired_suffix, true, true, CachesReleased);
+    let status_suffix = policy::observed_cleanup_result(true, "terminal", None,
+        Some("cleaned\0"), Some("already-absent"));
+    expect_cleanup_outcome(status_suffix, true, false, Failed);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_and_released_retained_work_remain_discoverable() {
     broadcast use vstd::string::group_string_axioms;
