@@ -1472,7 +1472,13 @@ impl Inventory {
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
     pub fn reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
-        self.partition_reference_paths(consumer, paths)
+        self.partition_reference_paths(consumer, paths, false)
+    }
+    /// Release only memberships absent from the consumer's durable declaration.
+    /// The caller owns that declaration through this transition and has already
+    /// published its shrink. This never admits any newly requested member.
+    pub fn prune_reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
+        self.partition_reference_paths(consumer, paths, true)
     }
     fn extend_reference_path(&self, consumer: &str, path: &str) -> Result<(), String> {
         let gate =

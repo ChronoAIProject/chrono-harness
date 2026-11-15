@@ -239,6 +239,7 @@ impl Inventory {
         &self,
         consumer: &str,
         paths: &[String],
+        prune_only: bool,
     ) -> Result<(), String> {
         if consumer.is_empty() || consumer.len() > 256 {
             return Err("retention consumer capacity/identity".into());
@@ -287,6 +288,13 @@ impl Inventory {
             let id = output.map(|output| output.id.clone());
             next.extend(id.iter().cloned());
             requested.insert(path.clone(), id);
+        }
+        if prune_only {
+            // The domain has already committed its smaller declaration. Only
+            // release obsolete protection; installing a new member still goes
+            // through the ordinary conservative admission below.
+            next.retain(|id| role.ids.contains(id) || role.attached.contains(id));
+            requested.clear();
         }
         let related: BTreeSet<_> = role
             .ids
