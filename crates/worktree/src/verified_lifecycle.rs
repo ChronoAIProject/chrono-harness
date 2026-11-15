@@ -51,12 +51,16 @@ pub use automatic_verification::age::{age_preservation_required, reusable_releas
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::inventory::append_action_index;
 #[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::migration::checkout_migration_ready;
+#[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::service::{
     maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,
     validate_activation_sequence,
 };
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::inventory::append_action_index;
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::migration::checkout_migration_ready;
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::service::{
     maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,
@@ -232,16 +236,6 @@ pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: boo
         || (kind@ == "birth"@ && registered)),
 {
     equal_text(kind, "import") || (equal_text(kind, "birth") && registered)
-}
-
-// The caller holds the original exclusive lease. Cleanup observations are
-// diagnostic history; actual unjoined work still prevents checkout adoption.
-pub fn checkout_migration_ready(status: &str, terminal: bool, uses_pending: bool,
-    handoff_pending: bool) -> (ready: bool)
-    ensures ready <==> (status@ == "active"@ && !terminal
-        && !uses_pending && !handoff_pending),
-{
-    equal_text(status, "active") && !terminal && !uses_pending && !handoff_pending
 }
 
 pub fn accepts_cleanup_branch(kind: &str, registered: bool) -> (accepted: bool)
