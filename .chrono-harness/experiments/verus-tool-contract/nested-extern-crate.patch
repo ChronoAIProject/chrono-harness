@@ -18,7 +18,7 @@
 +mod common;
 +use common::*;
 +
-+test_verify_one_file! {
++test_verify_one_file_with_options! {
 +    #[test] nested_extern_crate_in_exec
 +    ["--no-cheating", "--no-external-by-default", "--num-threads", "2"] => verus_code! {
 +        fn alias() -> (out: u8)
@@ -31,7 +31,7 @@
 +    } => Ok(())
 +}
 +
-+test_verify_one_file! {
++test_verify_one_file_with_options! {
 +    #[test] nested_extern_crate_in_proof
 +    ["--no-cheating", "--no-external-by-default", "--num-threads", "2"] => verus_code! {
 +        proof fn alias() {
@@ -42,7 +42,7 @@
 +    } => Ok(())
 +}
 +
-+test_verify_one_file! {
++test_verify_one_file_with_options! {
 +    #[test] nested_extern_crate_keeps_inner_checks
 +    ["--no-cheating", "--no-external-by-default", "--num-threads", "2"] => code! {
 +        use vstd::prelude::*;
