@@ -141,13 +141,19 @@ fn explicit_quota_observes_more_members_than_one_address_budget() {
         let file = d
             .path()
             .join(format!(".chrono-harness/state/fixtures/quota-{i}"));
-        let output = owner.create("fixture", &file, false, json!({})).unwrap();
+        let output =
+            retained_artifacts::retention::create_adopted(d.path(), "fixture", &file, false, json!({}))
+                .unwrap()
+                .unwrap();
         fs::write(&file, b"cache").unwrap();
         output.complete(json!({"status":"passed"})).unwrap();
         files.push(file);
     }
     let live = d.path().join(".chrono-harness/state/fixtures/live");
-    let publication = owner.create("fixture", &live, false, json!({})).unwrap();
+    let publication =
+        retained_artifacts::retention::create_adopted(d.path(), "fixture", &live, false, json!({}))
+            .unwrap()
+            .unwrap();
     fs::write(&live, b"active producer").unwrap();
     let round = owner.maintain_explicit().unwrap();
     assert_eq!(
@@ -191,7 +197,10 @@ fn unknown_quota_member_preserves_other_outputs_until_its_scope_is_known() {
         let file = d
             .path()
             .join(format!(".chrono-harness/state/fixtures/unknown-quota-{i}"));
-        let output = owner.create("fixture", &file, false, json!({})).unwrap();
+        let output =
+            retained_artifacts::retention::create_adopted(d.path(), "fixture", &file, false, json!({}))
+                .unwrap()
+                .unwrap();
         first.get_or_insert_with(|| output.id().to_owned());
         fs::write(&file, b"required original").unwrap();
         output.complete(json!({"status":"passed"})).unwrap();
