@@ -55,6 +55,28 @@ pub fn write_record(
     Ok(())
 }
 
+/// Keep every observation, sharing only identical declaration bodies within
+/// this original. References are one-based JSONL line numbers, never authority.
+#[doc(hidden)]
+#[cfg(not(verus_keep_ghost))]
+pub fn compact_retention_record(
+    row: &mut Value,
+    first_records: &mut BTreeMap<String, u64>,
+    line: u64,
+) -> Result<(), String> {
+    if row["kind"] != "declaration-state" || !row["record"].is_object() {
+        return Ok(());
+    }
+    let digest = sha256(&serde_json::to_vec(&row["record"]).map_err(|e| e.to_string())?);
+    if let Some(first) = first_records.get(&digest) {
+        row.as_object_mut().unwrap().remove("record");
+        row["record_ref"] = value!(first);
+    } else {
+        first_records.insert(digest, line);
+    }
+    Ok(())
+}
+
 #[cfg(not(verus_keep_ghost))]
 pub(super) struct Report {
     root: PathBuf,
@@ -71,6 +93,7 @@ pub(super) struct Report {
     io_error: Option<String>,
     artifact_addresses: BTreeSet<PathBuf>,
     worktree_addresses: BTreeSet<PathBuf>,
+    retention_records: BTreeMap<String, u64>,
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -89,7 +112,7 @@ impl Report {
             false,
             value!({"operation":"maintenance-inventory","status":"not-established"}),
         )?;
-        parent["complete_inventory"] = value!({"schema":"chrono-maintenance-inventory/v1",
+        parent["complete_inventory"] = value!({"schema":"chrono-maintenance-inventory/v2",
             "path":path,"format":"jsonl","status":"incomplete",
             "member_enumeration_complete":false,"measurements_complete":false,
             "publication_complete":false});
@@ -111,6 +134,7 @@ impl Report {
             io_error: None,
             artifact_addresses: BTreeSet::new(),
             worktree_addresses: BTreeSet::new(),
+            retention_records: BTreeMap::new(),
         };
         report.record(value!({"kind":"scope","source":"maintenance-round",
             "trigger":parent["maintenance_trigger"],
@@ -281,11 +305,11 @@ impl Report {
         }
     }
 
-    pub(super) fn retention(&mut self, mut row: Value) {
+    pub(super) fn retention(&mut self, source_root: &Path, mut row: Value) {
         if row["kind"] == "declaration-state" {
             if row["record"]["output"].is_object() {
                 if let Some(path) = row["record"]["path"].as_str() {
-                    row["measurement"] = self.measure(&self.root.join(path));
+                    row["measurement"] = self.measure(&source_root.join(path));
                     row["measurement"]["scope"] =
                         value!("current physical path; declaration identity is separate");
                 }
@@ -294,11 +318,17 @@ impl Report {
                 row["measurement"]["scope"] = value!("retired output declaration metadata only");
             }
             if !row["error"].is_null() {
-                self.error("retention-declaration", &row["error"]);
+                self.error(
+                    &format!("retention-declaration:{}", source_root.display()),
+                    &row["error"],
+                );
             }
         }
         if row["kind"] == "enumeration-error" {
-            self.error("retention-namespace", &row["error"]);
+            self.error(
+                &format!("retention-namespace:{}", source_root.display()),
+                &row["error"],
+            );
         }
         if row["kind"] == "round"
             && (!row["error"].is_null()
@@ -309,11 +339,37 @@ impl Report {
             self.enumeration_complete = false;
             self.measurements_complete = false;
             self.errors.push(format!(
-                "retention round {}: original error retained",
+                "retention {} round {}: original error retained",
+                source_root.display(),
                 row["address"]
             ));
         }
-        self.record(value!({"kind":"retention","owner":"runner-retention","observation":row}));
+        if row["kind"] == "source-result" {
+            for (producer, quota) in row["original"]["terminal_quotas"]
+                .as_object()
+                .into_iter()
+                .flatten()
+            {
+                for error in quota["errors"].as_array().into_iter().flatten() {
+                    self.error(
+                        &format!("retention-quota:{}:{producer}", source_root.display()),
+                        error,
+                    );
+                }
+            }
+        }
+        // Measurements remain per observation: identical declarations do not
+        // establish that the physical path is unchanged. Only reuse the body.
+        // A failed write stops all later writes, so no reference can target a
+        // first body that failed publication.
+        if let Err(error) =
+            compact_retention_record(&mut row, &mut self.retention_records, self.rows + 1)
+        {
+            self.error("retention-record", error);
+            return;
+        }
+        self.record(value!({"kind":"retention","owner":"runner-retention",
+            "source_root":source_root,"observation":row}));
     }
 
     pub(super) fn finish(mut self, parent: &mut Value) -> Result<(), String> {
@@ -345,7 +401,7 @@ impl Report {
             self.errors.push(format!("inventory IO: {error}"));
         }
         let finished = timestamp()?;
-        let descriptor = value!({"schema":"chrono-maintenance-inventory/v1",
+        let descriptor = value!({"schema":"chrono-maintenance-inventory/v2",
             "path":self.path,"format":"jsonl","rows":self.rows,"byte_length":self.bytes,
             "status":if self.errors.is_empty() && self.enumeration_complete {"observed"} else {"incomplete"},
             "member_enumeration_complete":self.enumeration_complete && self.io_error.is_none(),
