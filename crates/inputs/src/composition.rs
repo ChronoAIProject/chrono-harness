@@ -26,6 +26,55 @@ impl CompositionEndpoint {
     }
 }
 
+/// 仅观察原声明数组与 ID 字段；匹配由本证明根完成。
+pub trait CompositionInputRows {
+    spec fn count(&self) -> nat;
+    spec fn id_at(&self, index: int) -> Option<&str>;
+
+    fn len(&self) -> (out: usize)
+        ensures out == self.count();
+
+    fn id(&self, index: usize) -> (out: Option<&str>)
+        requires index < self.count(),
+        ensures out == self.id_at(index as int);
+}
+
+pub open spec fn composition_input_matches<R: CompositionInputRows>(
+    rows: &R, index: int, expected: Seq<char>) -> bool
+{
+    match rows.id_at(index) { Some(id) => id@ == expected, None => false }
+}
+
+pub open spec fn first_composition_input<R: CompositionInputRows>(
+    rows: &R, expected: Seq<char>, out: Option<usize>) -> bool
+{
+    match out {
+        Some(index) => index < rows.count() && composition_input_matches(rows, index as int, expected)
+            && forall|j: int| 0 <= j < index ==> !composition_input_matches(rows, j, expected),
+        None => forall|j: int| 0 <= j < rows.count() ==> !composition_input_matches(rows, j, expected),
+    }
+}
+
+pub fn find_composition_input<R: CompositionInputRows>(rows: &R, expected: &str)
+    -> (out: Option<usize>)
+    ensures first_composition_input(rows, expected@, out),
+{
+    let count = rows.len();
+    let mut index = 0usize;
+    while index < count
+        invariant index <= count, count == rows.count(),
+            forall|j: int| 0 <= j < index ==> !composition_input_matches(rows, j, expected@),
+        decreases count - index,
+    {
+        if let Some(id) = rows.id(index) {
+            if identifiers::equal_text(id, expected) { return Some(index); }
+        }
+        assert(!composition_input_matches(rows, index as int, expected@));
+        index += 1;
+    }
+    None
+}
+
 pub enum CompositionMergeError<'a> {
     Environment(CompositionEndpoint),
     Files(String),
@@ -572,6 +621,17 @@ pub fn compose_sources<S, X, T, O, H, I, M>(
 }
 
 #[cfg(not(verus_keep_ghost))]
+impl CompositionInputRows for Vec<Value> {
+    fn len(&self) -> usize {
+        Vec::len(self)
+    }
+
+    fn id(&self, index: usize) -> Option<&str> {
+        self[index]["id"].as_str()
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Source {
@@ -716,11 +776,9 @@ fn import_source(
         chrono_judge_registration::inputs::environment(r.config(), &snapshot["environment"])?;
         pair[name] = snapshot.clone();
         for (id, file) in snapshot["files"].as_object().ok_or("snapshot files")? {
-            let declared = r.config()["environment"]["inputs"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .find(|i| i["id"] == *id)
+            let inputs = r.config()["environment"]["inputs"].as_array().unwrap();
+            let declared = find_composition_input(inputs, id)
+                .map(|index| &inputs[index])
                 .ok_or_else(|| format!("E_COMPOSE_INPUT: {name} unregistered {id}"))?;
             let observed = import_blob(root, file, source)?;
             admit_imported_input(
