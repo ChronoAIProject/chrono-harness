@@ -125,6 +125,8 @@ v2 采集生成 `chrono-input-snapshot/v2`，普通文件仍用 blob，实际缺
 
 `chrono-inputs compose --host-root H --config P --base BASE_OID --candidate CANDIDATE_OID --manifest M --output O --receipt R` 离线组合明确地址的原配对。有限清单使用 `chrono-input-composition/v1`，`sources` 各含 `pair: {path, sha256}`、可选 `transport: {source_directory, directory}` 和原报告 `artifacts` 映射。不自动发现来源，最多 4096 项，JSON 仍限 64 MiB。复制和身份检查沿原描述符／传输要求流式进行。
 
+blob 运输时边复制边核对摘要与长度，再由输入存储所有者直接发布同一临时文件，避免重新复制和计算摘要。已有内容地址仍核对实际字节，冲突或损坏不覆盖；完整运行和存储成本未测。
+
 组合核对每份快照精确端点、配置、选择器和环境绑定。兼容重叠观察可合并，存在状态、摘要、环境或配置矛盾则拒绝。两端必须覆盖全局必需的全部声明输入，包括已选业务测试之外的检查程序输入；缺覆盖时点名端点和输入，不用实时业务输入、版本探测或 SDK 安装补齐。
 
 来源 `pair` 地址也可指另一端存在前采到的一份真实单端快照，由其 commit 决定所属端。两端仍须从明确来源取得完整覆盖。原快照／pair 字节保存在 `.chrono-harness/state/inputs/originals/`，独立 `chrono-input-composition-result/v1` 回执点名清单、组成项和输出。快照 v2／v3 形状不变，回执仍为 `completeness_proven: false`。
