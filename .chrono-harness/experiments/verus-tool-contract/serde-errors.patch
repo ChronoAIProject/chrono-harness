@@ -1,3 +1,56 @@
+diff --git a/source/vstd/std_specs/core.rs b/source/vstd/std_specs/core.rs
+--- a/source/vstd/std_specs/core.rs
++++ b/source/vstd/std_specs/core.rs
+@@ -3,6 +3,11 @@
+
+ use verus as verus_skip_verusfmt;
+ verus_skip_verusfmt! {
++
++#[verifier::external_trait_specification]
++pub trait ExStdError: core::fmt::Debug + core::fmt::Display {
++    type ExternalTraitSpecificationFor: core::error::Error;
++}
+
+ #[verifier::external_trait_specification]
+ pub trait ExTuple {
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -6,6 +6,34 @@
+
+ #[verifier::external_type_specification]
+ pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
++
++#[verifier::external_trait_specification]
++pub trait ExSerializeError: Sized + core::error::Error {
++    type ExternalTraitSpecificationFor: serde::ser::Error;
++
++    fn custom<T: core::fmt::Display>(message: T) -> Self;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExDeserializeError: Sized + core::error::Error {
++    type ExternalTraitSpecificationFor: serde::de::Error;
++
++    fn custom<T: core::fmt::Display>(message: T) -> Self;
++
++    fn invalid_type(value: serde::de::Unexpected<'_>, expected: &dyn serde::de::Expected) -> Self;
++
++    fn invalid_value(value: serde::de::Unexpected<'_>, expected: &dyn serde::de::Expected) -> Self;
++
++    fn invalid_length(length: usize, expected: &dyn serde::de::Expected) -> Self;
++
++    fn unknown_variant(value: &str, expected: &'static [&'static str]) -> Self;
++
++    fn unknown_field(value: &str, expected: &'static [&'static str]) -> Self;
++
++    fn missing_field(field: &'static str) -> Self;
++
++    fn duplicate_field(field: &'static str) -> Self;
++}
+
+ #[verifier::external_trait_specification]
+ pub trait ExExpected {
 diff --git a/source/rust_verify_test/tests/serde_errors.rs b/source/rust_verify_test/tests/serde_errors.rs
 new file mode 100644
 --- /dev/null

@@ -267,6 +267,9 @@ Expected、完整字段及静态候选列表保持原签名。负例必须实际
 先核原失败，再声明实际标准库父 trait 和 Serde 方法，重建 vstd 并核完整根。
 标准库父 trait 在现有 `std_specs::core` 所有者处声明，不把其未声明方法列为已支持，
 也不为仓内 impl 或适配器增加外部函数豁免。
+实际标准库声明保留 Debug／Display 两个父约束；Serde 两个声明保留 Sized／StdError
+及各方法实际泛型、借用和返回类型。所有方法均无额外 requires／ensures，本地
+impl 仍有完整证明义务；编译器的外部 trait 规格匹配也须通过，不能放宽来规避失败。
 
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。
