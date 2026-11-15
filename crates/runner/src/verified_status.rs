@@ -4857,6 +4857,7 @@ pub open spec fn tree_merge_fields(a: Seq<(&TreePath, &TreeEntry)>,
 }
 
 /// 对任意完整路径，输出恰为该路径实际两端字段的零或一条变化。
+#[verifier::spinoff_prover]
 proof fn tree_merge_path_projection(a: Seq<(&TreePath, &TreeEntry)>,
     b: Seq<(&TreePath, &TreeEntry)>, i: int, j: int, path: Seq<char>)
     requires tree_rows_ordered(a), tree_rows_ordered(b),
