@@ -379,14 +379,25 @@ fn round(
 }
 
 #[cfg(not(verus_keep_ghost))]
-fn linked_retention_ready(
+fn linked_retention_status(
     r: &mut Runner,
     token: &str,
     inputs: &PolicyInputs,
     path: &Path,
-) -> Result<bool, String> {
+) -> Result<&'static str, String> {
     match fs::symlink_metadata(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok("absent"),
+        Err(error) => return Err(error.to_string()),
+        Ok(_) => {}
+    }
+    // Opening Inventory can create its namespace. Only inspect adoption here;
+    // absent policies need no attachment probes, and foreign roots get no writes.
+    let policy = no_symlink_parents(
+        path,
+        chrono_harness::retained_artifacts::retention::POLICY_PATH,
+    )?;
+    match fs::symlink_metadata(policy) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok("not-adopted"),
         Err(error) => return Err(error.to_string()),
         Ok(_) => {}
     }
@@ -401,12 +412,12 @@ fn linked_retention_ready(
         false,
     )?
     .ok_or("cleanup policy disappeared")?;
-    let index = owner
-        .current_entry(path)
-        .ok_or("no current enrollment for retention root")?;
+    let Some(index) = owner.current_entry(path) else {
+        return Ok("no-current-enrollment");
+    };
     let head = r.oid(path, "HEAD")?;
     owner.check_attachment(r, &owner.ledger.entries[index], &head, None)?;
-    Ok(true)
+    Ok("ready")
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -674,15 +685,21 @@ fn run_round(
         // originals defer the coordinator store, not independent linked stores.
         // No enrollment metadata lease spans this retention IO.
         let result = (|| {
-            if !linked_retention_ready(r, token, inputs, &path)? {
-                inventory.retention(&path, value!({"kind":"source-result","status":"absent"}));
-                return Ok(None);
+            let status = linked_retention_status(r, token, inputs, &path)?;
+            if status != "ready" {
+                inventory.retention(&path, value!({"kind":"source-result","status":status}));
+                return Ok(status);
             }
-            maintain_retention_inventory(&path, &mut inventory)
+            let result = maintain_retention_inventory(&path, &mut inventory)?;
+            Ok::<_, String>(if result.is_some() {
+                "reported"
+            } else {
+                "no-adopted-storage"
+            })
         })();
         match result {
-            Ok(result) => linked_retention.push(value!({"source_root":path,
-                "status":if result.is_some() {"reported"} else {"no-adopted-storage"},
+            Ok(status) => linked_retention.push(value!({"source_root":path,
+                "status":status,
                 "original":"see complete_inventory"})),
             Err(error) => {
                 let scope = format!("retention:{}", path.display());
