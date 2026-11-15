@@ -1,3 +1,164 @@
+--- a/source/rust_verify/src/rust_to_vir_expr.rs
++++ b/source/rust_verify/src/rust_to_vir_expr.rs
+@@ -2280,16 +2280,12 @@
+                                     );
+                                 }
+ 
+-                                // TODO(mut_refs): likely needs Place considerations
+-                                let fun = vir::fun!(CrateId::Vstd => "array"; "array_as_slice");
+-
+-                                let typ_args = match &*undecorate_typ(arg.typ()) {
+-                                    TypX::Primitive(Primitive::Array, typs) => typs.clone(),
+-                                    _ => {
+-                                        crate::internal_err!(expr.span, "expected array")
+-                                    }
+-                                };
+-                                Some((fun, typ_args))
++                                let arg = arg.consume(bctx, get_inner_ty());
++                                let x = ExprX::Unary(UnaryOp::ArrayToSlice, arg);
++                                let expr_typ = bctx.mid_ty_to_vir(expr.span, &ty2)?;
++                                return Ok(ExprOrPlace::Expr(bctx.spanned_typed_new(
++                                    expr.span, &expr_typ, x,
++                                )));
+                             } else {
+                                 None
+                             }
+--- a/source/vir/src/ast.rs
++++ b/source/vir/src/ast.rs
+@@ -487,6 +487,9 @@
+     MutRefFinal(bool),
+     /// Length of an array or slice
+     Length(ArrayKind),
++    /// Pure implicit coercion from a shared array reference to a slice.
++    /// Lowered to vstd::array::spec_array_as_slice by AST simplification.
++    ArrayToSlice,
+ }
+ 
+ /// Which builtin source name does this come from
+--- a/source/vir/src/ast_simplify.rs
++++ b/source/vir/src/ast_simplify.rs
+@@ -521,6 +521,29 @@
+             simplify_one_expr(ctx, state, scope_map, &ctor)
+         }
+         ExprX::Unary(UnaryOp::CoerceMode { .. }, expr0) => Ok(expr0.clone()),
++        ExprX::Unary(UnaryOp::ArrayToSlice, array) => {
++            let typs = match &*undecorate_typ(&array.typ) {
++                TypX::Primitive(crate::ast::Primitive::Array, typs) => typs.clone(),
++                _ => return Err(internal_error(&expr.span, "expected array in slice coercion")),
++            };
++            let target = CallTarget::Fun(
++                crate::ast::CallTargetKind::Static,
++                crate::fun!(CrateId::Vstd => "array"; "spec_array_as_slice"),
++                typs,
++                Arc::new(vec![]),
++                crate::ast::CallTargetAttrs {
++                    autospec: AutospecUsage::Final,
++                    const_var: false,
++                    assume_external_allowed: false,
++                },
++            );
++            Ok(SpannedTyped::new(&expr.span, &expr.typ, ExprX::Call {
++                target,
++                args: Arc::new(vec![array.clone()]),
++                post_args: None,
++                body: None,
++            }))
++        }
+         ExprX::Multi(MultiOp::Chained(ops), args) => {
+             use crate::ast::IeeeFloatBinaryOp;
+             assert!(args.len() == ops.len() + 1);
+--- a/source/vir/src/ast_to_sst.rs
++++ b/source/vir/src/ast_to_sst.rs
+@@ -1964,6 +1964,9 @@
+                 }
+             }
+         }
++        ExprX::Unary(UnaryOp::ArrayToSlice, _) => {
++            Err(crate::messages::internal_error(&expr.span, "slice coercion not simplified"))
++        }
+         ExprX::Unary(op, exprr) => {
+             let (mut stms, exp) = expr_to_stm_opt(ctx, state, exprr)?;
+             let exp = to_exp_or_return_never!(exp, stms);
+--- a/source/vir/src/bitvector_to_air.rs
++++ b/source/vir/src/bitvector_to_air.rs
+@@ -465,6 +465,7 @@
+                 let expr = float_to_ieee_bits(bv_typ, Arc::new(ExprX::Unary(op, expr)));
+                 Ok(BvExpr { expr, bv_typ })
+             }
++            UnaryOp::ArrayToSlice => panic!("slice coercion not simplified"),
+             UnaryOp::IntToReal => {
+                 return Err(error(
+                     &exp.span,
+--- a/source/vir/src/heuristics.rs
++++ b/source/vir/src/heuristics.rs
+@@ -52,6 +52,7 @@
+     // with an empty by().)
+     match &exp.x {
+         ExpX::Unary(op, e) => match op {
++            UnaryOp::ArrayToSlice => panic!("slice coercion not simplified"),
+             UnaryOp::Not | UnaryOp::BitNot(_) | UnaryOp::Clip { .. } => exp.clone(),
+             UnaryOp::IntToReal => exp.clone(),
+             UnaryOp::RealToInt => exp.clone(),
+--- a/source/vir/src/poly.rs
++++ b/source/vir/src/poly.rs
+@@ -582,6 +582,7 @@
+         ExpX::Unary(op, e1) => {
+             let e1 = visit_exp(ctx, state, e1);
+             match op {
++                UnaryOp::ArrayToSlice => panic!("slice coercion not simplified"),
+                 UnaryOp::IeeeFloat(crate::ast::IeeeFloatUnaryOp::Cast) => {
+                     let e1 = coerce_exp_to_poly(ctx, &e1);
+                     mk_exp_typ(&coerce_typ_to_poly(ctx, &exp.typ), ExpX::Unary(*op, e1))
+--- a/source/vir/src/sst_to_air.rs
++++ b/source/vir/src/sst_to_air.rs
+@@ -1120,6 +1120,7 @@
+                 };
+                 apply_range_fun(&f_name, &range, vec![expr])
+             }
++            UnaryOp::ArrayToSlice => panic!("slice coercion not simplified"),
+             UnaryOp::IntToReal => {
+                 let expr = exp_to_expr(ctx, e, expr_ctxt)?;
+                 Arc::new(ExprX::Unary(air::ast::UnaryOp::ToReal, expr))
+--- a/source/vir/src/sst_util.rs
++++ b/source/vir/src/sst_util.rs
+@@ -506,6 +506,9 @@
+                     ),
+                     99,
+                 ),
++                UnaryOp::ArrayToSlice => {
++                    (format!("array_to_slice({})", exp.x.to_user_string(global)), 99)
++                }
+                 UnaryOp::IntToReal => {
+                     (format!("int_to_real({})", exp.x.to_user_string(global)), 99)
+                 }
+--- a/source/vir/src/triggers.rs
++++ b/source/vir/src/triggers.rs
+@@ -113,6 +113,7 @@
+ fn check_trigger_expr_arg(state: &mut State, arg: &Exp) {
+     match &arg.x {
+         ExpX::Unary(op, arg) => match op {
++            UnaryOp::ArrayToSlice => panic!("slice coercion not simplified"),
+             UnaryOp::Trigger(_)
+             | UnaryOp::HeightTrigger
+             | UnaryOp::CoerceMode { .. }
+@@ -263,6 +264,7 @@
+             Err(error(&exp.span, "triggers cannot contain const type bounds"))
+         }
+         ExpX::Unary(op, arg) => match op {
++            UnaryOp::ArrayToSlice => panic!("slice coercion not simplified"),
+             UnaryOp::NewStrLit
+             | UnaryOp::StrLen
+             | UnaryOp::BitNot(_)
+--- a/source/vir/src/triggers_auto.rs
++++ b/source/vir/src/triggers_auto.rs
+@@ -402,6 +402,7 @@
+                 | UnaryOp::Length(_) => 0,
+                 UnaryOp::HeightTrigger => 1,
+                 UnaryOp::Trigger(_) | UnaryOp::Clip { .. } | UnaryOp::BitNot(_) => 1,
++                UnaryOp::ArrayToSlice => panic!("slice coercion not simplified"),
+                 UnaryOp::IntToReal => 1,
+                 UnaryOp::RealToInt => 1,
+                 UnaryOp::FloatToBits => 1,
 --- /dev/null
 +++ b/source/rust_verify_test/tests/const_array_unsizing.rs
 @@ -0,0 +1,66 @@
