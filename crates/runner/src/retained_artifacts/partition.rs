@@ -1766,7 +1766,7 @@ impl Inventory {
         // members. Other waiting activities recheck their discovered closure
         // under the same path/role/object exclusion order below.
         loop {
-            if selected.len() > self.policy.max_related_outputs {
+            if selected.union(&retained_dependencies).count() > self.policy.max_related_outputs {
                 return Err("related retention graph capacity; originals preserved".into());
             }
             let next_role = wanted_roles
@@ -1836,6 +1836,15 @@ impl Inventory {
                         // cannot change while this source is held. Their full
                         // width must not become simultaneous descriptors.
                         retained_dependencies.insert(id.clone());
+                        let mut related: BTreeSet<_> =
+                            selected.union(&retained_dependencies).cloned().collect();
+                        related.extend(output.references.iter().cloned());
+                        if related.len() > self.policy.max_related_outputs {
+                            return Err(
+                                "related retention graph capacity; originals preserved".into()
+                            );
+                        }
+                        let policy_sha256 = sha256(&self.policy_bytes);
                         for target in &output.references {
                             if observed.contains_key(target) {
                                 continue;
@@ -1846,7 +1855,7 @@ impl Inventory {
                                     format!("retention output metadata is busy: {target}")
                                 })?;
                             let original = self.read_object(target, &directory)?;
-                            if original.policy_sha256 != sha256(&self.policy_bytes) {
+                            if original.policy_sha256 != policy_sha256 {
                                 return Err("retention policy migration required; original record preserved".into());
                             }
                         }
