@@ -3663,6 +3663,10 @@ proof fn tree_fixture_literal_rows(a: &str, b: &str)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
+    // 成员展开由专属引理负责，不在整个解析消费者中展开前缀和逐字段关系。
+    hide(policy::git_tree_prefix_map);
+    hide(policy::git_tree_entry_matches);
+    hide(policy::git_tree_row_spec);
     let a = "100644 blob 0000000000000000000000000000000000000001\ta";
     let b = "100644 blob 0000000000000000000000000000000000000001\ta//./b/";
     proof { policy::tree_path_obeys_cmp(); tree_fixture_literal_rows(a, b); }
