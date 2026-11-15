@@ -27,6 +27,36 @@ fn recovery_accounting_never_substitutes_for_domain_completion() {
     expect_true(accounting::accounting_releases(true, true));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn migration_custody_excludes_existing_capabilities_without_attaching_reservations() {
+    proof {
+        reveal_strlit("reserving"); reveal_strlit("creating");
+        reveal_strlit("released"); reveal_strlit(""); reveal_strlit("inode:original");
+        assert("creating"@.len() != "reserving"@.len());
+    }
+    let absent = policy::migration_custody("reserving", "", true);
+    expect_true(absent.admitted && !absent.acquire && absent.expected.is_none());
+    let unbound = policy::migration_custody("reserving", "", false);
+    expect_true(unbound.admitted && unbound.acquire && unbound.expected.is_none());
+    let unknown = policy::migration_custody("creating", "", false);
+    expect_true(!unknown.admitted && unknown.acquire && unknown.expected.is_none());
+    let missing_unknown = policy::migration_custody("creating", "", true);
+    expect_true(!missing_unknown.admitted && !missing_unknown.acquire
+        && missing_unknown.expected.is_none());
+    let attached = policy::migration_custody("creating", "inode:original", false);
+    expect_true(attached.admitted && attached.acquire);
+    expect_true(policy::contains(&vec![attached.expected.unwrap().to_owned()], "inode:original"));
+    let missing_attached = policy::migration_custody("creating", "inode:original", true);
+    expect_true(missing_attached.admitted && missing_attached.acquire);
+    expect_true(policy::contains(&vec![missing_attached.expected.unwrap().to_owned()], "inode:original"));
+    let reserved_attached = policy::migration_custody("reserving", "inode:original", true);
+    expect_true(reserved_attached.admitted && reserved_attached.acquire);
+    expect_true(policy::contains(&vec![reserved_attached.expected.unwrap().to_owned()], "inode:original"));
+    let completed = policy::migration_custody("released", "inode:original", false);
+    expect_true(completed.admitted && completed.acquire);
+    expect_true(policy::contains(&vec![completed.expected.unwrap().to_owned()], "inode:original"));
+}
+
 #[cfg(verus_keep_ghost)]
 fn bounded_inputs_accept_the_limit_and_reject_the_next_byte() {
     expect_true(policy::commands::within_bound(0, 0));
