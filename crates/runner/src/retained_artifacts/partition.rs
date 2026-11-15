@@ -382,9 +382,6 @@ impl Inventory {
             .ok_or("retention consumer metadata is busy")?;
         self.stable(&lease)?;
         let current = self.read_role(consumer)?;
-        if prune_only && current.is_none() {
-            return self.stable(&lease);
-        }
         let fresh = current.is_none();
         let mut role = current.unwrap_or(Role {
             observation: None,

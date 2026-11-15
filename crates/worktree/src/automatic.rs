@@ -1815,6 +1815,7 @@ impl Manager {
             scope,
             exclusive_namespace,
             wait,
+            false,
         )?
         else {
             return Ok(None);
@@ -1833,11 +1834,21 @@ impl Manager {
         scope: &Path,
         exclusive_namespace: bool,
         wait: bool,
+        recover_published_results: bool,
     ) -> Result<Option<Self>, String> {
         let Some(inputs) = PolicyInputs::load(r, root, config_path, bytes)? else {
             return Ok(None);
         };
-        Self::from_inputs(r, inputs, token, scope, exclusive_namespace, wait).map(Some)
+        Self::from_inputs(
+            r,
+            inputs,
+            token,
+            scope,
+            exclusive_namespace,
+            wait,
+            recover_published_results,
+        )
+        .map(Some)
     }
     fn from_inputs(
         r: &mut Runner,
@@ -1846,6 +1857,7 @@ impl Manager {
         scope: &Path,
         exclusive_namespace: bool,
         wait: bool,
+        recover_published_results: bool,
     ) -> Result<Self, String> {
         let scope = absolute(scope, true)?;
         let policy = &inputs.policy;
@@ -2032,7 +2044,9 @@ impl Manager {
             _namespace: namespace,
             _gate: gate,
         };
-        manager.reconcile_published_results()?;
+        if recover_published_results {
+            manager.reconcile_published_results()?;
+        }
         manager.protect_originals()?;
         Ok(manager)
     }
@@ -4496,6 +4510,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 target.as_deref().unwrap_or(&invoking),
                 operation == "deploy-owner",
                 true,
+                false,
             )?;
             manager.restore_absent_policy(r)?;
             if !matches!(operation.as_str(), "maintain" | "import") {
