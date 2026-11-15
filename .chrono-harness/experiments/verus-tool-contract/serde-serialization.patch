@@ -1,3 +1,23 @@
+diff --git a/source/vir/src/ast_to_sst_func.rs b/source/vir/src/ast_to_sst_func.rs
+--- a/source/vir/src/ast_to_sst_func.rs
++++ b/source/vir/src/ast_to_sst_func.rs
+@@ -131,7 +131,15 @@
+     state.view_as_spec = true;
+     // Use expr_to_pure_exp_skip_checks here
+     // because spec precondition checking is performed as a separate query
+-    let body_exp = expr_to_pure_exp_skip_checks(&ctx, &mut state, &body)?;
++    let body_exp = expr_to_pure_exp_skip_checks(&ctx, &mut state, &body).map_err(|error| {
++        error.secondary_label(
++            &function.span,
++            format!(
++                "in specification body of {}",
++                crate::ast_util::fun_as_friendly_rust_name(&function.x.name),
++            ),
++        )
++    })?;
+     let body_exp = state.finalize_exp(ctx, &body_exp)?;
+     state.finalize()?;
+
 diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
 --- a/source/vstd/serde_specs.rs
 +++ b/source/vstd/serde_specs.rs
@@ -508,23 +528,3 @@ new file mode 100644
 +        assert_one_fails(err);
 +    }
 +}
-diff --git a/source/vir/src/ast_to_sst_func.rs b/source/vir/src/ast_to_sst_func.rs
---- a/source/vir/src/ast_to_sst_func.rs
-+++ b/source/vir/src/ast_to_sst_func.rs
-@@ -131,7 +131,15 @@
-     state.view_as_spec = true;
-     // Use expr_to_pure_exp_skip_checks here
-     // because spec precondition checking is performed as a separate query
--    let body_exp = expr_to_pure_exp_skip_checks(&ctx, &mut state, &body)?;
-+    let body_exp = expr_to_pure_exp_skip_checks(&ctx, &mut state, &body).map_err(|error| {
-+        error.secondary_label(
-+            &function.span,
-+            format!(
-+                "in specification body of {}",
-+                crate::ast_util::fun_as_friendly_rust_name(&function.x.name),
-+            ),
-+        )
-+    })?;
-     let body_exp = state.finalize_exp(ctx, &body_exp)?;
-     state.finalize()?;
-
