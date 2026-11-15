@@ -1,11 +1,50 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+#[path = "../../inputs/src/lib.rs"]
+mod policy;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_inputs as policy;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_identity_requires_both_exact_digest_and_length() {
+    proof {
+        reveal_strlit("hash"); reveal_strlit("Hash"); reveal_strlit("");
+        assert("hash"@[0] != "Hash"@[0]);
+        assert("hash"@.len() != ""@.len());
+    }
+    let same = policy::blob_identity_matches("hash", 42, "hash", 42);
+    let content = policy::blob_identity_matches("Hash", 42, "hash", 42);
+    let size = policy::blob_identity_matches("hash", 41, "hash", 42);
+    let absent = policy::blob_identity_matches("", 42, "hash", 42);
+    let empty = policy::blob_identity_matches("hash", 0, "hash", 0);
+    let largest = policy::blob_identity_matches("hash", u64::MAX, "hash", u64::MAX);
+    assert(same && !content && !size && !absent && empty && largest);
+    if !(same && !content && !size && !absent && empty && largest) { panic!(); }
+}
+}
+
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod support;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{json, sha256};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, path::Path, process::Command};
+#[cfg(not(verus_keep_ghost))]
 use support::*;
+#[cfg(not(verus_keep_ghost))]
 fn invoke(root: &Path, args: &[&str]) -> (i32, Value, String) {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"));
     cmd.current_dir("/")
@@ -21,6 +60,7 @@ fn invoke(root: &Path, args: &[&str]) -> (i32, Value, String) {
         String::from_utf8_lossy(&out.stderr).into(),
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
     let d = tempfile::Builder::new()
         .prefix("retained input host ")
@@ -36,7 +76,9 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
     let commit = commit(d.path());
     (d, f, v, commit)
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn capture_rejects_retired_endpoint_options_before_accessing_host_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -56,7 +98,9 @@ fn capture_rejects_retired_endpoint_options_before_accessing_host_inputs() {
         );
     }
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_strict() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -136,7 +180,9 @@ fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_str
             .contains("unknown field credential_environment")
     );
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn captures_only_declared_bytes_and_environment_and_deduplicates_content() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -176,7 +222,9 @@ fn captures_only_declared_bytes_and_environment_and_deduplicates_content() {
         1
     );
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn captures_observed_mismatch_without_rewriting_registration_and_preserves_old_blob() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -237,7 +285,9 @@ fn captures_observed_mismatch_without_rewriting_registration_and_preserves_old_b
     );
     assert_ne!(code, 0);
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn pairs_explicit_snapshots_without_recapturing_the_old_environment_or_file() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -286,7 +336,9 @@ fn pairs_explicit_snapshots_without_recapturing_the_old_environment_or_file() {
     assert_eq!(code, 0, "{err}");
     assert_eq!(p, value!({"base":a,"candidate":b}));
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn wrong_checkout_dirty_config_missing_input_and_unsafe_output_never_publish_snapshot() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -363,7 +415,9 @@ fn wrong_checkout_dirty_config_missing_input_and_unsafe_output_never_publish_sna
     assert!(!d.path().join(".chrono-harness/state/one.json").exists());
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn transport_to_a_new_host_uses_retained_bytes_after_original_input_disappears() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -415,7 +469,9 @@ fn transport_to_a_new_host_uses_retained_bytes_after_original_input_disappears()
     assert!(err.contains("E_INPUT_BLOB"), "{err}");
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn corrupt_existing_content_address_and_symlink_output_are_rejected() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -463,7 +519,9 @@ fn corrupt_existing_content_address_and_symlink_output_are_rejected() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn pairing_does_not_silently_normalize_conflicting_or_incomplete_snapshot_fields() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -537,7 +595,9 @@ fn pairing_does_not_silently_normalize_conflicting_or_incomplete_snapshot_fields
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_absence_is_retained_transported_and_distinct_from_empty_bytes() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -603,7 +663,9 @@ fn explicit_absence_is_retained_transported_and_distinct_from_empty_bytes() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn v2_absence_rejects_symlink_directory_and_non_directory_ancestors() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -680,7 +742,9 @@ fn v2_absence_rejects_symlink_directory_and_non_directory_ancestors() {
     assert_eq!(observed["files"]["data"], value!({"absent":true}));
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn absence_versioning_rejects_ambiguous_declarations_and_legacy_null() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -744,7 +808,9 @@ fn absence_versioning_rejects_ambiguous_declarations_and_legacy_null() {
     assert!(snapshot_shape(&s).is_err());
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1005,7 +1071,9 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     assert!(state.join("v3.json").exists());
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn compose_genuine_captures_retains_originals_and_rejects_conflicts_and_missing_coverage() {
     if !chrono_git_boundary::isolated_git() {
         return;
