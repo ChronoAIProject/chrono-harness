@@ -4838,6 +4838,24 @@ proof fn delta_at_path_append(first: Seq<DeltaFields>, second: Seq<DeltaFields>,
     Seq::<DeltaFields>::filter_distributes_over_add(first, second, delta_path_predicate(path));
 }
 
+/// 单侧只前进零或一项；将尾部有序性留在本引理，不向双树递归暴露量词。
+proof fn rows_entry_advance_projection(rows: Seq<(&TreePath, &TreeEntry)>,
+    start: int, next: int, key: &TreePath, entry: Option<&TreeEntry>, path: Seq<char>)
+    requires tree_rows_ordered(rows), 0 <= start <= next <= rows.len(), next <= start + 1,
+        next == start ==> entry.is_none(),
+        next > start ==> entry == Some(rows[start].1) && rows[start].0@ == key@,
+        next == rows.len() || identifiers::byte_lt(key.bytes(), rows[next].0.bytes()),
+    ensures if path == key@ {
+        rows_entry(rows, start, path) == optional_entry_fields(entry)
+            && rows_entry(rows, next, path).is_none()
+    } else { rows_entry(rows, start, path) == rows_entry(rows, next, path) },
+{
+    if path == key@ {
+        rows_entry_before_head(rows, next, key);
+    }
+    reveal_with_fuel(rows_entry, 1);
+}
+
 pub open spec fn tree_merge_fields(a: Seq<(&TreePath, &TreeEntry)>,
     b: Seq<(&TreePath, &TreeEntry)>, i: int, j: int) -> Seq<DeltaFields>
     decreases a.len() - i + b.len() - j,
@@ -4857,7 +4875,6 @@ pub open spec fn tree_merge_fields(a: Seq<(&TreePath, &TreeEntry)>,
 }
 
 /// 对任意完整路径，输出恰为该路径实际两端字段的零或一条变化。
-#[verifier::spinoff_prover]
 proof fn tree_merge_path_projection(a: Seq<(&TreePath, &TreeEntry)>,
     b: Seq<(&TreePath, &TreeEntry)>, i: int, j: int, path: Seq<char>)
     requires tree_rows_ordered(a), tree_rows_ordered(b),
@@ -4893,15 +4910,8 @@ proof fn tree_merge_path_projection(a: Seq<(&TreePath, &TreeEntry)>,
     assert(tree_merge_fields(a, b, i, j) == head + rest);
     entry_delta_projection(key@, old_entry, new_entry, path);
     delta_at_path_append(head, rest, path);
-    if path == key@ {
-        rows_entry_before_head(a, ni, key);
-        rows_entry_before_head(b, nj, key);
-        assert(rows_entry(a, i, path) == optional_entry_fields(old_entry));
-        assert(rows_entry(b, j, path) == optional_entry_fields(new_entry));
-    } else {
-        assert(rows_entry(a, i, path) == rows_entry(a, ni, path));
-        assert(rows_entry(b, j, path) == rows_entry(b, nj, path));
-    }
+    rows_entry_advance_projection(a, i, ni, key, old_entry, path);
+    rows_entry_advance_projection(b, j, nj, key, new_entry, path);
 }
 
 proof fn tree_merge_sources(a: Seq<(&TreePath, &TreeEntry)>,
