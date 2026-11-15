@@ -2361,33 +2361,8 @@ impl Inventory {
                         count += 1;
                         bytes += output.manifest.bytes;
                     } else if expired.len() < self.policy.max_nodes_per_round {
-                        let updated = (|| {
-                            let gate = self.addressed_gate(
-                                std::slice::from_ref(&output.id),
-                                &[],
-                                &[],
-                                None,
-                                false,
-                                false,
-                            )?;
-                            let mut ledger = self.load(&gate)?;
-                            if let Some(current) =
-                                ledger.outputs.iter_mut().find(|o| o.id == output.id)
-                            {
-                                if current.phase == "released"
-                                    && current.manifest.sealed
-                                    && current.identity == output.identity
-                                {
-                                    if current.expires <= observed {
-                                        return Ok(true);
-                                    }
-                                    current.expires = current.expires.min(observed);
-                                    self.save(&ledger, &gate)?;
-                                    return Ok::<_, String>(true);
-                                }
-                            }
-                            Ok(false)
-                        })();
+                        let updated =
+                            self.expire_terminal_output(&output.id, &output.identity, observed);
                         match updated {
                             Ok(true) => expired.push(output.id.clone()),
                             Ok(false) => (),
@@ -2398,6 +2373,31 @@ impl Inventory {
             }
         }
         Ok(json!({"scope_complete":complete,"errors":errors,"expired":expired}))
+    }
+
+    fn expire_terminal_output(
+        &self,
+        id: &str,
+        expected_identity: &str,
+        observed: u64,
+    ) -> Result<bool, String> {
+        let gate =
+            self.addressed_gate_scope(&[id.to_owned()], &[], &[], None, false, false, true)?;
+        let mut ledger = self.load(&gate)?;
+        if let Some(current) = ledger.outputs.iter_mut().find(|output| output.id == id) {
+            if crate::verified_release::terminal_eligible(
+                current.phase == "released",
+                current.manifest.sealed,
+            ) && current.identity == expected_identity
+            {
+                if current.expires > observed {
+                    current.expires = observed;
+                    self.save(&ledger, &gate)?;
+                }
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Ordinary entries coalesce concurrent reclamation without waiting behind

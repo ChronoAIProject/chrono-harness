@@ -694,6 +694,25 @@ impl Inventory {
         self.stable(gate)?;
         fs::remove_dir(directory).map_err(|e| e.to_string())
     }
+
+    fn path_metadata_occupied(&self, directory: &Path, path: &str) -> Result<bool, String> {
+        let address: Address = self
+            .read_metadata(&no_symlink_parents(directory, "address.json")?)?
+            .ok_or("path metadata declaration missing")?;
+        if address.path != path {
+            return Err("path metadata identity differs".into());
+        }
+        Ok(address.output.is_some()
+            || fs::read_dir(directory)
+                .map_err(|e| e.to_string())?
+                .any(|entry| {
+                    entry.map_or(true, |entry| {
+                        entry.file_name() != "address.json"
+                            && entry.file_name() != "address.pending"
+                    })
+                }))
+    }
+
     fn prune_object(&self, id: &str, observed: u64, nodes: &mut usize) -> Result<(), String> {
         let directory = self.object_directory(id)?;
         let Some(gate) = DirectoryLease::acquire_local(&directory, true, None)? else {
@@ -724,26 +743,30 @@ impl Inventory {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => record.prune_path = next,
                 Err(e) => return Err(e.to_string()),
                 Ok(_) => {
+                    // A populated ancestor cannot be removed. Observe it under
+                    // a shared lease so sibling publishers can keep using it.
+                    // This only abandons pruning; it grants no removal right.
+                    let Some(observation) =
+                        DirectoryLease::acquire_local(&path_directory, false, None)?
+                    else {
+                        return Ok(());
+                    };
+                    let occupied = self.path_metadata_occupied(&path_directory, &path)?;
+                    self.stable(&observation)?;
+                    drop(observation);
+                    if occupied {
+                        record.prune_path = None;
+                        self.write_metadata(&directory.join("record.json"), &record)?;
+                        break;
+                    }
                     let Some(path_gate) =
                         DirectoryLease::acquire_local(&path_directory, true, None)?
                     else {
                         return Ok(());
                     };
-                    let address: Address = self
-                        .read_metadata(&no_symlink_parents(&path_directory, "address.json")?)?
-                        .ok_or("path metadata declaration missing")?;
-                    if address.path != path {
-                        return Err("path metadata identity differs".into());
-                    }
-                    let has_children = fs::read_dir(&path_directory)
-                        .map_err(|e| e.to_string())?
-                        .any(|entry| {
-                            entry.map_or(true, |entry| {
-                                entry.file_name() != "address.json"
-                                    && entry.file_name() != "address.pending"
-                            })
-                        });
-                    if address.output.is_some() || has_children {
+                    // The shared observation may already be stale. Recheck the
+                    // actual mapping and members under the original exclusion.
+                    if self.path_metadata_occupied(&path_directory, &path)? {
                         record.prune_path = None;
                     } else {
                         self.remove_metadata_directory(
@@ -848,6 +871,144 @@ impl Inventory {
     ) -> Result<Value, String> {
         self.maintain_explicit_reporting_at(now()?, Some(&mut observer))
     }
+
+    // The explicit sweep already visits every declared object. Quota inputs
+    // must cover that same namespace, rather than repeating a truncated global
+    // scan for each producer. Only compact immutable fields survive each read;
+    // each read and expiry update uses the existing single-address budget.
+    fn explicit_terminal_quotas(
+        &self,
+        observed: u64,
+        observer: &mut Option<&mut dyn FnMut(&Value) -> Result<(), String>>,
+    ) -> Result<Value, String> {
+        let mut groups: BTreeMap<String, Vec<(String, String, u64, u64)>> = self
+            .policy
+            .terminal_limits
+            .keys()
+            .map(|producer| (producer.clone(), Vec::new()))
+            .collect();
+        if groups.is_empty() {
+            return Ok(json!({}));
+        }
+        let mut errors = Vec::new();
+        match fs::read_dir(self.directory.join("objects")) {
+            Err(error) => errors.push(json!({"error":error.to_string()})),
+            Ok(entries) => {
+                for entry in entries {
+                    let candidate = (|| {
+                        let entry = entry.map_err(|error| error.to_string())?;
+                        let id = entry
+                            .file_name()
+                            .into_string()
+                            .map_err(|_| "quota address is not UTF8")?;
+                        self.with_round_budget(|| {
+                            let gate = self.addressed_gate_scope(
+                                std::slice::from_ref(&id),
+                                &[],
+                                &[],
+                                None,
+                                false,
+                                false,
+                                true,
+                            )?;
+                            let ledger = self.load(&gate)?;
+                            self.stable(&gate)?;
+                            Ok(ledger
+                                .outputs
+                                .iter()
+                                .find(|output| output.id == id)
+                                .filter(|output| {
+                                    crate::verified_release::terminal_eligible(
+                                        output.phase == "released",
+                                        output.manifest.sealed,
+                                    )
+                                })
+                                .map(|output| {
+                                    (
+                                        output.producer.clone(),
+                                        (
+                                            output.id.clone(),
+                                            output.identity.clone(),
+                                            output.expires,
+                                            output.manifest.bytes,
+                                        ),
+                                    )
+                                }))
+                        })
+                    })();
+                    match candidate {
+                        Ok(Some((producer, candidate))) => {
+                            if let Some(group) = groups.get_mut(&producer) {
+                                group.push(candidate);
+                            }
+                        }
+                        Ok(None) => (),
+                        Err(error) => errors.push(json!({"error":error})),
+                    }
+                }
+            }
+        }
+        let mut quotas = serde_json::Map::new();
+        for (producer, mut candidates) in groups {
+            candidates.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| b.0.cmp(&a.0)));
+            let limits = &self.policy.terminal_limits[&producer];
+            let mut producer_errors = errors.clone();
+            let mut count = 0;
+            let mut bytes = 0;
+            let mut expired = Vec::new();
+            let mut expired_count = 0u64;
+            for (id, identity, expires, length) in candidates {
+                let keep = crate::verified_release::terminal_budget(
+                    count,
+                    bytes,
+                    length,
+                    limits.max_count,
+                    limits.max_bytes,
+                );
+                let decision = if !errors.is_empty() {
+                    "unknown-scope-preserved"
+                } else if keep {
+                    count += 1;
+                    bytes += length;
+                    "within-quota"
+                } else {
+                    match self
+                        .with_round_budget(|| self.expire_terminal_output(&id, &identity, observed))
+                    {
+                        Ok(true) => {
+                            expired_count += 1;
+                            if expired.len() < self.policy.max_nodes_per_round {
+                                expired.push(id.clone());
+                            }
+                            "expired"
+                        }
+                        Ok(false) => {
+                            producer_errors
+                                .push(json!({"id":id,"error":"quota member changed; preserve it"}));
+                            "changed-preserved"
+                        }
+                        Err(error) => {
+                            producer_errors.push(json!({"id":id,"error":error}));
+                            "failed-preserved"
+                        }
+                    }
+                };
+                if let Some(observer) = observer.as_deref_mut() {
+                    observer(&json!({"kind":"quota-member","producer":producer,"id":id,
+                        "identity":identity,"observed_expires":expires,"logical_bytes":length,
+                        "decision":decision,"disposal":"not-claimed"}))?;
+                }
+            }
+            quotas.insert(
+                producer,
+                json!({"scope_complete":producer_errors.is_empty(),
+                "errors":producer_errors,"expired":expired,"expired_count":expired_count,
+                "expired_list_complete":expired_count <= self.policy.max_nodes_per_round as u64}),
+            );
+        }
+        Ok(Value::Object(quotas))
+    }
+
     fn maintain_explicit_reporting_at(
         &self,
         observed: u64,
@@ -860,7 +1021,7 @@ impl Inventory {
         // empty directory manufactured by an ordinary owner operation.
         let declarations = ["transaction-gates", "objects", "roles"]
             .map(|namespace| (namespace, fs::read_dir(self.directory.join(namespace))));
-        sweep.value["terminal_quotas"] = json!(self.terminal_quotas_at(observed));
+        sweep.value["terminal_quotas"] = self.explicit_terminal_quotas(observed, &mut observer)?;
         for (namespace, entries) in declarations {
             sweep.value["enumeration"][namespace] = json!({"entries":0,"exhausted":false});
             let entries = match entries {

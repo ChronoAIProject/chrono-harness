@@ -278,6 +278,7 @@ fn terminal_cache_results_preserve_completion_and_actual_removal_priority() {
         reveal_strlit("failed"); reveal_strlit("verified-absent"); reveal_strlit("already-absent");
         reveal_strlit("preserved"); reveal_strlit("");
         reveal_strlit("reusable-source-preserved");
+        reveal_strlit("no-disposable-output-retained-checkout");
         reveal_strlit("expired-checkout-verified-absent-source-branches-retained");
         assert("active"@.len() != "terminal"@.len());
         assert("failed"@.len() != "cleaned"@.len());
@@ -289,6 +290,12 @@ fn terminal_cache_results_preserve_completion_and_actual_removal_priority() {
     let terminal = policy::observed_cleanup_result(false, "terminal",
         Some("reusable-source-preserved"), Some("cleaned"), Some("preserved"));
     expect_cleanup_outcome(terminal, true, true, Retained);
+    let no_effect = policy::observed_cleanup_result(false, "active",
+        Some("no-disposable-output-retained-checkout"), Some("cleaned"), Some("preserved"));
+    expect_cleanup_outcome(no_effect, true, true, CachesReleased);
+    let no_effect_terminal = policy::observed_cleanup_result(false, "terminal",
+        Some("no-disposable-output-retained-checkout"), Some("cleaned"), Some("preserved"));
+    expect_cleanup_outcome(no_effect_terminal, true, true, Retained);
     let pending = policy::observed_cleanup_result(true, "active",
         Some("reusable-source-preserved"), Some("cleaned"), Some("verified-absent"));
     expect_cleanup_outcome(pending, true, true, CachesReleased);
@@ -315,6 +322,7 @@ fn cleanup_observations_keep_missing_unknown_and_complete_text_distinct() {
         reveal_strlit(""); reveal_strlit("terminal"); reveal_strlit("cleaned");
         reveal_strlit("verified-absent"); reveal_strlit("already-absent");
         reveal_strlit("reusable-source-preserved");
+        reveal_strlit("no-disposable-output-retained-checkout");
         reveal_strlit("expired-checkout-verified-absent-source-branches-retained");
         reveal_strlit("unknown λ\0\n"); reveal_strlit("terminal\0");
         reveal_strlit("cleaned\0"); reveal_strlit("verified-absent\n");
