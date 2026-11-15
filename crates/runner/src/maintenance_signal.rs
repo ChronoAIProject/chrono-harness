@@ -210,12 +210,75 @@ use serde_json::{Value, json};
 #[cfg(not(verus_keep_ghost))]
 use std::{
     cell::Cell,
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
 
 #[cfg(not(verus_keep_ghost))]
 pub const POLICY_PATH: &str = ".chrono-harness/maintenance.json";
+
+/// Routing context from an already admitted lifecycle caller. This is only an
+/// activation destination, never an ownership capability or disposal policy.
+#[cfg(not(verus_keep_ghost))]
+pub const CONTEXT_ENV: &str = "CHRONO_MAINTENANCE_CONTEXT";
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
+pub struct RequestContext {
+    source_root: PathBuf,
+    owner_root: PathBuf,
+}
+
+#[cfg(not(verus_keep_ghost))]
+impl RequestContext {
+    pub fn new(source_root: &Path, owner_root: &Path) -> Result<Self, String> {
+        let context = Self {
+            source_root: source_root.into(),
+            owner_root: owner_root.into(),
+        };
+        context.validate()?;
+        Ok(context)
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        self.validate_shape()?;
+        for root in [&self.source_root, &self.owner_root] {
+            if fs::canonicalize(root).map_err(|error| error.to_string())? != *root {
+                return Err("maintenance context requires physical absolute roots".into());
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_shape(&self) -> Result<(), String> {
+        for root in [&self.source_root, &self.owner_root] {
+            if !root.is_absolute()
+                || root.components().any(|part| {
+                    matches!(
+                        part,
+                        std::path::Component::CurDir | std::path::Component::ParentDir
+                    )
+                })
+            {
+                return Err("maintenance context requires physical absolute roots".into());
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Preserve an enclosing route across the existing process boundary. An
+/// explicitly admitted nested lifecycle command supplies its own route.
+#[cfg(not(verus_keep_ghost))]
+pub fn forward_context(declared: &mut BTreeMap<String, String>, inherited: Option<&str>) {
+    if let Some(context) = inherited {
+        declared
+            .entry(CONTEXT_ENV.into())
+            .or_insert_with(|| context.into());
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -285,6 +348,14 @@ impl Drop for RoundGuard {
 /// Responsibility was durably recorded by the caller's original owner first.
 #[cfg(not(verus_keep_ghost))]
 pub fn request_adopted(root: &Path, reason: &str) -> Value {
+    let context = std::env::var(CONTEXT_ENV).ok();
+    request_with_context(root, reason, context.as_deref())
+}
+
+/// Explicit context is also available to admitted in-process callers. A route
+/// for a different source cannot redirect this host's event.
+#[cfg(not(verus_keep_ghost))]
+pub fn request_with_context(root: &Path, reason: &str, context: Option<&str>) -> Value {
     let mut receipt = json!({"schema":"chrono-maintenance-request/v1", "reason":reason,
         "accepted":false,"round_completion":"not-established", "disposal":"not-attempted",
         "responsibility":"existing-owner-state"});
@@ -293,6 +364,20 @@ pub fn request_adopted(root: &Path, reason: &str) -> Value {
         return receipt;
     }
     let request = (|| {
+        let context = context
+            .map(|raw| decode::<RequestContext>(raw.as_bytes()))
+            .transpose()?;
+        if let Some(context) = &context {
+            context.validate_shape()?;
+        }
+        let context = context
+            .as_ref()
+            .filter(|context| context.source_root == root);
+        if let Some(context) = context {
+            context.validate()?;
+        }
+        let root = context.map_or(root, |context| context.owner_root.as_path());
+        receipt["activation_root"] = json!(root);
         let Some((policy, bytes)) = adopted(root)? else {
             return Ok(false);
         };

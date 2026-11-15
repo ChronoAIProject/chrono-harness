@@ -1336,11 +1336,18 @@ fn run_process_inner_with_stdout(
             publication,
         });
     let launcher_pid = std::process::id();
+    let mut command_env = s.env.clone();
+    maintenance_signal::forward_context(
+        &mut command_env,
+        std::env::var(maintenance_signal::CONTEXT_ENV)
+            .ok()
+            .as_deref(),
+    );
     let mut environment = if expected.is_some() {
-        s.env.clone()
+        command_env.clone()
     } else {
         let mut env: std::collections::BTreeMap<String, String> = std::env::vars().collect();
-        env.extend(s.env.clone());
+        env.extend(command_env.clone());
         env
     };
     let stdin_sha256 = sha256(input);
@@ -1360,7 +1367,7 @@ fn run_process_inner_with_stdout(
     }
     command
         .args(&s.args)
-        .envs(&s.env)
+        .envs(&command_env)
         .current_dir(&root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

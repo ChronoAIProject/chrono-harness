@@ -66,6 +66,35 @@ fn main() -> ExitCode {
         "--version" => println!("fixture"),
         "noop" => (),
         "ordinary" => print!("ordinary-work"),
+        "maintenance-hint" => {
+            let root = fs::canonicalize(".").unwrap();
+            println!(
+                "{}",
+                chrono_harness::maintenance_signal::request_adopted(&root, "fixture-release")
+            );
+        }
+        "nested-maintenance-hint" => {
+            let program = std::env::current_exe().unwrap();
+            let command = chrono_harness::CommandSpec {
+                program: program.to_str().unwrap().into(),
+                args: vec!["maintenance-hint".into()],
+                env: std::collections::BTreeMap::new(),
+                timeout_seconds: 30,
+                output_limit_bytes: 4096,
+            };
+            let digest = chrono_harness::sha256(&fs::read(program).unwrap());
+            let result = chrono_harness::run_process_observed(
+                &fs::canonicalize(".").unwrap(),
+                &command,
+                &[],
+                &digest,
+            )
+            .unwrap();
+            assert_eq!(result.exit_code, 0);
+            assert!(result.owned_work_joined);
+            io::stdout().write_all(&result.stdout_bytes).unwrap();
+            io::stderr().write_all(&result.stderr_bytes).unwrap();
+        }
         "finished" => print!("finished"),
         "artifact-success" | "artifact-failure" => {
             let directory = std::env::var_os("CHRONO_ARTIFACT_DIRECTORY")

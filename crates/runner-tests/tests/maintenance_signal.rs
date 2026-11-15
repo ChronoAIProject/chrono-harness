@@ -458,25 +458,38 @@ fn linked_retention_routes_only_its_own_hint_to_the_known_physical_owner() {
     let mut bytes = [0; 64];
     let n = owner_socket.recv(&mut bytes).unwrap();
     assert_eq!(&bytes[..n], b"retention-release");
-    assert_eq!(linked_socket.recv(&mut bytes).unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+    assert_eq!(
+        linked_socket.recv(&mut bytes).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
 
     let receipt = signal::request_with_context(other.path(), "other-owner", Some(&encoded));
     assert_eq!(receipt["accepted"], true);
     assert_eq!(receipt["socket"], serde_json::json!(other_path));
     assert_eq!(other_socket.recv(&mut bytes).unwrap(), b"other-owner".len());
-    assert_eq!(owner_socket.recv(&mut bytes).unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+    assert_eq!(
+        owner_socket.recv(&mut bytes).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
 }
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn destination_context_rejects_invalid_input_and_preserves_the_original_responsibility() {
     let (owner, owner_path) = host();
-    let (linked, _) = host();
+    let (linked, linked_path) = host();
     let owner_socket = UnixDatagram::bind(owner_path).unwrap();
     owner_socket.set_nonblocking(true).unwrap();
+    let linked_socket = UnixDatagram::bind(linked_path).unwrap();
+    linked_socket.set_nonblocking(true).unwrap();
     let original = linked.path().join(".chrono-harness/state/original.json");
     fs::write(&original, b"unresolved responsibility").unwrap();
-    for input in ["{}", "null", "{", r#"{"source_root":"relative","owner_root":"/absolute"}"#] {
+    for input in [
+        "{}",
+        "null",
+        "{",
+        r#"{"source_root":"relative","owner_root":"/absolute"}"#,
+    ] {
         let receipt = signal::request_with_context(linked.path(), "released", Some(input));
         assert_eq!(receipt["status"], "wake-failed");
         assert_eq!(receipt["accepted"], false);
@@ -484,7 +497,14 @@ fn destination_context_rejects_invalid_input_and_preserves_the_original_responsi
         assert_eq!(fs::read(&original).unwrap(), b"unresolved responsibility");
     }
     let mut bytes = [0; 64];
-    assert_eq!(owner_socket.recv(&mut bytes).unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+    assert_eq!(
+        owner_socket.recv(&mut bytes).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    assert_eq!(
+        linked_socket.recv(&mut bytes).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
 }
 
 #[test]
