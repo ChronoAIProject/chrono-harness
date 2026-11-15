@@ -8,6 +8,112 @@ use chrono_harness::{verified_identifiers as identifiers, verus};
 use vstd::prelude::*;
 
 verus! {
+pub open spec fn cache_record_publication_result<S, B, P, Q, F, E, W, L, R, D, O, Y>(
+    initial: S, encode: E, write: W, link: L, remove: R, parent: D, open: O, sync: Y,
+    out: (S, Result<(), String>)) -> bool
+    where E: FnOnce(S) -> (S, Result<B, String>),
+        W: FnOnce(S, &B) -> (S, Result<P, String>),
+        L: FnOnce(S, &P) -> (S, Result<(), String>),
+        R: FnOnce(S, &P) -> (S, Result<(), String>),
+        D: FnOnce(S) -> (S, Option<Q>),
+        O: FnOnce(S, Q) -> (S, Result<F, String>),
+        Y: FnOnce(S, F) -> (S, Result<(), String>),
+{
+    exists|encoded: S, encoding: Result<B, String>|
+        #[trigger] encode.ensures((initial,), (encoded, encoding))
+        && match encoding {
+            Err(error) => out == (encoded, Err::<(), String>(error)),
+            Ok(bytes) => exists|written: S, writing: Result<P, String>|
+                #[trigger] write.ensures((encoded, &bytes), (written, writing))
+                && match writing {
+                    Err(error) => out == (written, Err::<(), String>(error)),
+                    Ok(temporary) => exists|linked: S, linking: Result<(), String>|
+                        #[trigger] link.ensures((written, &temporary), (linked, linking))
+                        && match linking {
+                            Err(error) => out == (linked, Err::<(), String>(error)),
+                            Ok(()) => exists|removed: S, removal: Result<(), String>|
+                                #[trigger] remove.ensures((linked, &temporary), (removed, removal))
+                                && match removal {
+                                    Err(error) => out == (removed, Err::<(), String>(error)),
+                                    Ok(()) => exists|parented: S, directory: Option<Q>|
+                                        #[trigger] parent.ensures((removed,), (parented, directory))
+                                        && match directory {
+                                            None => out.0 == parented && match out.1 {
+                                                Err(error) => error@ == "E_CACHE_ATTEMPT: record parent"@,
+                                                _ => false,
+                                            },
+                                            Some(path) => exists|opened: S, opening: Result<F, String>|
+                                                #[trigger] open.ensures((parented, path), (opened, opening))
+                                                && match opening {
+                                                    Err(error) => out == (opened, Err::<(), String>(error)),
+                                                    Ok(file) => sync.ensures((opened, file), out),
+                                                },
+                                        },
+                                },
+                        },
+                },
+        }
+}
+
+/// 编码、落盘、链接、移除临时文件及父目录同步保留原顺序和首错。
+pub fn record_cache_attempt<S, B, P, Q, F, E, W, L, R, D, O, Y>(state: S,
+    encode: E, write: W, link: L, remove: R, parent: D, open: O, sync: Y,
+) -> (out: (S, Result<(), String>))
+    where E: FnOnce(S) -> (S, Result<B, String>),
+        W: FnOnce(S, &B) -> (S, Result<P, String>),
+        L: FnOnce(S, &P) -> (S, Result<(), String>),
+        R: FnOnce(S, &P) -> (S, Result<(), String>),
+        D: FnOnce(S) -> (S, Option<Q>),
+        O: FnOnce(S, Q) -> (S, Result<F, String>),
+        Y: FnOnce(S, F) -> (S, Result<(), String>),
+    requires forall|state: S| encode.requires((state,)),
+        forall|state: S, bytes: &B| write.requires((state, bytes)),
+        forall|state: S, temporary: &P| link.requires((state, temporary)),
+        forall|state: S, temporary: &P| remove.requires((state, temporary)),
+        forall|state: S| parent.requires((state,)),
+        forall|state: S, path: Q| open.requires((state, path)),
+        forall|state: S, file: F| sync.requires((state, file)),
+    ensures cache_record_publication_result(state, encode, write, link, remove, parent, open, sync, out),
+{
+    let ghost initial = state;
+    let (state, encoding) = encode(state);
+    let ghost encoded = state;
+    let ghost encoding_result = encoding;
+    assert(encode.ensures((initial,), (encoded, encoding_result)));
+    let bytes = match encoding { Err(error) => return (state, Err(error)), Ok(bytes) => bytes, };
+    let (state, writing) = write(state, &bytes);
+    let ghost written = state;
+    let ghost writing_result = writing;
+    assert(write.ensures((encoded, &bytes), (written, writing_result)));
+    let temporary = match writing { Err(error) => return (state, Err(error)), Ok(path) => path, };
+    let (state, linking) = link(state, &temporary);
+    let ghost linked = state;
+    let ghost linking_result = linking;
+    assert(link.ensures((written, &temporary), (linked, linking_result)));
+    match linking { Err(error) => return (state, Err(error)), Ok(()) => (), }
+    let (state, removal) = remove(state, &temporary);
+    let ghost removed = state;
+    let ghost removal_result = removal;
+    assert(remove.ensures((linked, &temporary), (removed, removal_result)));
+    match removal { Err(error) => return (state, Err(error)), Ok(()) => (), }
+    let (state, directory) = parent(state);
+    let ghost parented = state;
+    let ghost directory_result = directory;
+    assert(parent.ensures((removed,), (parented, directory_result)));
+    let path = match directory {
+        None => return (state, Err("E_CACHE_ATTEMPT: record parent".to_string())),
+        Some(path) => path,
+    };
+    let (state, opening) = open(state, path);
+    let ghost opened = state;
+    let ghost opening_result = opening;
+    assert(open.ensures((parented, path), (opened, opening_result)));
+    let file = match opening { Err(error) => return (state, Err(error)), Ok(file) => file, };
+    let out = sync(state, file);
+    assert(sync.ensures((opened, file), out));
+    out
+}
+
 pub enum CacheAttemptFailure {
     Original(String),
     Recording(String, Option<String>),
@@ -602,16 +708,34 @@ mod runtime {
     }
     impl Attempt {
         pub fn record(&self, path: &Path, value: &Value) -> Result<(), String> {
-            let raw = serde_json::to_vec(value).map_err(|e| e.to_string())?;
-            let temporary = path.with_extension("json.writing");
-            // write_file synchronizes these bytes before returning. The link
-            // below still needs the directory sync, without a second file sync.
-            self.publication.write_file(&temporary, &raw)?;
-            fs::hard_link(&temporary, path).map_err(|e| e.to_string())?;
-            fs::remove_file(&temporary).map_err(|e| e.to_string())?;
-            fs::File::open(path.parent().ok_or("E_CACHE_ATTEMPT: record parent")?)
-                .and_then(|f| f.sync_all())
-                .map_err(|e| e.to_string())
+            decision::record_cache_attempt(
+                (),
+                |()| ((), serde_json::to_vec(value).map_err(|e| e.to_string())),
+                |(), raw| {
+                    let temporary = path.with_extension("json.writing");
+                    // write_file already synchronizes the original bytes.
+                    let written = self
+                        .publication
+                        .write_file(&temporary, raw)
+                        .map(|()| temporary);
+                    ((), written)
+                },
+                |(), temporary| {
+                    (
+                        (),
+                        fs::hard_link(temporary, path).map_err(|e| e.to_string()),
+                    )
+                },
+                |(), temporary| ((), fs::remove_file(temporary).map_err(|e| e.to_string())),
+                |()| ((), path.parent()),
+                |(), parent| ((), fs::File::open(parent).map_err(|e| e.to_string())),
+                |(), file| {
+                    let synced = file.sync_all();
+                    drop(file);
+                    ((), synced.map_err(|e| e.to_string()))
+                },
+            )
+            .1
         }
     }
 
