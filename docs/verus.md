@@ -1,5 +1,29 @@
 # Verus 实施范围
 
+## 输入快照的 selector 绑定准入
+
+`judge-registration/src/inputs.rs::snapshot_shape` 的 v3 selector 内容分支直接调用
+同源 Verus 的 `admit_snapshot_selector_binding`。只有完整
+`chrono-registry-selection/v1`、非空且与标准 trim 观察全文相同的平台文字，以及
+入口匹配、已选配置匹配和非自链接三项关系同时成立时通过；其余观察产生原完整
+`E_INPUT_SNAPSHOT: invalid selector binding schema`。不归一化文字，内部空格、
+NUL 和 Unicode 保留原义，路径格式仍由原后续校验负责。
+
+五组独立 Verus 预期同体普通运行，覆盖 ASCII／Unicode、内部空格和 NUL、
+缺失／空平台、ASCII 和 Unicode 的 trim 差异、未知 schema，以及全部七种错误
+关系组合；泛化辅助函数核任意非空原文字、任意 trim 差异和错误关系。
+沿原两项严格整 crate 根、未过滤行为测试和已有 FILEMAP 消费边验收，没有新增
+项目、依赖、入口、仓内公理、过滤或证明预算。
+
+外部观察逐项限于固定 Serde JSON 的字段索引、`Value::as_str`、`Value::PartialEq`
+全值相等，以及固定 Rust 的 `str::trim`、Option::map 和错误 ToString。
+适配器只交付原文字、trim 结果和三项全值相等观察；Verus 决定完整准入及错误。
+原短路路径可能提前返回，新调用会先取得全部只读观察，可能增加 JSON 全值比较；
+没有新增复制、文件 IO 或进程，完整运行、构建、证明及存储成本未测。
+
+JSON 全值比较与原树的完整机械对应、v3 分支选择、对象字段和路径格式校验及外层
+事务仍有各自证明义务；局部观察合同不证明完整快照或全仓覆盖。Python 暂缓。
+
 ## 输入快照的 schema 准入与缺失表示
 
 `judge-registration/src/inputs.rs::snapshot_shape` 在原对象字段准入后直接调用同源 Verus 的

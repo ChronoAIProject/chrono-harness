@@ -90,6 +90,41 @@ pub fn admit_snapshot_header(schema: Option<&str>, effective: bool, selection: b
     Ok(())
 }
 
+pub open spec fn snapshot_selector_binding_valid(
+    schema: Option<&str>, platform: Option<(&str, &str)>,
+    entry_matches: bool, selected_matches: bool, self_link: bool,
+) -> bool {
+    (match schema { Some(text) => text@ == "chrono-registry-selection/v1"@, None => false })
+        && (match platform {
+            Some((text, trimmed)) => text@.len() > 0 && text@ == trimmed@,
+            None => false,
+        }) && entry_matches && selected_matches && !self_link
+}
+
+/// JSON 全值相等与 trim 只提供观察，完整准入和原错误由本函数决定。
+pub fn admit_snapshot_selector_binding(
+    schema: Option<&str>, platform: Option<(&str, &str)>,
+    entry_matches: bool, selected_matches: bool, self_link: bool,
+) -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => snapshot_selector_binding_valid(schema, platform, entry_matches, selected_matches, self_link),
+        Err(message) => !snapshot_selector_binding_valid(schema, platform, entry_matches, selected_matches, self_link)
+            && message@ == "E_INPUT_SNAPSHOT: invalid selector binding schema"@,
+    },
+{
+    let schema_ok = match schema {
+        Some(text) => identifiers::equal_text(text, "chrono-registry-selection/v1"),
+        None => false,
+    };
+    let platform_ok = match platform {
+        Some((text, trimmed)) => !text.is_empty() && identifiers::equal_text(text, trimmed),
+        None => false,
+    };
+    if schema_ok && platform_ok && entry_matches && selected_matches && !self_link {
+        Ok(())
+    } else { Err("E_INPUT_SNAPSHOT: invalid selector binding schema") }
+}
+
 /// 选择器优先使用 v3；直接配置仅在版本 2、3、4 时使用 v2。
 pub fn select_snapshot_schema(version: Option<u64>, selected: bool) -> (schema: &'static str)
     ensures schema@ == if selected { "chrono-input-snapshot/v3"@ }
@@ -486,16 +521,16 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
             &["registry_path"],
         )
         .map_err(|e| format!("E_INPUT_SNAPSHOT: invalid selector binding: {e}"))?;
-        if selection["schema"] != "chrono-registry-selection/v1"
-            || !selection["platform"]
+        admit_snapshot_selector_binding(
+            selection["schema"].as_str(),
+            selection["platform"]
                 .as_str()
-                .is_some_and(|s| !s.is_empty() && s.trim() == s)
-            || selection["path"] != value["config_path"]
-            || selection["config_path"] != value["effective_config_path"]
-            || selection["path"] == selection["config_path"]
-        {
-            return Err("E_INPUT_SNAPSHOT: invalid selector binding schema".into());
-        }
+                .map(|text| (text, text.trim())),
+            selection["path"] == value["config_path"],
+            selection["config_path"] == value["effective_config_path"],
+            selection["path"] == selection["config_path"],
+        )
+        .map_err(str::to_string)?;
         for key in ["path", "config_path"] {
             let path = selection[key]
                 .as_str()

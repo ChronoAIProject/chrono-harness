@@ -13,11 +13,13 @@ use identifiers::equal_text;
 
 #[cfg(not(verus_keep_ghost))]
 pub use chrono_judge_registration::inputs::{
-    admit_snapshot_header, admit_snapshot_retained, select_snapshot_schema,
+    admit_snapshot_header, admit_snapshot_retained, admit_snapshot_selector_binding,
+    select_snapshot_schema,
 };
 #[cfg(verus_keep_ghost)]
 pub use source_registration::inputs::{
-    admit_snapshot_header, admit_snapshot_retained, select_snapshot_schema,
+    admit_snapshot_header, admit_snapshot_retained, admit_snapshot_selector_binding,
+    select_snapshot_schema,
 };
 
 #[cfg(verus_keep_ghost)]

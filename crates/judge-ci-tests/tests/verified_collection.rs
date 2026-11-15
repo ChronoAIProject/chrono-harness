@@ -25,6 +25,103 @@ use vstd::vpanic as panic;
 
 verus! {
 
+fn selector_binding_error(result: Result<(), &str>)
+    requires match result { Err(message) => message@ == "E_INPUT_SNAPSHOT: invalid selector binding schema"@, _ => false },
+{
+    expect_snapshot_error(result, "E_INPUT_SNAPSHOT: invalid selector binding schema");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_selector_binding_accepts_literal_platform_and_exact_links() {
+    proof {
+        reveal_strlit("linux-x86_64"); reveal_strlit("平台 λ");
+        assert("linux-x86_64"@.len() > 0);
+        assert("平台 λ"@.len() > 0);
+    }
+    let ascii = policy::admit_snapshot_selector_binding(
+        Some("chrono-registry-selection/v1"), Some(("linux-x86_64", "linux-x86_64")), true, true, false);
+    let unicode = policy::admit_snapshot_selector_binding(
+        Some("chrono-registry-selection/v1"), Some(("平台 λ", "平台 λ")), true, true, false);
+    expect_continuity_bool(ascii.is_ok() && unicode.is_ok());
+}
+
+fn arbitrary_literal_platform_is_preserved(platform: &str)
+    requires platform@.len() > 0,
+{
+    let actual = policy::admit_snapshot_selector_binding(
+        Some("chrono-registry-selection/v1"), Some((platform, platform)), true, true, false);
+    expect_continuity_bool(actual.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_selector_binding_accepts_internal_spaces_and_nul_without_normalizing() {
+    proof { reveal_strlit("a b"); reveal_strlit("\0"); }
+    arbitrary_literal_platform_is_preserved("a b");
+    arbitrary_literal_platform_is_preserved("\0");
+}
+
+fn unknown_binding_schema_fails(schema: Option<&str>)
+    requires match schema { None => true, Some(text) => text@ != "chrono-registry-selection/v1"@ },
+{
+    selector_binding_error(policy::admit_snapshot_selector_binding(
+        schema, Some(("linux", "linux")), true, true, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_selector_binding_rejects_missing_and_unknown_schema() {
+    proof {
+        reveal_strlit(""); reveal_strlit("chrono-registry-selection/v1");
+        reveal_strlit("chrono-registry-selection/v1\0");
+        assert(""@.len() == 0);
+        assert("chrono-registry-selection/v1\0"@.len() != "chrono-registry-selection/v1"@.len());
+    }
+    unknown_binding_schema_fails(None);
+    unknown_binding_schema_fails(Some(""));
+    unknown_binding_schema_fails(Some("chrono-registry-selection/v1\0"));
+}
+
+fn nonliteral_platform_fails(platform: &str, trimmed: &str)
+    requires platform@.len() == 0 || platform@ != trimmed@,
+{
+    selector_binding_error(policy::admit_snapshot_selector_binding(
+        Some("chrono-registry-selection/v1"), Some((platform, trimmed)), true, true, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_selector_binding_rejects_missing_empty_and_trimmed_platform() {
+    proof {
+        reveal_strlit(""); reveal_strlit(" linux"); reveal_strlit("linux");
+        reveal_strlit("linux\n"); reveal_strlit("\u{2003}linux");
+        assert(" linux"@.len() != "linux"@.len());
+        assert("linux\n"@.len() != "linux"@.len());
+        assert("\u{2003}linux"@.len() != "linux"@.len());
+    }
+    selector_binding_error(policy::admit_snapshot_selector_binding(
+        Some("chrono-registry-selection/v1"), None, true, true, false));
+    nonliteral_platform_fails("", "");
+    nonliteral_platform_fails(" linux", "linux");
+    nonliteral_platform_fails("linux\n", "linux");
+    nonliteral_platform_fails("\u{2003}linux", "linux");
+}
+
+fn incorrect_binding_links_fail(entry: bool, selected: bool, self_link: bool)
+    requires !entry || !selected || self_link,
+{
+    selector_binding_error(policy::admit_snapshot_selector_binding(
+        Some("chrono-registry-selection/v1"), Some(("linux", "linux")), entry, selected, self_link));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_selector_binding_rejects_all_seven_incorrect_link_combinations() {
+    incorrect_binding_links_fail(false, false, false);
+    incorrect_binding_links_fail(false, false, true);
+    incorrect_binding_links_fail(false, true, false);
+    incorrect_binding_links_fail(false, true, true);
+    incorrect_binding_links_fail(true, false, false);
+    incorrect_binding_links_fail(true, false, true);
+    incorrect_binding_links_fail(true, true, true);
+}
+
 fn snapshot_schema_literals_differ()
     ensures
         "chrono-input-snapshot/v1"@ != "chrono-input-snapshot/v2"@,
