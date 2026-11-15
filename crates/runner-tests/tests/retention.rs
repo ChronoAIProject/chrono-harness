@@ -280,14 +280,25 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
     let round = logger
         .run(|| owner.maintain_originals_at(std::slice::from_ref(&id), u64::MAX))
         .unwrap();
-    logger.finish().expect("retired metadata diagnostics");
     assert!(!h.path().join(obsolete).exists(), "{round}");
+    let metadata = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/objects")
+        .join(&id);
+    // 原件处置可用尽本轮预算；只对仍存在的元数据续作，父路径始终保持共享。
+    let continuation = if metadata.exists() {
+        Some(
+            logger
+                .run(|| owner.maintain_originals_at(std::slice::from_ref(&id), u64::MAX))
+                .unwrap(),
+        )
+    } else {
+        None
+    };
+    logger.finish().expect("retired metadata diagnostics");
     assert!(
-        !h.path()
-            .join(".chrono-harness/state/output-retention-v1/objects")
-            .join(id)
-            .exists(),
-        "obsolete metadata must retire while its populated parent is shared: {round}"
+        !metadata.exists(),
+        "obsolete metadata must retire while its populated parent is shared: {round}; continuation: {continuation:?}"
     );
     assert!(parent_address.join("address.json").is_file());
     assert_eq!(

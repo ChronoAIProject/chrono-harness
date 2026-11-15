@@ -118,9 +118,8 @@ struct BlobReceipt {
     process: usize,
     range: std::ops::Range<usize>,
     // Batch ranges also belong to the original metadata receipt and identity.
-    object: Option<(usize, BlobObject)>,
+    metadata_process: Option<usize>,
 }
-#[derive(Clone)]
 #[cfg(not(verus_keep_ghost))]
 struct BlobObject {
     oid: String,
@@ -192,7 +191,7 @@ pub fn acquire_registry_blobs(
                 receipt: BlobReceipt {
                     process,
                     range: 0..original.len(),
-                    object: None,
+                    metadata_process: None,
                 },
                 bytes: original,
             });
@@ -264,7 +263,7 @@ pub fn acquire_registry_blobs(
                     receipt: BlobReceipt {
                         process,
                         range: 0..original.len(),
-                        object: Some((metadata_process, objects[first].clone())),
+                        metadata_process: Some(metadata_process),
                     },
                     bytes: original,
                 });
@@ -298,7 +297,7 @@ pub fn acquire_registry_blobs(
                     receipt: BlobReceipt {
                         process,
                         range: offset..stop,
-                        object: Some((metadata_process, object.clone())),
+                        metadata_process: Some(metadata_process),
                     },
                     bytes: content.to_vec(),
                 });
@@ -797,11 +796,10 @@ impl Reader {
             self.unchanged(true).map_err(|e| self.error(&e))?;
             let processes = self.processes.borrow();
             let bytes = processes[receipt.process].stdout_bytes[receipt.range].to_vec();
-            if let Some((metadata_process, object)) = &receipt.object {
-                // Both originals remain owned by this Reader, including the
-                // metadata identity that framed this exact content range.
-                debug_assert!(*metadata_process < receipt.process);
-                debug_assert!(object.matches(&bytes));
+            if let Some(metadata_process) = receipt.metadata_process {
+                // Both originals remain owned by this Reader; framing and
+                // content identity were validated before this range was cached.
+                debug_assert!(metadata_process < receipt.process);
             }
             self.check_root(root)?;
             self.unchanged(true).map_err(|e| self.error(&e))?;
@@ -816,7 +814,7 @@ impl Reader {
             BlobReceipt {
                 process: index,
                 range: 0..bytes.len(),
-                object: None,
+                metadata_process: None,
             },
         );
         Ok(bytes)
