@@ -161,6 +161,7 @@ impl<S, O> CompositionSources<S, O> {
     }
 }
 
+#[verifier::opaque]
 pub open spec fn composition_source_step_result<S, X, T, O, H, I, M>(
     initial: CompositionSources<S, O>, row: &X, hash: &H, import: &I, merge: &M,
     out: (CompositionSources<S, O>, Result<(), String>)) -> bool
@@ -211,6 +212,7 @@ pub fn compose_source_step<S, X, T, O, H, I, M>(
         forall|state: S, part: T| merge.requires((state, part)),
     ensures composition_source_step_result(progress, row, hash, import, merge, out),
 {
+    reveal(composition_source_step_result);
     let ghost initial = progress;
     let CompositionSources { state, mut originals, mut seen } = progress;
     let (state, digest) = hash(state, row);
@@ -279,7 +281,8 @@ pub fn compose_sources<S, X, T, O, H, I, M>(
     let ghost states = seq![initial];
     let mut i = 0usize;
     while i < rows.len()
-        invariant i <= rows.len(), states.len() == i + 1, states.last() == current,
+        invariant initial == progress, i <= rows.len(), states.len() == i + 1,
+            states.last() == current,
             composition_sources_prefix(rows@, states, initial, hash, import, merge),
             vstd::laws_cmp::obeys_cmp::<String>(),
             forall|state: S, row: &X| hash.requires((state, row)),

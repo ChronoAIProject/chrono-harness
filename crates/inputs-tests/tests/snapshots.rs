@@ -1523,13 +1523,29 @@ proof fn fixture_source_step_bound(
         &fixture_source_hash, &fixture_source_import, &fixture_source_merge, out),
     ensures fixture_source_step_expected(initial, row, out),
 {
+    reveal(policy::composition::composition_source_step_result);
     if initial.seen@.contains(row.digest) {
         assert(initial.seen@.insert(row.digest) =~= initial.seen@);
     }
 }
 
+proof fn fixture_source_prefix_step(
+    rows: Seq<CompositionSourceFixture>,
+    states: Seq<policy::composition::CompositionSources<CompositionSourceTrace, u64>>,
+    initial: policy::composition::CompositionSources<CompositionSourceTrace, u64>, i: int,
+)
+    requires policy::composition::composition_sources_prefix(rows, states, initial,
+        &fixture_source_hash, &fixture_source_import, &fixture_source_merge),
+        0 <= i < states.len() - 1,
+    ensures policy::composition::composition_source_step_result(states[i], &rows[i],
+        &fixture_source_hash, &fixture_source_import, &fixture_source_merge,
+        (states[i + 1], Ok::<(), String>(()))) ,
+{
+    reveal(policy::composition::composition_sources_prefix);
+}
+
 fn composition_source_trace(expected: &[(u64, u8)], actual: &[(u64, u8)])
-    requires actual@ == expected@,
+    requires actual@ =~= expected@,
 {
     let same_length = actual.len() == expected.len();
     assert(same_length);
@@ -1583,6 +1599,13 @@ fn composition_sources_case(failure: u8, duplicate: bool)
                         &fixture_source_hash, &fixture_source_import, &fixture_source_merge,
                         (progress, Err::<(), String>(error))),
             };
+        reveal(composition_sources_prefix);
+        assert(composition_sources_prefix(rows@, states, original,
+            &fixture_source_hash, &fixture_source_import, &fixture_source_merge));
+        assert(forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] composition_source_step_result(states[i], &rows@[i],
+                &fixture_source_hash, &fixture_source_import, &fixture_source_merge,
+                (states[i + 1], Ok::<(), String>(()))) );
         if states.len() == 1 {
             match outcome {
                 Ok(()) => { assert(false); },
@@ -1593,12 +1616,18 @@ fn composition_sources_case(failure: u8, duplicate: bool)
             }
         }
         assert(states.len() >= 2);
+        assert(states[0] == original);
+        fixture_source_prefix_step(rows@, states, original, 0);
+        assert(composition_source_step_result(states[0], &rows@[0],
+            &fixture_source_hash, &fixture_source_import, &fixture_source_merge,
+            (states[1], Ok::<(), String>(()))) );
         fixture_source_step_bound(original, &rows@[0], (states[1], Ok::<(), String>(()))) ;
         assert(states[1].state@ == seq![(11u64, 1u8), (11u64, 2u8), (11u64, 3u8)]);
         assert(states[1].originals@ == seq![11u64]);
         assert(states[1].seen@ == Set::<String>::empty().insert(rows@[0].digest));
         assert(states[1].seen@.contains(rows@[1].digest) == duplicate);
         if states.len() >= 3 {
+            fixture_source_prefix_step(rows@, states, original, 1);
             fixture_source_step_bound(states[1], &rows@[1], (states[2], Ok::<(), String>(()))) ;
             assert(failure == 0 && !duplicate);
             assert(!states[2].seen@.contains(rows@[2].digest));
@@ -1606,6 +1635,7 @@ fn composition_sources_case(failure: u8, duplicate: bool)
         match outcome {
             Ok(()) => {
                 assert(states.len() == 4);
+                fixture_source_prefix_step(rows@, states, original, 2);
                 fixture_source_step_bound(states[2], &rows@[2], (progress, Ok::<(), String>(()))) ;
             },
             Err(error) => {
@@ -1626,6 +1656,8 @@ fn composition_sources_case(failure: u8, duplicate: bool)
         composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2), (29, 3),
             (47, 1), (47, 2), (47, 3)], progress.state.as_slice());
     } else {
+        assert(progress.state@ == seq![(11u64, 1u8), (11u64, 2u8), (11u64, 3u8),
+            (29u64, 1u8), (29u64, 2u8), (29u64, 3u8)]);
         composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2), (29, 3)], progress.state.as_slice());
     }
     let expected_originals = if failure == 1 || duplicate || failure == 2 { 1usize }
@@ -1683,6 +1715,7 @@ fn composition_sources_empty_inventory_keeps_exact_initial_state()
     trace.push((u64::MAX, u8::MAX));
     let initial = CompositionSources::<CompositionSourceTrace, u64>::new(trace);
     let ghost original = initial;
+    assert(original.state@ == seq![(u64::MAX, u8::MAX)]);
     let rows: Vec<CompositionSourceFixture> = Vec::new();
     let (progress, result) = compose_sources(initial, rows.as_slice(),
         &fixture_source_hash, &fixture_source_import, &fixture_source_merge);
@@ -1699,6 +1732,7 @@ fn composition_sources_empty_inventory_keeps_exact_initial_state()
                         (progress, Err::<(), String>(error))),
             };
         assert(states.len() == 1 && progress == original);
+        assert(progress.state@ == seq![(u64::MAX, u8::MAX)]);
     }
     composition_source_trace(&[(u64::MAX, u8::MAX)], progress.state.as_slice());
     let no_originals = progress.originals.len() == 0;
