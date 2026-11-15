@@ -12,6 +12,68 @@ pub fn maintenance_idle_exit(event_pending: bool, timer_due: bool, idle_due: boo
     !event_pending && !timer_due && idle_due
 }
 
+/// Preserve both actual roots, including their order and a repeated root.
+pub fn maintenance_exclusions<P>(coordinator: P, invoking: P) -> (excluded: Vec<P>)
+    ensures excluded@ == seq![coordinator, invoking],
+{
+    let mut excluded = Vec::new();
+    excluded.push(coordinator);
+    excluded.push(invoking);
+    excluded
+}
+
+pub open spec fn maintenance_retention_result<S, T, R, A, C, F, D>(
+    source: S, namespace_complete: bool, unprotected: usize,
+    attempt: A, completed: C, failed: F, deferred: D, out: (S, R)) -> bool
+    where A: FnOnce(S) -> (S, Result<T, String>), C: FnOnce(S, T) -> (S, R),
+        F: FnOnce(S, String) -> (S, R), D: FnOnce(S) -> (S, R),
+{
+    if namespace_complete && unprotected == 0 {
+        exists|observed: S, result: Result<T, String>|
+            #[trigger] attempt.ensures((source,), (observed, result))
+            && match result {
+                Ok(value) => completed.ensures((observed, value), out),
+                Err(error) => failed.ensures((observed, error), out),
+            }
+    } else {
+        deferred.ensures((source,), out)
+    }
+}
+
+/// 只在完整命名空间且全部登记项原件已保护时清理；原结果决定唯一后续路径。
+pub fn maintenance_retention_phase<S, T, R, A, C, F, D>(
+    source: S, namespace_complete: bool, unprotected: usize,
+    attempt: A, completed: C, failed: F, deferred: D) -> (out: (S, R))
+    where A: FnOnce(S) -> (S, Result<T, String>), C: FnOnce(S, T) -> (S, R),
+        F: FnOnce(S, String) -> (S, R), D: FnOnce(S) -> (S, R),
+    requires attempt.requires((source,)), deferred.requires((source,)),
+        forall|state: S, value: T| completed.requires((state, value)),
+        forall|state: S, error: String| failed.requires((state, error)),
+    ensures maintenance_retention_result(source, namespace_complete, unprotected,
+        attempt, completed, failed, deferred, out),
+{
+    if namespace_complete && unprotected == 0 {
+        let (state, result) = attempt(source);
+        let ghost observed = state;
+        let ghost observation = result;
+        assert(attempt.ensures((source,), (observed, observation)));
+        match result {
+            Ok(value) => {
+                let out = completed(state, value);
+                assert(completed.ensures((observed, value), out));
+                out
+            },
+            Err(error) => {
+                let out = failed(state, error);
+                assert(failed.ensures((observed, error), out));
+                out
+            },
+        }
+    } else {
+        deferred(source)
+    }
+}
+
 pub open spec fn activation_error<S>(source: S, message: Seq<char>,
     out: (S, Result<(), String>)) -> bool
 {
@@ -311,7 +373,7 @@ fn round(
                 return Ok(());
             }
             report["round_started"] = value!(true);
-            run_round(r, token, report, &inputs)
+            run_round(r, token, report, &inputs, root)
         },
     )
 }
@@ -322,8 +384,10 @@ fn run_round(
     token: &str,
     report: &mut Value,
     inputs: &PolicyInputs,
+    invoking_root: &Path,
 ) -> Result<(), String> {
     let root = &inputs.policy.coordinator_root;
+    let exclude = maintenance_exclusions(root.clone(), invoking_root.to_path_buf());
     let directory = no_symlink_parents(root, inputs.policy.state_directory.trim_end_matches('/'))?;
     // Shared deployment custody protects executable/policy identity, never business metadata.
     let namespace = open_namespace(inputs, &directory, false, None)?;
@@ -337,9 +401,7 @@ fn run_round(
     report["producer_drains"] = value!([]);
     report["maintenance_scope"] = value!({"kind":"declared-enrollments"});
     let mut inventory = inventory::Report::begin(root, report)?;
-    if let Err(error) =
-        observation.observe_inventory(r, &[root.clone()], report, true, &BTreeSet::new())
-    {
+    if let Err(error) = observation.observe_inventory(r, &exclude, report, true, &BTreeSet::new()) {
         inventory.error("git-inventory", error);
     }
     inventory.worktrees(&observation, r, report, "before");
@@ -411,7 +473,7 @@ fn run_round(
             .ok_or("cleanup policy disappeared")?;
             owner.restore_absent_policy(r)?;
             observe_boundary("disposition", &path);
-            let errors = owner.drain_entries(r, &[root.clone()], report, true)?;
+            let errors = owner.drain_entries(r, &exclude, report, true)?;
             owner.retire_empty_address(r, report)?;
             Ok::<_, String>(errors)
         })();
@@ -493,34 +555,47 @@ fn run_round(
             failures.push(error);
         }
     }
-    report["output_retention"] = if namespace_complete && unprotected.is_empty() {
-        match chrono_harness::retained_artifacts::retention::Inventory::adopted(root).and_then(
-            |owner| {
-                owner
-                    .map(|owner| {
-                        owner.maintain_explicit_observed(|row| {
-                            inventory.retention(row.clone());
-                            Ok(())
+    let (_, retention) = maintenance_retention_phase(
+        (&mut inventory, &mut failures),
+        namespace_complete,
+        unprotected.len(),
+        |(inventory, failures)| {
+            let result = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
+                .and_then(|owner| {
+                    owner
+                        .map(|owner| {
+                            owner.maintain_explicit_observed(|row| {
+                                inventory.retention(row.clone());
+                                Ok(())
+                            })
                         })
-                    })
-                    .transpose()
-            },
-        ) {
-            Ok(result) => value!(result),
-            Err(error) => {
-                inventory.error("retention", &error);
-                failures.push(error.clone());
-                value!({"status":"failed","error":error})
-            }
-        }
-    } else {
-        inventory.error(
-            "retention",
-            "enrollment original protection unavailable; dependent retention deferred",
-        );
-        value!({"status":"preserved","reason":"enrollment original protection unavailable",
-            "namespace_complete":namespace_complete,"unprotected_enrollments":unprotected})
-    };
+                        .transpose()
+                });
+            ((inventory, failures), result)
+        },
+        |state, result| (state, value!(result)),
+        |(inventory, failures), error| {
+            inventory.error("retention", &error);
+            failures.push(error.clone());
+            (
+                (inventory, failures),
+                value!({"status":"failed","error":error}),
+            )
+        },
+        |(inventory, failures)| {
+            inventory.error(
+                "retention",
+                "enrollment original protection unavailable; dependent retention deferred",
+            );
+            (
+                (inventory, failures),
+                value!({"status":"preserved",
+                "reason":"enrollment original protection unavailable",
+                "namespace_complete":namespace_complete,"unprotected_enrollments":unprotected}),
+            )
+        },
+    );
+    report["output_retention"] = retention;
     inventory.worktrees(&observation, r, report, "after");
     if let Err(error) = inventory.finish(report) {
         failures.push(error);

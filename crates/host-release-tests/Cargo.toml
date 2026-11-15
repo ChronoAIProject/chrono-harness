@@ -22,13 +22,13 @@ name = "verified_recipe"
 path = "tests/verified_recipe.rs"
 
 [dependencies]
-chrono-identifiers = { path = "../../../crates/identifiers" }
+chrono-identifiers = { path = "../identifiers" }
 sha1 = "0.10"
 sha2 = "0.10"
-chrono-host-bootstrap = { path = "../../ci/native" }
-chrono-harness = { path = "../../../crates/runner" }
-chrono-host-release = { path = "../native" }
-chrono-distribution = { path = "../../../crates/distribution" }
+chrono-host-bootstrap = { path = "../host-bootstrap" }
+chrono-harness = { path = "../runner" }
+chrono-host-release = { path = "../host-release" }
+chrono-distribution = { path = "../distribution" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tar = "0.4"
@@ -65,13 +65,13 @@ path = "tests/frontend.rs"
 
 [[bin]]
 name = "chrono-test-release-cli"
-path = "../native/src/main.rs"
+path = "../host-release/src/main.rs"
 test = false
 bench = false
 
 [[bin]]
 name = "chrono-test-release-distribution"
-path = "../../../crates/distribution/src/main.rs"
+path = "../distribution/src/main.rs"
 test = false
 bench = false
 
@@ -83,13 +83,13 @@ bench = false
 
 [[bin]]
 name = "chrono-test-release-operation"
-path = "../../../crates/judge-projects-tests/tests/support/execution_child.rs"
+path = "../judge-projects-tests/tests/support/execution_child.rs"
 test = false
 bench = false
 
 [[bin]]
 name = "chrono-test-release-git"
-path = "../../../crates/runner-tests/tests/support/git_model.rs"
+path = "../runner-tests/tests/support/git_model.rs"
 test = false
 bench = false
 

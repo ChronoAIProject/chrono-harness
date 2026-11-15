@@ -172,7 +172,7 @@
     },
     {
       "path": ".chrono-harness/cache/bootstrap-owner-tooling/verus/",
-      "disposition": "retain"
+      "disposition": "finish-dispose"
     },
     {
       "path": ".chrono-harness/cache/host-bootstrap-native/",
@@ -228,11 +228,11 @@
     },
     {
       "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/",
-      "disposition": "retain"
+      "disposition": "finish-dispose"
     },
     {
       "path": ".chrono-harness/cache/bootstrap-owner-tooling/rustup/",
-      "disposition": "retain"
+      "disposition": "finish-dispose"
     },
     {
       "path": ".chrono-harness/cache/bootstrap-owner-tooling/home/",

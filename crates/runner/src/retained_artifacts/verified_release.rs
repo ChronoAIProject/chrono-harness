@@ -1,8 +1,10 @@
 //! 原件交接的请求边界、精确成员与局部释放；IO 仍归保留所有者。
 #[cfg(not(verus_keep_ghost))]
-pub use crate::retained_artifacts::retention::partition::metadata_only_retirement;
+pub use crate::retained_artifacts::retention::partition::{
+    metadata_only_retirement, preserve_frontier_original,
+};
 #[cfg(verus_keep_ghost)]
-pub use accounting::partition::metadata_only_retirement;
+pub use accounting::partition::{metadata_only_retirement, preserve_frontier_original};
 #[cfg(verus_keep_ghost)]
 #[path = "retention.rs"]
 pub mod accounting;
@@ -23,6 +25,30 @@ verus! {
 
 pub open spec fn recovery_text(text: Option<&str>) -> Option<Seq<char>> {
     match text { Some(value) => Some(value@), None => None }
+}
+
+/// Addressed metadata already excludes reservation changes. Existing
+/// capabilities still require actual exclusion; migration never creates one.
+pub struct MigrationCustody<'a> {
+    pub admitted: bool,
+    pub acquire: bool,
+    pub expected: Option<&'a str>,
+}
+
+pub fn migration_custody<'a>(phase: &str, lease_id: &'a str, missing: bool)
+    -> (custody: MigrationCustody<'a>)
+    ensures custody.admitted == (phase@ == "reserving"@ || lease_id@.len() > 0),
+        custody.acquire == (lease_id@.len() > 0 || !missing),
+        recovery_text(custody.expected) == if lease_id@.len() == 0 {
+            None
+        } else { Some(lease_id@) },
+{
+    let attached = !lease_id.is_empty();
+    MigrationCustody {
+        admitted: attached || identifiers::equal_text(phase, "reserving"),
+        acquire: attached || !missing,
+        expected: if attached { Some(lease_id) } else { None },
+    }
 }
 
 fn same_recovery_text(left: Option<&str>, right: Option<&str>) -> (same: bool)
@@ -187,23 +213,22 @@ pub fn finalized_expansion(rooted: bool, initial: Option<&str>, id: &str,
     ensures match out {
         FinalizedExpansion::RetainOnly => rooted && recovery_text(initial) == Some(id@),
         FinalizedExpansion::RootFrontier => rooted && recovery_text(initial) != Some(id@),
-        FinalizedExpansion::RetireFrontier => !rooted && recovery_text(initial) == Some(id@)
-            && incoming == 0 && roles == 0,
-        FinalizedExpansion::Related => !rooted && (recovery_text(initial) != Some(id@)
-            || incoming != 0 || roles != 0),
+        FinalizedExpansion::RetireFrontier => !rooted && incoming == 0 && roles == 0,
+        FinalizedExpansion::Related => !rooted && (incoming != 0 || roles != 0),
     },
 {
     let initial = same_recovery_text(initial, Some(id));
     if rooted {
         if initial { FinalizedExpansion::RetainOnly } else { FinalizedExpansion::RootFrontier }
-    } else if initial && incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
+    } else if incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
     else { FinalizedExpansion::Related }
 }
 
 /// 原件仍有登记时才排除其物理路径；已移除记录不进入内容维护。
-pub fn maintenance_path_required(present: bool, initial: bool, retained: bool) -> (required: bool)
-    ensures required == (present && (initial || !retained)),
-{ present && (initial || !retained) }
+pub fn maintenance_path_required(present: bool, initial: bool, retained: bool,
+    retiring_report: bool) -> (required: bool)
+    ensures required == (present && (!retained || (initial && !retiring_report))),
+{ present && (!retained || (initial && !retiring_report)) }
 
 pub fn terminal_eligible(released: bool, sealed: bool) -> (eligible: bool)
     ensures eligible == (released && sealed),

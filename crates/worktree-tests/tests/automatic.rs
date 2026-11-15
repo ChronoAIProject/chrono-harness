@@ -17,6 +17,26 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn imported_policy_source_preserves_explicit_field_and_only_uses_absent_field_source() {
+    let policy = "policy";
+    let source = "source";
+    require_selected_source(absence_policy::imported_policy_source_commit(true, Some(policy), Some(source)), policy);
+    require_selected_source(absence_policy::imported_policy_source_commit(true, Some(policy), None), policy);
+    require_absence_expectation(absence_policy::imported_policy_source_commit(true, None, Some(source)).is_none());
+    require_selected_source(absence_policy::imported_policy_source_commit(false, None, Some(source)), source);
+    require_absence_expectation(absence_policy::imported_policy_source_commit(false, None, None).is_none());
+}
+
+fn require_selected_source(actual: Option<&str>, expected: &str)
+    requires match actual { Some(actual) => actual@ == expected@, None => false },
+{
+    match actual {
+        Some(actual) => require_absence_expectation(absence_identifiers::equal_text(actual, expected)),
+        None => require_absence_expectation(false),
+    }
+}
+
 fn require_capacity_fixture_exit(code: i32)
     requires code == 0,
     ensures code == 0,
@@ -272,10 +292,10 @@ impl EnrollmentOriginalsFixture {
             }
             retained.insert(POLICY.into(), config_bytes.clone());
             retained.insert(AUTO_POLICY.into(), policy_bytes.clone());
-            if fault == "config-bytes" {
+            if matches!(fault, "config-bytes" | "source-only-config-bytes") {
                 retained.insert(POLICY.into(), format!("{config_bytes}\n"));
             }
-            if fault == "policy-bytes" {
+            if matches!(fault, "policy-bytes" | "source-only-policy-bytes") {
                 retained.insert(AUTO_POLICY.into(), format!("{policy_bytes}\n"));
             }
             if fault == "registration" {
@@ -308,12 +328,34 @@ impl EnrollmentOriginalsFixture {
             .unwrap();
             let mut report = value!({
                 "schema":"chrono-worktree-report/v1","operation":"import","status":"imported",
-                "source_root":root,"policy_source_root":root,"policy_source_commit":source,
+                "source_root":root,"source_commit":source,"policy_source_root":root,"policy_source_commit":source,
                 "report_path":original,"config_path":POLICY,
                 "config_sha256":sha256(config_bytes.as_bytes())
             });
             match fault {
+                "explicit-policy-source" => report["source_commit"] = value!("b".repeat(64)),
+                "source-only" | "source-only-config-bytes" | "source-only-policy-bytes" => {
+                    report
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("policy_source_commit");
+                }
+                "null-policy-source" => report["policy_source_commit"] = value!(null),
+                "invalid-policy-source" => report["policy_source_commit"] = value!(17),
+                "short-policy-source" => report["policy_source_commit"] = value!("not-an-oid"),
+                "source-only-null" | "source-only-invalid" | "source-only-short" => {
+                    report
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("policy_source_commit");
+                    report["source_commit"] = match fault {
+                        "source-only-null" => value!(null),
+                        "source-only-invalid" => value!(17),
+                        _ => value!("not-an-oid"),
+                    };
+                }
                 "missing-source" => {
+                    report.as_object_mut().unwrap().remove("source_commit");
                     report
                         .as_object_mut()
                         .unwrap()
@@ -460,6 +502,41 @@ fn present_import_restores_adopted_caller_policy_without_reinterpreting_target_i
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn import_uses_original_fixed_caller_source_only_when_policy_field_is_absent() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for (present, fault) in [
+        (false, "source-only"),
+        (true, "source-only"),
+        (false, "explicit-policy-source"),
+        (true, "explicit-policy-source"),
+    ] {
+        let h = EnrollmentOriginalsFixture::build(Some(fault));
+        if present {
+            h.make_present();
+        }
+        let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+        let original = fs::read(h.root.join(&h.original)).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{report}");
+        assert_eq!(report["cleanup_failures"], value!([]), "{report}");
+        assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+        assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
+        assert_eq!(h.target.exists(), present);
+        if present {
+            assert_eq!(
+                fs::read(h.target.join("unsaved-source.rs")).unwrap(),
+                b"unique source\n"
+            );
+        } else {
+            assert_eq!(attention_row(&report, &h.target)["work_state"], "unknown");
+        }
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_import_after_explicit_migration_uses_the_last_target_binding() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -533,6 +610,14 @@ fn assert_import_recovery_rejects_faults(present: bool) {
     }
     for fault in [
         "missing-source",
+        "null-policy-source",
+        "invalid-policy-source",
+        "short-policy-source",
+        "source-only-null",
+        "source-only-invalid",
+        "source-only-short",
+        "source-only-config-bytes",
+        "source-only-policy-bytes",
         "schema",
         "operation",
         "status",
@@ -689,7 +774,7 @@ fn absent_adoption_rejects_invalid_addresses_and_original_drift() {
         let h = EnrollmentOriginalsFixture::new();
         let mut config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
         match fault {
-            "host-type" => config["host_config"] = Value::Null,
+            "host-type" => config["host_config"] = value!(null),
             "policy-type" => config["automatic_cleanup"] = value!(7),
             "relocated-policy" => {
                 config["automatic_cleanup"] = value!(".chrono-harness/other.json")
@@ -978,7 +1063,12 @@ impl Host {
     pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
         self.auto_command_at(&self.root, command, extra)
     }
-    fn auto_command_at(&self, invoking: &Path, command: &str, extra: &[&str]) -> Command {
+    pub(super) fn auto_command_at(
+        &self,
+        invoking: &Path,
+        command: &str,
+        extra: &[&str],
+    ) -> Command {
         let mut c = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")));
         c.current_dir(invoking)
             .env_clear()
@@ -4105,18 +4195,14 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    use std::{
-        thread,
-        time::{Duration, Instant},
-    };
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     native_consumer(&h, "managed-child");
     let target = h.parent.join("in-use");
     assert_eq!(h.invoke("feature", "in-use", &target).0, 0);
     output(&target);
-    let mut child = h
-        .auto_command(
+    let mut child = super::interrupted_cleanup::CapturedChild::spawn(
+        &mut h.auto_command(
             "use",
             &[
                 "--path",
@@ -4124,20 +4210,13 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
                 "--operation",
                 "use.consumer",
             ],
-        )
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    let began = Instant::now();
-    while !target.join(".chrono-harness/state/ready").exists()
-        && began.elapsed() < Duration::from_secs(10)
-    {
-        if child.try_wait().unwrap().is_some() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(20));
-    }
+        ),
+        &h.root,
+    );
+    child.release_on_drop(target.join(".chrono-harness/state/release"));
+    // Input preparation precedes the consumer. Use its registered process
+    // bounds and retain the wrapper's complete result, as other managed tests do.
+    child.await_managed_file(&target.join(".chrono-harness/state/ready"));
     let ready = target.join(".chrono-harness/state/ready").exists();
     // Join the wrapper before asserting, including its failure path. A missing
     // readiness marker must expose the real wrapper result and retain its receipt.
@@ -4176,13 +4255,15 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks() {
+fn automatic_terminal_rejects_changed_head_rewound_ref_policy_attachment_and_git_locks() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
     for fault in [
         "head",
-        "ref",
+        "rewound-ref",
+        "diverged-ref",
+        "symbolic-ref",
         "policy",
         "target-policy",
         "target-config",
@@ -4213,7 +4294,11 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
                 fs::write(target.join("payload"), "changed head").unwrap();
                 commit(&target);
             }
-            "ref" => {
+            "rewound-ref" => {
+                git(&h.root, &["update-ref", "refs/heads/dev", "HEAD^"]);
+            }
+            "diverged-ref" => {
+                git(&h.root, &["update-ref", "refs/heads/dev", "HEAD^"]);
                 git(
                     &h.root,
                     &[
@@ -4224,7 +4309,21 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
                         "commit",
                         "--allow-empty",
                         "-qm",
-                        "advanced reference",
+                        "diverged reference",
+                    ],
+                );
+            }
+            "symbolic-ref" => {
+                git(
+                    &h.root,
+                    &["update-ref", "refs/heads/retention-alias", "HEAD"],
+                );
+                git(
+                    &h.root,
+                    &[
+                        "symbolic-ref",
+                        "refs/heads/dev",
+                        "refs/heads/retention-alias",
                     ],
                 );
             }
@@ -4272,6 +4371,52 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
         assert_ne!(code, 0, "{fault}: {r} {e}");
         assert!(target.exists());
         assert!(target.join("output λ/data").exists());
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn automatic_terminal_resumes_after_ref_advance_using_the_original_saved_commit() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for retention in ["ancestor", "same-tree"] {
+        let h = Host::new("payload");
+        h.automatic("evidence-retain");
+        let mut policy = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
+        policy["retention"] = value!(retention);
+        fs::write(
+            h.root.join(AUTO_POLICY),
+            serde_json::to_vec(&policy).unwrap(),
+        )
+        .unwrap();
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        let target = h.parent.join("saved-before-advance");
+        assert_eq!(h.invoke("feature", "saved-before-advance", &target).0, 0);
+        output(&target);
+        let (code, report, error) = h.auto(
+            "finish",
+            &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+        );
+        assert_eq!(code, 0, "{report} {error}");
+        let terminal = h.ledger()["entries"][0]["terminal"].clone();
+        let original_path = h.root.join(terminal["receipt"]["path"].as_str().unwrap());
+        let original_bytes = fs::read(&original_path).unwrap();
+        let saved = terminal["retained_commit"].as_str().unwrap();
+        fs::write(h.root.join("payload"), "later independent change\n").unwrap();
+        let advanced = commit(&h.root);
+        assert_ne!(advanced, saved);
+        assert_ne!(
+            git(&h.root, &["rev-parse", &format!("{advanced}^{{tree}}")]),
+            git(&h.root, &["rev-parse", &format!("{saved}^{{tree}}")]),
+        );
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{retention}: {report} {error}");
+        assert!(!target.exists(), "the saved checkout must be reclaimed");
+        assert_eq!(git(&h.root, &["rev-parse", "dev"]), advanced);
+        assert_eq!(fs::read(&original_path).unwrap(), original_bytes);
+        assert_eq!(h.ledger()["entries"][0]["terminal"], terminal);
     }
 }
 

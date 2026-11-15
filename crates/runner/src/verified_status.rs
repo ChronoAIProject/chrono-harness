@@ -17,6 +17,19 @@ pub mod identifiers;
 use crate::verified_identifiers as identifiers;
 
 #[cfg(verus_keep_ghost)]
+#[path = "facts.rs"]
+pub mod fixed_source_read;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::facts as fixed_source_read;
+#[cfg(verus_keep_ghost)]
+#[path = "facts_binding.rs"]
+mod acquired_blobs;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::facts_binding::ordered_acquired_blobs;
+#[cfg(verus_keep_ghost)]
+pub use acquired_blobs::ordered_acquired_blobs;
+
+#[cfg(verus_keep_ghost)]
 #[path = "verified_paths.rs"]
 pub mod paths;
 #[cfg(not(verus_keep_ghost))]

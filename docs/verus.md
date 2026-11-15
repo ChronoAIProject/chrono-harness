@@ -1,5 +1,206 @@
 # Verus 实施范围
 
+## 缓存收据的原件发布顺序
+
+`cache/src/attempt.rs::record_cache_attempt` 拥有实际收据记录的完整顺序：先编码同一
+JSON 值，成功后才构造临时地址并写入、同步原字节，再将同一临时文件硬链接到目标，
+删除临时地址，取得目标父路径，打开并同步父目录。每个阶段首错都停止后续调用，保留
+完整原错误和该阶段实际返回的状态。缺失父路径只在临时地址删除成功后检查，由 Verus
+返回原 `E_CACHE_ATTEMPT: record parent`；同步的原结果直接返回。
+
+实际 `Attempt::record` 直接调用该流程，编码字节、临时地址、父路径和文件能力依次
+交给后续操作。同步回调先关闭文件再渲染原错误，保留原接口中的关闭顺序。真实硬链接
+冲突回归继续核对 `compiler/process.json.writing` 保留完整原结果、任务已加入、尝试
+未知且重入不重新派发，以及维护后原件仍在；不把组合证明扩大为文件系统原子性保证。
+
+独立 Verus 预期同体作为普通 Rust 测试运行，覆盖成功及七个阶段的首错、完整调用
+前缀、原状态、编码字节、临时地址、父路径、文件身份和完整错误。三组输入分别覆盖
+空串、Unicode／NUL／换行、不同载荷以及 usize 端点。沿用现役 planner 两项严格整
+crate 根和原未过滤 cache-tests；没有新增证明入口、依赖、受信函数、过滤、线程或预算。
+
+外部接口逐项限定为固定 Serde 的 `serde_json::to_vec` 及错误显示，固定 Rust 1.95.0
+的 `Path::with_extension`、`Path::parent`、`fs::hard_link`、`fs::remove_file`、
+`File::open`、`File::sync_all`、`drop` 和 `Result::map`／`map_err`。它们提供原编码
+结果、路径观察、实际 IO 结果、文件关闭及原错误转交；字符串与借用沿固定 vstd 合同。
+原 `Publication::write_file` 的资格、创建、写入及同步内部仍有仓内证明义务，不登记为
+外部公理，也不为回调或仓内函数授予 `external_body`／assume 例外。完整记录事务、
+保留实现及全仓覆盖仍未完成；新增构建、证明、CI、运行及存储总成本未测，旧失败
+原件继续保留。
+
+## 缓存尝试的结果收尾
+
+`cache/src/attempt.rs::finalize_cache_attempt` 拥有新尝试的实际收尾顺序：先记录同一
+业务结果，只有任务终态才重新取得请求摘要并将同一摘要交给封存；只有终态封存成功、
+且原业务结果失败，才释放失败计划的引用。未知任务不调用摘要、封存或释放，成功计划
+保留后续消费者所需引用。每个阶段失败都停止后续调用，保留该阶段的实际前驱状态。
+记录与封存失败保留完整发布错误及可选原业务错误；摘要与释放失败仍直接返回原错。
+全部成功后交回原成功值或原业务错误，不替换、复制成功载荷或重新执行探测。
+
+同源 `CacheAttemptFailure` 区分原错误、结果记录失败和终态封存失败。
+`CacheAttemptStage` 让同一尝试沿记录和摘要阶段传递，封存时消费原发布能力，随后
+交回封存后的状态；`AfterSeal` 仅表示封存调用已返回，不表示封存成功。
+`cache_attempt_failure_fragments` 选择固定七项借用数组，逐字段证明完整原错误、
+分隔符、发布错误、尝试地址和文件名的原顺序；缺失与空原错误保持区别。
+终态发布诊断直接复用下节既有片段所有者。真实 `prepare` 消费收尾结果，
+只用标准字符串接口连接该数组；不在适配器中选择收尾阶段、释放条件或错误类别。
+
+两项独立 Verus 预期同体作为普通 Rust 测试运行，核对终态／未知与成功／失败组合、
+四个阶段的首错、完整调用轨迹、原输入与摘要转交、成功载荷、完整错误、空串、
+Unicode、NUL、换行及 usize 端点。沿用现役 planner 两项严格整 crate 根和原
+未过滤 cache-tests，原终态发布失败、中断和失败探测回归继续验收。
+
+明确外部接口仍为下节的标准字符串、借用与数组合同。固定 Rust 1.95.0 的
+`Result::inspect` 只在成功时执行现有追踪日志并交回原结果；`Result::and_then`
+在 Err 时交回原错，在 Ok 时将同一库存交给已有引用操作；`map_err` 只渲染上述
+已分类错误。固定 tracing 调用消费原事件、终态观察和耗时，不产生领域状态。
+JSON 收据编码、`wire::digest`、原件记录与封存、库存及引用操作内部仍是有自身证明
+义务的存量实现，不登记为外部公理。完整准备事务、文件系统／租约原子性与全仓
+覆盖门尚未完成。没有新增依赖、仓内受信函数、证明入口、过滤、线程或预算；
+完整构建、证明、CI、运行、分配、存储和生命周期成本未测，原失败现场继续保留。
+
+## 缓存原结果重放与终态诊断
+
+`cache/src/attempt.rs::replay_cache_result` 拥有原结果的全部组合判断。只有计划存在、
+不是 JSON Null 且错误文本缺失时，才交回同一借用计划；计划缺失或为 Null 且错误文本
+存在时，原样返回完整错误。两者同时存在、两者都没有等其余组合保留原拒绝文字，
+不会重新派发。真实 `replay` 只取得三个原字段观察，消费该结果并克隆成功的原 JSON 值。
+
+`cache_publication_error_fragments` 产生固定七项借用字符串数组。原错误不存在时，
+前两项为空；原错误存在时保留完整原文和 `; `，即使原错误为空也保留分隔符。
+其余五项按原顺序保留发布失败文字、完整发布错误及原尝试的 `result.json` 地址。
+真实 `publication_error` 只用标准字符串拼接渲染该数组，不再自行选择原错误前缀。
+数组不增加堆上片段容器，完整运行和分配成本仍未测。
+
+三项独立 Verus 预期同时作为普通 Rust 测试运行，核对计划存在／Null／错误存在的
+全部八种组合、成功的完整计划、原错误、拒绝文字，以及错误片段顺序和缺失／空原错误
+的区别；覆盖空串、Unicode、NUL、换行和分隔符原文。沿用现役 planner 两项严格整
+crate 根和原未过滤 cache-tests，原环境错误重放、终态失败及中断恢复用例继续执行。
+没有新增依赖、仓内受信函数、证明入口、过滤、线程或预算。
+
+本范围采用以下明确外部接口合同：固定 Serde 的 `Value::get` 返回所请求的原字段
+或 None，字符串键索引在缺失时提供 Null，`is_null` 与 `as_str` 分别投影 Null 和原
+字符串观察；固定 Rust 1.95.0 的 `Result<&Value, String>::cloned` 只克隆 Ok 的完整
+原 JSON 值并保留 Err，`Value::clone` 保留完整值；`[&str]::concat` 按数组顺序无分隔地
+连接全部原 UTF-8 字符串。字符串借用、`str::to_string` 和数组索引沿固定 vstd 合同。
+这些标准库／Serde 内部接口未由本仓机械精化，不为仓内函数授予 `external_body` 或
+assume 例外。其余 JSON command 集合投影、原件写入事务、库存及 retention 内部、
+完整缓存调用组合和全仓覆盖门仍有各自义务；原超时和失败现场继续保留。
+
+## 缓存库存准入与消费引用释放
+
+`cache/src/attempt.rs::admit_attempt_inventory` 直接处理真实库存采用结果；采用错误原样
+返回，无库存时保留原拒绝文本。只有库存存在才查询 cache-probe-attempt 的终态额度，
+且只有该项存在才查询 cache-plan 的终态额度；两项均存在才交回同一库存。真实
+`inventory` 只转交采用结果及两项查询，不再自行决定错误传播、缺失准入或短路顺序。
+
+`release_cache_plan` 拥有实际消费引用的释放顺序。没有命令原件时不派发；否则依次
+取得库存、确认同一原件、读取当前所有者、取得该所有者的读取租约，最后释放引用。
+确认 false 与所有者缺失分别保留原错误；任何阶段首错都保留完整错误和实际前驱状态，
+后续操作不调用。释放消费同一库存、完整所有者 ID 及实际取得的租约。真实 `release_plan`
+直接调用该函数，最终回调持有原租约直到 `reference` 返回。
+
+三项独立 Verus 轨迹预期同体作为普通 Rust 测试运行，覆盖库存采用原错、无库存、
+两项额度缺失及短路，释放的五阶段错误、未绑定确认与缺失所有者、空原件、成功、
+前驱状态与库存／所有者／租约身份、空串／Unicode／NUL／换行及 usize 端点。
+沿用现役 planner 两项严格整 crate 根、FILEMAP 和原未过滤 cache-tests；不新增依赖、
+受信函数、证明入口、过滤、线程或预算。
+
+外部接口逐项限定：固定 Serde 的 `Value` 字段索引、`as_str` 及 `Option::map`／
+`str::to_owned` 只投影和保留所有者完整文本，不判断所有者是否存在；固定 Rust 的
+`Result::map` 只转交原状态结果，`format!` 产生现役 publication-recheck 引用名，
+`String::as_str`／切片长度及 SHA-256 接口提供原 ID、原字节长度和摘要。JSON command
+集合投影及前置解码仍有自身仓内判断义务；retention 的采用、额度查询、原件确认、
+状态取得、consume 和 reference 内部也是待迁移的仓内实现，不声明为外部公理。
+控制组合证明不证明整个缓存事务、租约实现或全仓覆盖，也不建立旧超时已修复。
+新增构建、证明、CI、存储及完整运行成本未测。
+
+## 缓存计划的发布顺序
+
+`cache/src/attempt.rs::publish_cache_plan` 拥有真实计划发布阶段的完整操作顺序与结果
+选择。没有命令原件时返回未发布，不调用后续操作；否则先核验原尝试资格，再编码同一
+计划并发布原字节。只有发布范围实际采用，才取得库存、确认同一原件并绑定依赖；未采用
+范围和未确认原件分别保留原错误文本，不调用后续阶段。任何原操作失败均保全实际前驱
+状态和完整错误，只有依赖绑定真实成功才返回已发布。
+
+真实 `publish_plan` 直接调用该函数，确认和依赖绑定消费同一个库存对象；确认读取实际
+编码的完整字节摘要和长度。两项独立 Verus 轨迹预期同时作为普通 Rust 测试运行，核对
+六阶段顺序、首错和后续失败的优先级、两种拒绝结果、空原件、前驱状态、完整载荷与库存
+身份；覆盖空串、Unicode／NUL／换行及 usize 端点。复用现役 `verify.cache-planner`、
+`verify.cache-planner-tests` 和原未过滤 `test.cache-tests`，FILEMAP 已逐文件绑定。
+
+外部接口只采用以下具体合同；仓内实现不因调用这些接口取得受信例外。
+
+| 接口 | 本阶段实际用途与合同 |
+| --- | --- |
+| 固定 Serde 的 `serde_json::to_vec`、`json!` 与标准错误显示 | 编码实际计划与发布元数据，保留完整原字节或原错误；JSON 原件列表投影和存量资格判断仍须另行证明 |
+| 原 retention 发布、库存取得、`published_original`、`dependencies_paths` | 现役原件 IO 及所有权操作的实际结果交给 Verus 决定后续顺序；它们是仍有仓内证明义务的存量实现，不声明为外部公理 |
+| 固定 Rust 1.95.0 的 `Result::inspect`、`map_err`、`Vec::is_empty`／`len`、`Instant`、tracing 与 SHA-256 接口 | 只转交原结果、取得真实长度／空观察、格式化原错误及保留成功后的诊断；摘要算法、容器及诊断后端使用既有明确接口合同 |
+
+没有新增依赖、`external_body`、`assume`、证明入口、线程或预算。回调内部存量判断、
+原件列表投影、完整准备／发布事务与全仓覆盖仍有各自义务。本批不修改既有 live probe
+的5秒期限、外层10秒期限、原行为断言或失败原件，也不将控制流程证明当作缓存超时已
+修复。增加的证明、编译、运行、CI、存储及完整生命周期成本未测。
+
+## 统一维护的依赖保留阶段
+
+`automatic/service.rs::maintenance_retention_phase` 拥有真实维护轮次的保留准入与后续
+选择：只有命名空间完整且未保护登记项数为零时，才调用原保留操作；成功值、完整错误
+及原操作返回的状态分别交给唯一完成或失败回调。其余情况直接走保留报告，不启动
+该保留操作。真实 `run_round` 直接使用此流程，原原件保护失败、独立生产者继续处理、
+失败收集和报告字段合同保持。
+
+独立 Verus 轨迹预期核对每次调用收到的完整前驱状态、成功值及错误，覆盖完整性两值、
+未保护数的零／一／usize::MAX、空成功值／整数端点、空串／Unicode／NUL／换行错误；
+同体作为普通 Rust 测试运行。沿用两个生命周期整 crate 根与原未过滤 core／adoption
+行为入口，既有真实失败隔离回归继续验收原件保全、独立回收和依赖保留。
+
+实际回调复用现役 retention IO、inventory 记录、字符串克隆、Vec::push 与 Serde JSON
+编码接口，传回原结果，不把这些接口授予仓内 `external_body` 或 assume 例外。
+回调内部的存量保留采用、可选所有者处理、记录事务、完整单登记项恢复及整体轮次
+仍有各自证明义务。本批不新增依赖、运行时进程、政策、证明入口、线程或预算；
+新增构建、证明、CI、存储及完整运行成本未测，不声明全仓证明完成。
+
+## 显式维护保留真实调用者
+
+`round` 将实际调用根传给 `run_round`；同源 Verus `maintenance_exclusions` 构造
+精确的 `[coordinator, invoking]`，证明完整值、顺序和重复项均保留。inventory 观察与
+`drain_entries` 消费同一个集合，避免从 linked worktree 发起维护时只排除协调者。
+原 cache-only 处置合同继续由现役清理所有者判断，本范围不扩大缓存排除。
+
+独立 Verus 预期覆盖不同／重复根、整数端点、空串、Unicode、NUL 和换行。真实回归从
+已过删除年龄的 linked worktree 发起维护，核调用根、唯一源码及 HEAD 不变，并核另一个
+独立过期检出确实移除。回归的准入顺序、错误传播、判定及失败现场保留由同源 Verus
+驱动，独立反例分别改变退出码、报告调用根、源码、HEAD、兄弟检出状态和观察错误。
+沿用两个生命周期证明根及原未过滤 core／adoption 行为入口，不增加证明参数或预算。
+
+路径适配明确采用 Rust `PathBuf::clone`／`Path::to_path_buf` 保留路径值的接口合同。
+真实 fixture 复用已有创建、年龄等待和 CLI 适配；进程结果及 JSON 字段读取沿原接口，
+文件观察采用 `read_to_string` 和 `try_exists` 的实际结果，Git HEAD 沿原登记 Git 接口。
+这些接口不为仓内函数授予 `external_body` 或 assume 例外；原 fixture 内部实现、完整维护
+事务和真实文件系统快照仍有各自的证明义务。新增生产逻辑和回归驱动均在 Verus 内，
+没有新增运行时依赖、外部假设包装器或证明入口；完整构建、CI、运行和存储成本未测。
+
+## 保留回归的当前组件预期
+
+`runner-tests/tests/retention.rs` 的单报告回归直接消费同源 Verus 判法：首轮必须仍有
+一条原件引用并精确观察两个对象；后续轮次仍有引用时继续要求两个对象，引用已经
+持久解除时精确要求一个对象。四轮上限、缺字段拒绝及整数端点由同一判法覆盖。
+共享原件还有其它入向报告时，实际读取原件的轮次保持 `scope.complete=false` 和严格
+JSON null 的剩余量；下一轮已只含 report 时，完整范围的剩余量按实际退役观察精确为
+零或一。不能把这两种阶段简化成任意接受一至两个对象。
+
+两项独立 Verus 边界预期同时作为普通 Rust 测试运行，覆盖首轮、后续三轮、超限、
+持久引用缺失／过多、缺失数量、错误数量、未知与完整范围及退役观察不符。三处真实
+回归循环沿用原四轮、25 ms 政策、节点上限和原件／角色／无关兄弟字节保护断言。
+证明复用 `verify.runner-fixture-tests`，行为复用原未过滤 `test.runner-tests`。
+
+本范围逐项采用现役标准库文件读取和 Serde JSON 解码接口，以及 `Value` 的字段索引、
+`as_array`／`as_u64`／`as_bool`／`is_null` 和数组长度投影；实际轮前持久 record 由 fixture
+自己的既有地址所有者定位，完整原字节和字段交给上述判法。每个最多四轮的用例每轮
+增加一次原 record 读取，不增加生产 IO、依赖、证明入口、线程或预算。fixture 地址计算、
+创建和完整测试驱动、生产保留图及 IO 事务仍有各自证明义务；本范围不声明整个文件
+或全仓已证明。完整构建、证明、运行、CI 和存储成本未测。
+
 ## 维护激活 socket 的完整准入顺序
 
 `automatic/service.rs::validate_activation` 直接消费同源 Verus
@@ -299,17 +500,101 @@ Display 与 `Option<String>` 的 Debug 编码；JSON 沿用 serde_json 的既有
 标准 Option／Result／元组及固定 vstd 的字符串比较沿用现有合同；没有新增 `external_body`、
 `assume`、依赖、证明操作或过滤。额外构建、证明、CI 和存储总成本未测。
 
+## 源码连续性接入计划
+
+`judge-routes/src/lib.rs` 的同源组合先核固定库存，再用同一份连续性结果核完整计划；
+首个分类错误原样返回，只有库存成功才消费计划结果。`judge-ci/src/lib.rs` 的同源流程
+按原输入调用观察回调，再把它实际返回的证据交给验证回调；观察失败时不调用验证。
+独立预期核完整输入、回调顺序、首错及完整证据传递，沿用现有 CI 集合两项整 crate
+证明和原未过滤测试。JSON、固定 Reader 和两端字段投影继续沿已登记的接口合同。
+
+**产品与宿主登记同时修改：**这两个文件只将上述新组合和流程纳入证明编译，
+原 Git、JSON、IO、影响规划和外层事务仍未全部证明。分类和局部证明不能解释为
+整文件覆盖；实际编译源码绑定、生产调用和全部适用结果仍需分别验收。
+没有增加证明过滤、线程、预算、依赖或操作，完整构建和 CI 成本仍未知。
+
 ## 受影响文件的分类门控
 
-本仓 FILEMAP 已启用 `require_new_file_classification: true`。当前候选只要影响某个已登记文件，
-该文件就必须显式声明 `program`、`specification` 或 `data`；缺少声明会由同源 Verus
-计划判定返回 `E_VERUS_COVERAGE`，因此修改旧文件新增仓内逻辑不能继续沿用 unknown
-分类绕过证明计划。未受影响的历史未分类文件仍保持 unknown，`program`／`specification`
-的完整证明根、真实生产调用绑定和全仓覆盖门仍分别按下文及 SPEC 保留未完成状态。
+本仓 FILEMAP 已启用 `require_new_file_classification: true`。本次同时修正产品判法与宿主政策：
+受影响 unknown 原先一律拒绝；候选现在仅允许经固定两端连续性核验的原源码保留 unknown。
+这不增加证明资格，也不改变最终形式化目标。新逻辑、错误引用、复制、无来源和歧义仍拒绝；
+原 proof-bearing 分类仍核历史，根、实际编译输入和证明原结果仍走原有完整计划。
+
+`verified_sources.rs` 的 `continuity` 模块只使用既有 projects 的项目 ID／根及固定 FILEMAP、
+完整 TreeEntry 库存与 Reader。它在 Verus 中联接登记和真实树条目，保留未登记树条目，
+核路径的唯一对应、类型、模式及登记元数据。搬迁还要求两端来源／目的不存在交叉留存。
+需要连续性资格的 unknown 文件，其原字节由同一个固定 Reader 读取；逐路径判断保持原选择次序。
+已分类文件只追踪固定来源，不额外读取两端源码，也不产生连续性资格；原分类历史、搬迁后的
+降级拒绝及全部证明计划仍须验收。分类状态来自该端原登记，并随完整路径联接到真实树条目。
+`assessment` 定义每条选择路径的完整返回结果，`assess` 保留全部判断或首个原读取错误。
+库存门和完整计划消费同一个不可手填的 `Continuity` 值，且不改变影响选择。
+选择路径为空时，观察适配器直接返回已证明的空证据，不额外解码两端登记或读取 Git 树；
+库存和完整计划仍执行原判断，空证据不提供任何文件的来源或连续性资格。
+
+连续性观察在两个端点均已绑定且 OID 已验证时，先复用原有有界批量读取取得比较所需字节，
+随后原逐路径判断消费同一个 Reader 的原回执缓存。实际判断与预取共用同源 `needs_source`，
+只选择可比较的 unknown；分类、模式、元数据、复制、缺路径和歧义的拒绝条件保持不变。
+输入适配保留选择顺序和重复路径，批量获取自身负责去重；传输失败返回原错误全文并停止，
+未取得的结果不产生连续性。未绑定或未验证的端点保留逐项读取。
+`needs_source` 的条件等价关系由原证明根核对；输入收集、Reader／Git IO 仍是接口适配边界，
+Rust mock 核两端完整请求、无需读取的分支和失败停止，不宣称这些 IO 已形式证明。
+
+真实编译源绑定先核完整 dep-info 路径、登记成员与模式，再按原顺序批量取得固定候选字节；
+返回数量不符即拒绝，逐文件摘要、完整 checksum 与声明根继续验收。Reader 复用已有的
+有界 `cat-file` 批量获取、内容身份校验和原进程回执，同路径别名复用实际字节且保留原顺序。
+未绑定或未验证的端点仍走原读取，不取得缓存资格。批量获取减少 Git 进程和相同大型
+CI 环境的重复回执；原环境、流、执行参数和所有检查义务继续保留，原预算不变。
+
+**产品与宿主登记同时修改：** `source_binding.rs` 的实际批量调用经过
+`observe_candidate_bytes`，在现有 CI 集合根中证明同一生产者、固定端点和完整路径输入
+直接转交给读取器，原结果直接返回。FILEMAP 因此登记为 program，并沿现有项目依赖选择
+专属测试。该证明只覆盖请求与结果的转发关系；JSON、Git、IO 和摘要仍受各自接口合同及
+未完成义务约束，不能据此声称整文件已获证明。复用原证明操作，未新增测试过滤或预算；
+完整验证与运行成本尚未测量。
+
+同批为 `facts.rs`／`facts_binding.rs` 补 program 登记：既有 runner-status 根编译其实际
+`select_fixed_source_read` 和 `ordered_acquired_blobs`。前者证明只调用端点资格选中的读取器，
+向其交付完整输入并返回原结果；后者证明重建的每项路径、顺序、重复项和字节与实际获取 map
+对应，缺键时返回 None。独立预期覆盖两条互斥读取路径、二进制字节、空文件、重复路径、
+空请求和缺键，沿原未过滤测试执行。模式、缓存资格、去重集合、Git 获取、回执及环境检查
+仍有各自接口与未完成证明义务；本次有限证明不构成整文件覆盖。
+顺序重建沿用既有 `BTreeMap<String, _>` 比较合同 `obeys_cmp::<String>()`，不在此证明标准库
+比较实现；具体 map 的二进制字节与缺键预期由普通 Rust 测试验收，分支选择另有同源 Verus 预期。
+
+源码比较逐字节核对非引用内容。仅支持现役 Rust `#[path]`、`include_bytes!`、Cargo `path`、
+以 `CARGO_MANIFEST_DIR` 为基准的两种 join 写法；宿主特定形式只读当前固定 FILEMAP 的
+`reference_syntax` 声明，不再内置本仓 shell 变量。
+每个锚点都核词法规范化和两端实际目标；文件／项目根／登记输出目录分开核对。
+目标只能保留原固定地址或沿原项目 ID 的实际根迁移，不能改指另一真实对象。
+声明按当前文件点名，给出两端确切前缀、引号前尾部、引号后后缀及路径基准；
+未登记的改写保持未取得连续性，不按相似度或忽略任意空白取绿。源码 byte 同一不等于
+原文件全语义已证明；未知继续未知，真正编译与消费者行为仍由原未过滤检查验收。
+
+**产品和宿主政策同时修改：**本宿主只登记六条当前采用的形式。两条 shell 形式
+分别把已存在的 `$task_root`／`$task_main` 解释为仓库根；两条 Rust 形式只覆盖
+`owner.rs` 中原 `serde_json::from_slice(include_bytes!(…)).unwrap()` 与
+`frontend.rs` 中原 `.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join(…))` 的 rustfmt 换行和尾逗号。
+另两条分别覆盖 `frontend.rs`／`execution.rs` 保存失败样本时换行并缩进 12 空格的
+`Path::new(env!("CARGO_MANIFEST_DIR")).join(…)`；两端格式完全相同，只迁移路径字面值。
+包围表达式、输入、调用和断言保持原义，完整原测试继续验收。声明的语言语义等价性是
+宿主政策责任，通用核心只证明声明限定的字节关系和实际引用目标；它不证明任意声明语义。
+因此不能把当前局部证明扩写为“任意逻辑变化都能被识别”，也不能登记含逻辑变化的形式。
+
+`judge-registration/src/schema.rs` 的新同源判断核声明数量上限 250、文件规范路径、
+非空前缀末端和明确基准，实际 schema 解码后直接调用。`lib.rs` 仅公开转发这项实际能力；两份源文件通过已有 CI 集合整 crate 根编译，
+独立预期核正常、空前缀、错误末端和未知基准；旧 JSON schema 逻辑仍未完整证明。
+源码逐步比较与循环组合分别证明，未提高 rlimit、线程或报告预算。完整成本仍未知。
+
+接口假设沿用固定 Reader 原字节与 Serde 的字段投影。新适配只解码原 `projects`／`files`，
+按原树迭代字段投影，序列化 owner、surface、cost、edges、symlink、projection 的原值；
+路径联接、准入、端点选择与状态选择均由 Verus 执行。固定基线和候选在四个现役计划入口
+明确传入；初始无基线由同源分支返回空连续性，不能伪造旧库存。观察适配自身及旧调用方
+外围源码仍不因本次局部证明获得整文件覆盖；实际验收以本次原证明和消费者结果为准。
+最坏路径匹配成本随显式项目数的平方和所选源码长度增长，完整构建、CI 和存储成本未知。
 
 本批的生产与独立预期根继续由 `crates/runner/src/verified_verifier.rs` 和
 `crates/runner-tests/tests/verified_verifier.rs` 整 crate 证明；真实 Rust 行为测试
-同时核受影响未分类拒绝、显式 `data` 准入、未受影响 unknown，以及未采用／明确关闭开关的外部宿主边界。
+同时核受影响未分类拒绝、显式 `data` 准入、未受影响 unknown、固定源码连续性，以及未采用／明确关闭开关的外部宿主边界。
 分类开关与它约束的文件库存通过同一类型传递，JSON 适配仅按原字段搬运；
 未采用开关的宿主不取得证明资格，已有证明声明仍须核验所选证明计划。
 这里明确采用各使用方 lockfile 固定的 Serde `Deserialize`、`serde(from)` 和
@@ -665,7 +950,7 @@ FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
 数据声明必须显式给出空 `roots: []`，program／specification 必须有有效根，并继续接受现有严格计划、
 编译源码、原证明及真实消费者的绑定检查。独立预期同为 Verus，并作为 Rust 测试运行。
 
-本宿主 FILEMAP 已采用该字段，新增登记行必须分类，已有分类不得删除。
+本宿主 FILEMAP 已采用该字段。新增登记行须分类或通过上文固定两端连续性核验保留原 unknown；已有分类不得删除。
 使用方必须先通过现役 bootstrap 安装能读取该字段的候选工具，再按正式生命周期入口采用；
 关联检出沿现役路径使用本树工具，共享状态仍由原物理协调者管理。旧工具拒绝新字段时，
 保留原失败并升级实际使用方，不能关闭字段或手换共享二进制来取得通过。
@@ -1129,7 +1414,7 @@ Verus 版本与整 crate 参数；Rust workflow 核心测试同时核真实 cons
 Verus 版本与整 crate 参数；workflow 核心测试和 inventory 同次验收真实测试消费者。
 JSON 解码和集合构造仍是明确登记的适配器输入，本批不把外部接口假设当作仓内证明。
 
-本批继续补齐宿主原生边界的既有证明根：`.chrono-harness/ci/native-tests/tests/verified_cargo.rs`
+本批继续补齐宿主原生边界的既有证明根：`crates/host-bootstrap-tests/tests/verified_cargo.rs`
 登记 `verify.bootstrap-cargo-tests`，release 原生实现及独立预期登记
 `verify.release-recipe`／`verify.release-recipe-tests`。三项操作均已存在于 execution plan，
 FILEMAP 现在把源码、证明根和实际 Rust 测试消费者绑定到同一登记；本批不新增证明源、工具或
@@ -1158,7 +1443,7 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 
 ## 发布交付字段判断
 
-发布交付的字段判断由 `release/native/src/verified_delivery.rs` 负责，接入现有
+发布交付的字段判断由 `crates/host-release/src/verified_delivery.rs` 负责，接入现有
 `verify.release-recipe`／`verify.release-recipe-tests` 整 crate 根。
 身份适配器把完整环境文本交给规范十进制、版本分量、channel 和显式版本判断；
 发布适配器把原 GitHub JSON 的可选文本、整数和布尔值直接交给逐字段判断，
@@ -1351,6 +1636,8 @@ JSON 投影、原生结果真实性、删除／时间调整及完整恢复事务
 `maintain` 的显式清单准入和是否进入全库枚举的选择也直接消费此实现。
 独立 Verus 边界预期覆盖空／重复／超额清单、缺少或多出角色、仍在使用、理由和原件大小边界，
 并核对释放后其他成员的原顺序和内容。
+
+同一根的 `migration_custody` 直接供政策迁移选择 capability 排除方式：只有 `reserving` 可以保留空身份；已有身份必须原样交给租约所有者核验，只有未附着且确实未创建的预约可以仅依靠原对象 metadata 排除。独立边界覆盖已附着／空身份、文件存在／缺失和创建／终态阶段；运行时在原两遍迁移中消费这些结果。源码和独立预期复用 `verify.retention-release`／`verify.retention-release-tests`，没有新增证明入口或预算。这里证明的是选择与输入的对应；文件存在性、内核独占、身份重验、JSON、绑定写入和完整恢复组合仍由原接口、Rust 行为回归及真实宿主验收负责。`retention.rs` 的 IO 回归不因 fixture 轮数证明或该局部证明取得完整证明资格。
 
 显式全局维护汇总的观察样本使用同一根的 `observation_bytes_fit`，
 证明已用字节与下一项之和不超过样本容量，且不发生 u64 加法溢出。
@@ -2579,7 +2866,7 @@ routes 原比较继续保留原结果合同；统一入口另从相同原 stdout
 | `DependencyRead::read` | routes 的 UTF-8 解码、`Path::join`、`File::open`、`Read::take`／`read_to_end`；返回指定原输出的字节或原 IO 错误，读取不超过请求上限 |
 | `CandidateSourceRead::text` | judge-ci 的标准 UTF-8 解码；Verus 另核完整字节往返，不仅依赖解码成功 |
 | `CandidateSourceRead::mode` | 同一固定请求树的完整路径查询和原模式字段投影；文件模式准入仍由 Verus 比较 |
-| `CandidateSourceRead::blob` | 现役 request-bound `Reader::blob(host_root, candidate, path)` 的固定 Git 字节观察；其现有运输和外层实现仍有未证明义务 |
+| `CandidateSourceRead::blobs` | 现役 request-bound `Reader::blobs(host_root, candidate, paths)` 按完整输入顺序取得固定 Git 字节；转发关系在现有 CI 集合根中证明，其现有运输和外层实现仍有未证明义务 |
 | `CandidateSourceRead::digest` | 现役 SHA-256 接口返回实际 blob 的十六进制摘要；Verus 核格式和完整 checksum，不证明密码学算法 |
 | `CompilerReportRead::decode`／`decoded` | judge-ci 的固定 serde_json 类型化解码；只关联点名原字节与完整字段，不作成功判断或从其他报告补齐字段 |
 | FILEMAP／回执编解码 | 固定 serde／serde_json 的字段解码及原字节编码；不授予外层仓内判断 `external_body` 例外 |
@@ -2597,7 +2884,7 @@ projects 原生单元同步选择现有 Verus bootstrap，先核共享 core 再�
 每项证明增加一份有界原观察；每次源码绑定按实际编译依赖读取固定候选字节，复用现役 Reader，
 完整运行、构建、验证、CI 和存储成本未知。
 **产品与宿主政策同改：**FILEMAP 移除 `ci/src/release.rs`、`ci/src/gating.rs`，以及
-`release/native/src/publication.rs`、`release/native/src/identity.rs` 的不实文件级证明声明。
+`crates/host-release/src/publication.rs`、`crates/host-release/src/identity.rs` 的不实文件级证明声明。
 它们调用了已证明辅助函数，自身未进入所声明根的编译依赖；调用辅助函数不能证明整个调用文件。
 原编译／测试依赖、辅助函数证明和行为测试保留，四个文件恢复未知覆盖，外围逻辑仍须迁移和验收。
 没有把它们改成 data，也没有据此宣称完整覆盖。新绑定沿现有证明、组合入口和 DELTA 检查验收；
@@ -2718,7 +3005,7 @@ registration 专属计划的必需前置，独立预期和 Rust 测试编译同�
 
 宿主 bootstrap 的 core、Verus 准备及所有者阶段已采用薄 shell 入口和 Rust 生产者；
 共享安装的编排也使用 Rust；实际生产、安装和后续使用仍须分别验收。
-`.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
+`crates/host-bootstrap/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
 字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断，
 以及环境名／值、宿主路径、共享目录排斥、工具探测分支和进程退出状态。
 版本前缀另要求完整空格分隔；Cargo 可接受精确版本字符串，rustc 必须保留版本后的空格。
@@ -2960,3 +3247,18 @@ Git inventory、租约、政策绑定、错误传播和外层维护组合仍有�
 任一成立才选择可复用缓存。FILEMAP 将该源码登记为 program，独立边界预期沿原
 Rust 和 Verus 入口执行。文件中的创建时间观察、源码保全、Git、租约和处置 IO
 继续受条件编译隔离，尚未证明；这项局部证明不代替真实维护验收。
+
+## 输入 blob 的内容身份
+
+输入存储和运输后的组合共用 `inputs/src/lib.rs::blob_identity_matches`：只有摘要全文
+和 u64 长度都相同，才接受内容身份。现有 `snapshots.rs` 增加独立预期，覆盖摘要大小写、
+空摘要、长度变化、空文件及 u64 上界；相同预期也作为普通 Rust 测试运行。
+两份已有源码分别成为 `verify.inputs-blobs`／`verify.inputs-blobs-tests` 的严格整 crate
+根，不新增项目、依赖或过滤。JSON、文件系统效果、摘要算法和完整输入事务仍未证明；
+分类和这个局部结果不表示整文件或完整 SPEC 已证明。
+
+**产品与宿主登记同步修改：**FILEMAP 补齐本批受影响文件的真实 program／data 分类，
+inputs 的原未过滤测试计划增加这两个证明操作。它们验证实际使用的共享身份判断，
+运输原件损坏、内容地址冲突、不覆盖和显式路径搬迁继续由原 Rust 行为入口验证。
+删除运输 blob 的第二次完整复制与计算摘要，改由原发布所有者使用已经核验的临时文件。
+验证范围因采用的分类合同增加，完整构建、证明、运行和存储成本未测。
