@@ -81,6 +81,7 @@ pub enum RetainedError<'a> {
     Length,
 }
 
+#[verifier::inline]
 pub open spec fn retained_mode<B>(observed: RetainedObservation<B>) -> int {
     if observed.absent.is_some() { 0 }
     else if observed.bytes.is_some() && observed.blob.is_none() { 1 }
@@ -88,18 +89,21 @@ pub open spec fn retained_mode<B>(observed: RetainedObservation<B>) -> int {
     else { 3 }
 }
 
+#[verifier::inline]
 pub open spec fn retained_required(mode: int) -> Seq<&'static str> {
     if mode == 0 { seq!["absent"] }
     else if mode == 1 { seq!["bytes"] }
     else { seq!["blob", "sha256", "length"] }
 }
 
+#[verifier::inline]
 pub open spec fn retained_fields_ok<B>(observed: RetainedObservation<B>) -> bool {
     observed.object
         && schema::required_fields_present(retained_required(retained_mode(observed)), observed.keys@)
         && schema::known_fields_only(retained_required(retained_mode(observed)), seq![], observed.keys@)
 }
 
+#[verifier::inline]
 pub open spec fn retained_field_failure<B>(
     observed: RetainedObservation<B>, error: ObjectFieldError,
 ) -> bool {
