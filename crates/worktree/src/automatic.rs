@@ -4686,6 +4686,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
                     let coordinator = manager.inputs.policy.coordinator_root.clone();
+                    let activation = chrono_harness::maintenance_signal::RequestContext::new(
+                        target,
+                        &coordinator,
+                    )?;
+                    command.env.insert(
+                        chrono_harness::maintenance_signal::CONTEXT_ENV.into(),
+                        serde_json::to_string(&activation).map_err(|error| error.to_string())?,
+                    );
                     manager.observe_attention(r, report, false)?;
                     let coordinator_bytes = manager.inputs.anchor_config_bytes.clone();
                     drop(manager);

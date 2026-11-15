@@ -422,6 +422,7 @@
       "TMPDIR",
       "SDKROOT",
       "CHRONO_CHECK_SOURCE",
+      "CHRONO_MAINTENANCE_CONTEXT",
       "GITHUB_EVENT_NAME",
       "GITHUB_EVENT_PATH",
       "CHRONO_WORKFLOW_REVISION",
@@ -557,6 +558,22 @@
         "kind": "declared-worktree-agent-identity",
         "inputs": [
           "environment:HECA_AGENT_ID"
+        ]
+      },
+      {
+        "id": "maintenance-context-runner",
+        "consumer": "project:runner",
+        "kind": "declared-maintenance-activation-context",
+        "inputs": [
+          "environment:CHRONO_MAINTENANCE_CONTEXT"
+        ]
+      },
+      {
+        "id": "maintenance-context-worktree",
+        "consumer": "project:worktree",
+        "kind": "declared-maintenance-activation-context",
+        "inputs": [
+          "environment:CHRONO_MAINTENANCE_CONTEXT"
         ]
       }
     ]
