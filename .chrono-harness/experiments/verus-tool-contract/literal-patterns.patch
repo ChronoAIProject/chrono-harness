@@ -98,10 +98,10 @@ index 70addaa..56f7c88 100644
                              reach_function(ctxt, state, &fn_array_update());
 diff --git a/source/rust_verify_test/tests/literal_patterns.rs b/source/rust_verify_test/tests/literal_patterns.rs
 new file mode 100644
-index 0000000..6b68886
+index 0000000..2475e0c
 --- /dev/null
 +++ b/source/rust_verify_test/tests/literal_patterns.rs
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,209 @@
 +#![feature(rustc_private)]
 +#[macro_use]
 +mod common;
@@ -256,6 +256,12 @@ index 0000000..6b68886
 +                (s is Some
 +                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])) ==> r,
 +        {
++            proof {
++                if s is Some {
++                    vstd::string::axiom_str_literal_len(s->Some_0);
++                    vstd::string::axiom_str_literal_get_char(s->Some_0, 0);
++                }
++            }
 +            let r = match s {
 +                Some("a" | "b") => true,
 +                _ => false,
@@ -280,6 +286,12 @@ index 0000000..6b68886
 +                (enabled && s is Some
 +                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])) ==> r,
 +        {
++            proof {
++                if s is Some {
++                    vstd::string::axiom_str_literal_len(s->Some_0);
++                    vstd::string::axiom_str_literal_get_char(s->Some_0, 0);
++                }
++            }
 +            let r = match s {
 +                Some("a") if enabled => true,
 +                Some("b") if enabled => true,
