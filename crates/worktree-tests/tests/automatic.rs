@@ -925,6 +925,11 @@ fn empty_admission_preserves_foreign_checkout_without_reading_its_policy() {
     let foreign_policy = h.target.join(POLICY);
     let foreign_bytes = b"this checkout has not adopted this coordinator's policy\n";
     fs::write(&foreign_policy, foreign_bytes).unwrap();
+    let foreign_retention = h
+        .target
+        .join(chrono_harness::retained_artifacts::retention::POLICY_PATH);
+    let foreign_retention_bytes = b"this retention store has not adopted this coordinator\n";
+    fs::write(&foreign_retention, foreign_retention_bytes).unwrap();
     let source = h.target.join("unsaved-source");
     fs::write(&source, b"independent work\n").unwrap();
 
@@ -934,6 +939,16 @@ fn empty_admission_preserves_foreign_checkout_without_reading_its_policy() {
     assert_ne!(report["output_retention"]["status"], "preserved");
     assert_eq!(fs::read(&ledger_path).unwrap(), ledger_bytes);
     assert_eq!(fs::read(&foreign_policy).unwrap(), foreign_bytes);
+    assert_eq!(
+        fs::read(&foreign_retention).unwrap(),
+        foreign_retention_bytes
+    );
+    assert!(
+        report["linked_output_retention"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(fs::read(&source).unwrap(), b"independent work\n");
     let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
         .unwrap()
