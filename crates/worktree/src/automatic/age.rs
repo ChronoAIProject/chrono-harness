@@ -140,8 +140,43 @@ impl Manager {
         for commit in reflog.lines().collect::<BTreeSet<_>>() {
             facts::full_oid(commit)?;
             let reference = format!("{prefix}reflog-{commit}");
-            self.retained_branch(r, &reference, commit)?;
             reflog_refs.insert(reference, commit.to_owned());
+        }
+        if !reflog_refs.is_empty() {
+            let retained = r.text(
+                &self.inputs.policy.coordinator_root,
+                &[
+                    "for-each-ref",
+                    "--format=%(refname) %(objectname) %(symref)",
+                    &prefix,
+                ],
+            )?;
+            let mut observed = BTreeSet::new();
+            for line in retained.lines() {
+                let (reference, identity) = line
+                    .split_once(' ')
+                    .ok_or("invalid retained branch inventory")?;
+                let Some(commit) = reflog_refs.get(reference) else {
+                    continue;
+                };
+                let (oid, symbolic) = identity
+                    .split_once(' ')
+                    .ok_or("invalid retained branch identity")?;
+                if !symbolic.is_empty() {
+                    return Err("source custody requires a direct retained branch".into());
+                }
+                if oid != commit {
+                    return Err("retained source branch changed".into());
+                }
+                observed.insert(reference);
+            }
+            // Git omits dangling symbolic refs from this inventory. New refs
+            // still need the original direct-ref check and compare-and-create.
+            for (reference, commit) in &reflog_refs {
+                if !observed.contains(reference.as_str()) {
+                    self.retained_branch(r, reference, commit)?;
+                }
+            }
         }
         let index = r.text(&e.path, &["write-tree"])?.trim().to_owned();
         facts::full_oid(&index)?;
