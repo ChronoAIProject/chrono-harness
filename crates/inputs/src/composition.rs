@@ -41,7 +41,11 @@ fn source_bytes(root: &Path, source: &Source) -> Result<Vec<u8>, String> {
     let raw = if let Some(a) = &source.artifacts {
         retained_artifacts::bytes(root, a, &source.pair.path, source.transport.as_ref())?
     } else {
-        chrono_harness::prepared::read_original(root, &source.pair, source.transport.as_ref())?
+        return chrono_harness::prepared::read_original(
+            root,
+            &source.pair,
+            source.transport.as_ref(),
+        );
     };
     if sha256(&raw) != source.pair.sha256 {
         return Err("E_COMPOSE_ORIGINAL: pair digest differs".into());
