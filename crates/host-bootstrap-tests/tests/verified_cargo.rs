@@ -1,7 +1,7 @@
 //! 完整 Cargo 输出的独立预期；普通执行和整 crate 证明消费同一组边界。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
-#[path = "../../../../crates/runner/src/verified_verifier.rs"]
+#[path = "../../runner/src/verified_verifier.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as ids;

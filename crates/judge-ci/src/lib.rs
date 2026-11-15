@@ -9,6 +9,7 @@ use serde_json::{Value, json as object};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
+pub use verified_collection::with_source_continuity;
 mod collect;
 pub use collect::{UnitOriginals, unit_originals};
 mod source_binding;
@@ -76,6 +77,7 @@ pub struct Policy {
 #[derive(Debug)]
 struct Snapshot {
     registry: Value,
+    filemap: Value,
     tools: BTreeMap<String, Value>,
     owner_nodes: BTreeMap<String, String>,
     files: BTreeMap<String, Value>,
@@ -526,8 +528,13 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
         )
     };
     let scheduling = chrono_judge_registration::execution::scheduling(&fm, &pr, &artifacts)?;
+    if let Some(declaration) = fm.get("reference_syntax") {
+        let syntax = serde_json::from_value(declaration.clone()).map_err(|e| e.to_string())?;
+        chrono_judge_registration::validate_reference_syntax(&syntax)?;
+    }
     let snapshot = Snapshot {
         registry: pr,
+        filemap: fm.clone(),
         tools,
         owner_nodes,
         files,
@@ -975,13 +982,59 @@ pub fn full_collection_requirements_with_inputs(
         )?;
         let previous_registry =
             serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
-        chrono_judge_routes::validate_proof_plan(
-            &serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?,
-            previous_registry.as_ref().map(Some).map_err(String::as_str),
-            &impact.closure.reached.keys().cloned().collect(),
-            &methods,
-            &operations,
-        )?;
+        let registry: chrono_harness::verified_verifier::sources::SourceRegistry =
+            serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?;
+        with_source_continuity(
+            (),
+            Some((
+                req.base.commit.as_str(),
+                old.filemap(),
+                old.projects(),
+                chrono_harness::facts::artifact_directories(old.config())?
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect(),
+            )),
+            (
+                req.candidate.commit.as_str(),
+                r.filemap(),
+                r.projects(),
+                chrono_harness::facts::artifact_directories(r.config())?
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect(),
+            ),
+            &chrono_harness::verified_verifier::sources::continuity_paths(
+                &registry.files,
+                &impact.closure.reached.keys().cloned().collect(),
+            ),
+            |state, previous, candidate, paths| {
+                (
+                    state,
+                    chrono_harness::facts::source_continuity::observe(
+                        &reader,
+                        &req.candidate.root,
+                        previous,
+                        candidate,
+                        paths,
+                    ),
+                )
+            },
+            |state, continuity| {
+                (
+                    state,
+                    chrono_judge_routes::validate_proof_plan(
+                        &registry,
+                        previous_registry.as_ref().map(Some).map_err(String::as_str),
+                        &impact.closure.reached.keys().cloned().collect(),
+                        &methods,
+                        &operations,
+                        &continuity,
+                    ),
+                )
+            },
+        )
+        .1?;
         let units = serde_json::from_value(r.config()["execution_units"]["units"].clone())
             .map_err(|e| e.to_string())?;
         Ok(
@@ -1046,13 +1099,55 @@ pub fn full_scheduling_requirements(
     )?;
     let previous_registry =
         serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
-    chrono_judge_routes::validate_proof_plan(
-        &serde_json::from_value(current.filemap().clone()).map_err(|error| error.to_string())?,
-        previous_registry.as_ref().map(Some).map_err(String::as_str),
-        &impact.closure.reached.keys().cloned().collect(),
-        &methods,
-        &operations,
-    )?;
+    let registry: chrono_harness::verified_verifier::sources::SourceRegistry =
+        serde_json::from_value(current.filemap().clone()).map_err(|error| error.to_string())?;
+    with_source_continuity(
+        (),
+        Some((
+            base,
+            old.filemap(),
+            old.projects(),
+            chrono_harness::facts::artifact_directories(old.config())?
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+        )),
+        (
+            candidate,
+            current.filemap(),
+            current.projects(),
+            chrono_harness::facts::artifact_directories(current.config())?
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+        ),
+        &chrono_harness::verified_verifier::sources::continuity_paths(
+            &registry.files,
+            &impact.closure.reached.keys().cloned().collect(),
+        ),
+        |state, previous, candidate, paths| {
+            (
+                state,
+                chrono_harness::facts::source_continuity::observe(
+                    &reader, root, previous, candidate, paths,
+                ),
+            )
+        },
+        |state, continuity| {
+            (
+                state,
+                chrono_judge_routes::validate_proof_plan(
+                    &registry,
+                    previous_registry.as_ref().map(Some).map_err(String::as_str),
+                    &impact.closure.reached.keys().cloned().collect(),
+                    &methods,
+                    &operations,
+                    &continuity,
+                ),
+            )
+        },
+    )
+    .1?;
     Ok(
         object!({"required_units":chrono_harness::units::required(&units, &selected),"global_selected":selected,"changed_paths":delta.iter().map(|d| &d.path).collect::<Vec<_>>(),"git_facts":reader.observation(),"input_scope":"git-and-declarations; final-effective-input-admission-required"}),
     )
@@ -1553,16 +1648,56 @@ fn inventory_profile(
         // Validate the complete obligation graph before selecting any unit.
         let (_, operations) =
             chrono_judge_routes::order(&global_selected, &new.plans, &methods, &new.execute)?;
-        chrono_judge_routes::validate_proof_plan(
-            new.source_registry.as_ref().map_err(Clone::clone)?,
-            old.as_ref()
-                .map(|snapshot| snapshot.source_registry.as_ref())
-                .transpose()
-                .map_err(String::as_str),
-            &affected,
-            &methods,
-            &operations,
-        )?;
+        let registry = new.source_registry.as_ref().map_err(Clone::clone)?;
+        with_source_continuity(
+            (),
+            req.base
+                .as_deref()
+                .zip(old.as_ref())
+                .map(|(oid, snapshot)| {
+                    (
+                        oid,
+                        &snapshot.filemap,
+                        &snapshot.registry,
+                        snapshot.policy.artifacts.clone(),
+                    )
+                }),
+            (
+                req.candidate.as_str(),
+                &new.filemap,
+                &new.registry,
+                new.policy.artifacts.clone(),
+            ),
+            &chrono_harness::verified_verifier::sources::continuity_paths(
+                &registry.files,
+                &affected.iter().cloned().collect(),
+            ),
+            |state, previous, candidate, paths| {
+                (
+                    state,
+                    chrono_harness::facts::source_continuity::observe(
+                        reader, root, previous, candidate, paths,
+                    ),
+                )
+            },
+            |state, continuity| {
+                (
+                    state,
+                    chrono_judge_routes::validate_proof_plan(
+                        registry,
+                        old.as_ref()
+                            .map(|snapshot| snapshot.source_registry.as_ref())
+                            .transpose()
+                            .map_err(String::as_str),
+                        &affected,
+                        &methods,
+                        &operations,
+                        &continuity,
+                    ),
+                )
+            },
+        )
+        .1?;
     }
     Ok(Inventory {
         config,

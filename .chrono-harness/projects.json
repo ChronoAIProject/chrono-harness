@@ -4532,9 +4532,9 @@
     {
       "id": "host-bootstrap-native",
       "kind": "production",
-      "manifest": ".chrono-harness/ci/native/Cargo.toml",
-      "lockfile": ".chrono-harness/ci/native/Cargo.lock",
-      "root": ".chrono-harness/ci/native",
+      "manifest": "crates/host-bootstrap/Cargo.toml",
+      "lockfile": "crates/host-bootstrap/Cargo.lock",
+      "root": "crates/host-bootstrap",
       "actions": {
         "build": {
           "operation": "build.host-bootstrap-native",
@@ -4543,7 +4543,7 @@
             "build",
             "--locked",
             "--manifest-path",
-            ".chrono-harness/ci/native/Cargo.toml",
+            "crates/host-bootstrap/Cargo.toml",
             "--target-dir",
             ".chrono-harness/cache/host-bootstrap-native/target"
           ]
@@ -4555,7 +4555,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            ".chrono-harness/ci/native/Cargo.toml"
+            "crates/host-bootstrap/Cargo.toml"
           ]
         },
         "format": {
@@ -4564,7 +4564,7 @@
           "argv": [
             "fmt",
             "--manifest-path",
-            ".chrono-harness/ci/native/Cargo.toml"
+            "crates/host-bootstrap/Cargo.toml"
           ]
         },
         "lockfile": {
@@ -4575,7 +4575,7 @@
             "--offline",
             "--workspace",
             "--manifest-path",
-            ".chrono-harness/ci/native/Cargo.toml"
+            "crates/host-bootstrap/Cargo.toml"
           ]
         },
         "verify_bindings": {
@@ -4604,7 +4604,7 @@
               "--extern",
               "serde",
               "--emit=link=.chrono-harness/state/verify.bootstrap-bindings.rlib,dep-info=.chrono-harness/state/verify.bootstrap-bindings.rlib.d",
-              ".chrono-harness/ci/native/src/verified_bindings.rs",
+              "crates/host-bootstrap/src/verified_bindings.rs",
               "-o",
               ".chrono-harness/state/verify.bootstrap-bindings.rlib",
               "-Zchecksum-hash-algorithm=sha256"
@@ -4642,7 +4642,7 @@
             "-L",
             "all=.chrono-harness/cache/host-bootstrap-native/target/debug/deps",
             "--emit=link=.chrono-harness/state/verify.bootstrap-dependency-owner.rlib,dep-info=.chrono-harness/state/verify.bootstrap-dependency-owner.rlib.d",
-            ".chrono-harness/ci/native/src/lib.rs",
+            "crates/host-bootstrap/src/lib.rs",
             "-o",
             ".chrono-harness/state/verify.bootstrap-dependency-owner.rlib",
             "-Zchecksum-hash-algorithm=sha256"
@@ -4665,7 +4665,7 @@
             "all",
             "--locked",
             "--manifest-path",
-            ".chrono-harness/ci/native/Cargo.toml",
+            "crates/host-bootstrap/Cargo.toml",
             "--target-dir",
             ".chrono-harness/cache/host-bootstrap-native/target",
             "--all-targets",
@@ -4701,7 +4701,7 @@
             "-L",
             "all=.chrono-harness/cache/host-bootstrap-native/target/debug/deps",
             "--emit=link=.chrono-harness/state/verify.bootstrap-dependency-owner-bin.rlib,dep-info=.chrono-harness/state/verify.bootstrap-dependency-owner-bin.rlib.d",
-            ".chrono-harness/ci/native/src/main.rs",
+            "crates/host-bootstrap/src/main.rs",
             "-o",
             ".chrono-harness/state/verify.bootstrap-dependency-owner-bin.rlib",
             "-Zchecksum-hash-algorithm=sha256"
@@ -4718,9 +4718,9 @@
     {
       "id": "host-bootstrap-native-tests",
       "kind": "test",
-      "manifest": ".chrono-harness/ci/native-tests/Cargo.toml",
-      "lockfile": ".chrono-harness/ci/native-tests/Cargo.lock",
-      "root": ".chrono-harness/ci/native-tests",
+      "manifest": "crates/host-bootstrap-tests/Cargo.toml",
+      "lockfile": "crates/host-bootstrap-tests/Cargo.lock",
+      "root": "crates/host-bootstrap-tests",
       "actions": {
         "format_check": {
           "operation": "fmt.host-bootstrap-native-tests",
@@ -4729,7 +4729,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            ".chrono-harness/ci/native-tests/Cargo.toml"
+            "crates/host-bootstrap-tests/Cargo.toml"
           ]
         },
         "format": {
@@ -4738,7 +4738,7 @@
           "argv": [
             "fmt",
             "--manifest-path",
-            ".chrono-harness/ci/native-tests/Cargo.toml"
+            "crates/host-bootstrap-tests/Cargo.toml"
           ]
         },
         "lockfile": {
@@ -4749,7 +4749,7 @@
             "--offline",
             "--workspace",
             "--manifest-path",
-            ".chrono-harness/ci/native-tests/Cargo.toml"
+            "crates/host-bootstrap-tests/Cargo.toml"
           ]
         },
         "verify_bindings": {
@@ -4778,7 +4778,7 @@
               "--extern",
               "serde",
               "--emit=link=.chrono-harness/state/verify.bootstrap-bindings-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-bindings-tests.rlib.d",
-              ".chrono-harness/ci/native-tests/tests/verified_bindings.rs",
+              "crates/host-bootstrap-tests/tests/verified_bindings.rs",
               "-o",
               ".chrono-harness/state/verify.bootstrap-bindings-tests.rlib",
               "-Zchecksum-hash-algorithm=sha256"
@@ -4798,7 +4798,7 @@
             "test",
             "--locked",
             "--manifest-path",
-            ".chrono-harness/ci/native-tests/Cargo.toml",
+            "crates/host-bootstrap-tests/Cargo.toml",
             "--target-dir",
             ".chrono-harness/cache/host-bootstrap-native-tests/target"
           ]
@@ -4831,7 +4831,7 @@
               "--extern",
               "serde_json",
               "--emit=link=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib.d",
-              ".chrono-harness/ci/native-tests/tests/verified_cargo.rs",
+              "crates/host-bootstrap-tests/tests/verified_cargo.rs",
               "-o",
               ".chrono-harness/state/verify.bootstrap-cargo-tests.rlib",
               "-Zchecksum-hash-algorithm=sha256"
@@ -4873,7 +4873,7 @@
             "-L",
             "all=.chrono-harness/cache/host-bootstrap-native-tests/target/debug/deps",
             "--emit=link=.chrono-harness/state/verify.bootstrap-dependency-owner-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-dependency-owner-tests.rlib.d",
-            ".chrono-harness/ci/native-tests/tests/proved_build.rs",
+            "crates/host-bootstrap-tests/tests/proved_build.rs",
             "-o",
             ".chrono-harness/state/verify.bootstrap-dependency-owner-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
@@ -4896,7 +4896,7 @@
             "all",
             "--locked",
             "--manifest-path",
-            ".chrono-harness/ci/native-tests/Cargo.toml",
+            "crates/host-bootstrap-tests/Cargo.toml",
             "--target-dir",
             ".chrono-harness/cache/host-bootstrap-native-tests/target",
             "--test",
@@ -4939,7 +4939,7 @@
               "--import",
               "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.vir",
               "--emit=link=.chrono-harness/state/verify.bootstrap-execution-driver.rlib,dep-info=.chrono-harness/state/verify.bootstrap-execution-driver.rlib.d",
-              ".chrono-harness/ci/native-tests/tests/execution.rs",
+              "crates/host-bootstrap-tests/tests/execution.rs",
               "-o",
               ".chrono-harness/state/verify.bootstrap-execution-driver.rlib",
               "-Zchecksum-hash-algorithm=sha256"
@@ -5107,9 +5107,9 @@
     {
       "id": "host-release-native",
       "kind": "production",
-      "manifest": ".chrono-harness/release/native/Cargo.toml",
-      "lockfile": ".chrono-harness/release/native/Cargo.lock",
-      "root": ".chrono-harness/release/native",
+      "manifest": "crates/host-release/Cargo.toml",
+      "lockfile": "crates/host-release/Cargo.lock",
+      "root": "crates/host-release",
       "language": "rust",
       "actions": {
         "format_check": {
@@ -5119,7 +5119,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            ".chrono-harness/release/native/Cargo.toml"
+            "crates/host-release/Cargo.toml"
           ]
         },
         "format": {
@@ -5128,7 +5128,7 @@
           "argv": [
             "fmt",
             "--manifest-path",
-            ".chrono-harness/release/native/Cargo.toml"
+            "crates/host-release/Cargo.toml"
           ]
         },
         "lockfile": {
@@ -5138,7 +5138,7 @@
             "update",
             "--workspace",
             "--manifest-path",
-            ".chrono-harness/release/native/Cargo.toml"
+            "crates/host-release/Cargo.toml"
           ]
         },
         "build": {
@@ -5148,7 +5148,7 @@
             "build",
             "--locked",
             "--manifest-path",
-            ".chrono-harness/release/native/Cargo.toml",
+            "crates/host-release/Cargo.toml",
             "--target-dir",
             ".chrono-harness/cache/host-release-native/target"
           ]
@@ -5165,7 +5165,7 @@
             "--output-json",
             "--compile",
             "--emit=link=.chrono-harness/state/verify.release-recipe.rlib,dep-info=.chrono-harness/state/verify.release-recipe.rlib.d",
-            ".chrono-harness/release/native/src/verified_recipe.rs",
+            "crates/host-release/src/verified_recipe.rs",
             "-o",
             ".chrono-harness/state/verify.release-recipe.rlib",
             "-Zchecksum-hash-algorithm=sha256"
@@ -5240,9 +5240,9 @@
     {
       "id": "host-release-native-tests",
       "kind": "test",
-      "manifest": ".chrono-harness/release/native-tests/Cargo.toml",
-      "lockfile": ".chrono-harness/release/native-tests/Cargo.lock",
-      "root": ".chrono-harness/release/native-tests",
+      "manifest": "crates/host-release-tests/Cargo.toml",
+      "lockfile": "crates/host-release-tests/Cargo.lock",
+      "root": "crates/host-release-tests",
       "language": "rust",
       "actions": {
         "format_check": {
@@ -5252,7 +5252,7 @@
             "fmt",
             "--check",
             "--manifest-path",
-            ".chrono-harness/release/native-tests/Cargo.toml"
+            "crates/host-release-tests/Cargo.toml"
           ]
         },
         "format": {
@@ -5261,7 +5261,7 @@
           "argv": [
             "fmt",
             "--manifest-path",
-            ".chrono-harness/release/native-tests/Cargo.toml"
+            "crates/host-release-tests/Cargo.toml"
           ]
         },
         "lockfile": {
@@ -5271,7 +5271,7 @@
             "update",
             "--workspace",
             "--manifest-path",
-            ".chrono-harness/release/native-tests/Cargo.toml"
+            "crates/host-release-tests/Cargo.toml"
           ]
         },
         "execute": {
@@ -5281,7 +5281,7 @@
             "test",
             "--locked",
             "--manifest-path",
-            ".chrono-harness/release/native-tests/Cargo.toml",
+            "crates/host-release-tests/Cargo.toml",
             "--target-dir",
             ".chrono-harness/cache/host-release-native-tests/target"
           ]
@@ -5298,7 +5298,7 @@
             "--output-json",
             "--compile",
             "--emit=link=.chrono-harness/state/verify.release-recipe-tests.rlib,dep-info=.chrono-harness/state/verify.release-recipe-tests.rlib.d",
-            ".chrono-harness/release/native-tests/tests/verified_recipe.rs",
+            "crates/host-release-tests/tests/verified_recipe.rs",
             "-o",
             ".chrono-harness/state/verify.release-recipe-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"

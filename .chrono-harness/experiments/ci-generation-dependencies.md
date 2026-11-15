@@ -118,7 +118,7 @@ E 的固定起点为 `01b9d7ebed083908ec0e3a49fe23c106e8b0da08`，工作树为 `
 
 扩展支持所缺的不是额外 flag 白名单，而是可消费的资格输入：每个直接／必要传递库及宏的生产者身份、固定源与有效编译输入、同一成功严格整 crate 原报告、实际 rlib 与 dep-info checksum；import 还需与同次成功生产者、对应 extern 和当前工具绑定的实际 VIR。缺失、失败、未知或变更的任一输入必须带具体错误阻断其依赖闭包。VIR 的存在、SHA、库名、缓存命中或 import／extern 声明都不能产生这些资格。
 
-现有 routes Receipt 和 typed ProofAdmission 没有逐依赖生产者／VIR 字段。`.chrono-harness/ci/native/src/proved_build.rs`、`verified_cargo.rs` 及 runner-build.json 的当前生产路径绑定 identifiers 库和最终 runner 二进制，仍应复用；其合同没有建立这四项扩展 action 的全部库、宏、传递输入或 VIR 资格。普通非 vstd proxy／external_body 在固定 no-cheating 下未被准入，不能假设 external spec 库 import 已解决 JSON／全文载体。E 没有足够依据为缺失载体填入成功，故只交付确定的 export 登记修复；完整方法类保持未完成，后续由原资格与固定工具／外部接口所有者继续处理。
+现有 routes Receipt 和 typed ProofAdmission 没有逐依赖生产者／VIR 字段。`crates/host-bootstrap/src/proved_build.rs`、`verified_cargo.rs` 及 runner-build.json 的当前生产路径绑定 identifiers 库和最终 runner 二进制，仍应复用；其合同没有建立这四项扩展 action 的全部库、宏、传递输入或 VIR 资格。普通非 vstd proxy／external_body 在固定 no-cheating 下未被准入，不能假设 external spec 库 import 已解决 JSON／全文载体。E 没有足够依据为缺失载体填入成功，故只交付确定的 export 登记修复；完整方法类保持未完成，后续由原资格与固定工具／外部接口所有者继续处理。
 
 ### F 的独立预期与执行边界
 

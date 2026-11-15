@@ -1,4 +1,5 @@
 //! Registration owns full-format schema, snapshot and affected-reference admissibility.
+pub use schema::validate_reference_syntax;
 pub mod consumption;
 pub mod execution;
 mod input_coverage;

@@ -72,7 +72,7 @@ fn cache_process(
 #[test]
 fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_inode() {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
+        .join("../..")
         .canonicalize()
         .unwrap();
     let state = repository.join(".chrono-harness/state/release-test-failures");

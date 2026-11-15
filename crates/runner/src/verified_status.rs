@@ -32,6 +32,96 @@ pub mod snapshot_export;
 
 verus! {
 
+/// 只按实际端点资格选择一条读取路径，完整输入和原结果保持对应。
+pub fn select_fixed_source_read<S, R, F, B>(reusable: bool, inputs: S, fallback: F, batch: B)
+    -> (out: R)
+    where F: FnOnce(S) -> R, B: FnOnce(S) -> R,
+    requires reusable ==> batch.requires((inputs,)),
+        !reusable ==> fallback.requires((inputs,)),
+    ensures if reusable { batch.ensures((inputs,), out) }
+        else { fallback.ensures((inputs,), out) },
+{
+    if reusable { batch(inputs) } else { fallback(inputs) }
+}
+
+pub open spec fn acquired_rows_prefix(
+    paths: Seq<String>, bytes: Map<String, Vec<u8>>, rows: Seq<(String, Vec<u8>)>, count: int,
+) -> bool {
+    0 <= count <= paths.len() && rows.len() == count
+        && (forall|j: int| 0 <= j < count ==>
+            bytes.contains_key(#[trigger] paths[j])
+            && rows[j].0@ == paths[j]@
+            && rows[j].1@ == bytes[paths[j]]@)
+}
+
+proof fn acquired_rows_append(
+    paths: Seq<String>, bytes: Map<String, Vec<u8>>, rows: Seq<(String, Vec<u8>)>,
+    count: int, row: (String, Vec<u8>),
+)
+    requires acquired_rows_prefix(paths, bytes, rows, count), count < paths.len(),
+        bytes.contains_key(paths[count]), row.0@ == paths[count]@,
+        row.1@ == bytes[paths[count]]@,
+    ensures acquired_rows_prefix(paths, bytes, rows.push(row), count + 1),
+{
+    let next = rows.push(row);
+    assert(0 <= count + 1 <= paths.len());
+    assert(next.len() == count + 1);
+    assert forall|j: int| 0 <= j < count + 1 implies
+        bytes.contains_key(#[trigger] paths[j])
+        && next[j].0@ == paths[j]@
+        && next[j].1@ == bytes[paths[j]]@ by {
+        if j < count { assert(next[j] == rows[j]); }
+        else { assert(j == count); }
+    }
+    assert(acquired_rows_prefix(paths, bytes, next, count + 1));
+}
+
+/// 按原请求顺序重建实际取得的字节，保留重复路径；缺少任一条时拒绝。
+pub fn ordered_acquired_blobs(paths: &[String], bytes: &BTreeMap<String, Vec<u8>>)
+    -> (out: Option<Vec<(String, Vec<u8>)>>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures match out {
+        Some(rows) => acquired_rows_prefix(paths@, bytes@, rows@, paths.len() as int),
+        None => exists|i: int| 0 <= i < paths.len() && !bytes@.contains_key(paths@[i]),
+    },
+{
+    broadcast use vstd::std_specs::btree::group_btree_axioms;
+    let mut rows: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut i = 0;
+    while i < paths.len()
+        invariant vstd::laws_cmp::obeys_cmp::<String>(),
+            0 <= i <= paths.len(), acquired_rows_prefix(paths@, bytes@, rows@, i as int),
+        decreases paths.len() - i,
+    {
+        let path = &paths[i];
+        let content = match bytes.get::<String>(path) {
+            Some(content) => {
+                proof {
+                    vstd::std_specs::btree::axiom_maps_deref_key_to_value(bytes@, path, *content);
+                    assert(bytes@.contains_key(paths@[i as int]));
+                    assert(*content == bytes@[paths@[i as int]]);
+                }
+                content
+            },
+            None => {
+                proof {
+                    vstd::std_specs::btree::axiom_contains_deref_key(bytes@, path);
+                    assert(!bytes@.contains_key(paths@[i as int]));
+                }
+                return None;
+            },
+        };
+        let name = paths[i].clone();
+        let copied = content.clone();
+        let ghost before = rows@;
+        proof { acquired_rows_append(paths@, bytes@, before, i as int, (name, copied)); }
+        rows.push((name, copied));
+        i += 1;
+    }
+    Some(rows)
+}
+
+
 pub fn admit_relative_path(value: &str) -> (out: Result<(), &str>)
     ensures match out {
         Ok(()) => paths::relative_path(value.spec_bytes()),

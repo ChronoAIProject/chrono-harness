@@ -1,4 +1,5 @@
 //! Routes owns method planning and comparison with runner-produced observations.
+pub use chrono_harness::verified_verifier::sources::validate_source_plan;
 use chrono_harness::{
     ProcessResult, facts,
     observation::{self, Tool},
@@ -60,9 +61,8 @@ pub fn validate_proof_plan(
     affected_nodes: &BTreeSet<String>,
     methods: &BTreeMap<String, Vec<Method>>,
     operations: &[Operation],
+    continuity: &chrono_harness::verified_verifier::sources::continuity::Continuity,
 ) -> Result<(), String> {
-    chrono_harness::verified_verifier::sources::validate_file_classifications(registry, previous)
-        .map_err(|error| error.render(|message, path| format!("{message}{path}")))?;
     let scopes = methods
         .values()
         .flatten()
@@ -83,11 +83,13 @@ pub fn validate_proof_plan(
             }))
         })
         .collect();
-    chrono_harness::verified_verifier::sources::validate_selected_roots(
-        &registry.files,
+    validate_source_plan(
+        registry,
+        previous,
         &affected_nodes.iter().cloned().collect(),
         &proof_invocations(operations),
         &scopes,
+        continuity,
     )
     .map_err(|error| error.render(|message, path| format!("{message}{path}")))
 }
@@ -820,12 +822,39 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
         order(&selected, &global_plans, &methods, &execute_actions(&r))?;
     let previous_registry =
         serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
+    let registry: chrono_harness::verified_verifier::sources::SourceRegistry =
+        serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?;
+    let affected = impact.closure.reached.keys().cloned().collect::<Vec<_>>();
+    let continuity = chrono_harness::facts::source_continuity::observe(
+        reader,
+        &req.candidate.root,
+        Some((
+            &req.base.commit,
+            old.filemap(),
+            old.projects(),
+            facts::artifact_directories(old.config())?
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+        )),
+        (
+            &req.candidate.commit,
+            r.filemap(),
+            r.projects(),
+            facts::artifact_directories(r.config())?
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+        ),
+        &chrono_harness::verified_verifier::sources::continuity_paths(&registry.files, &affected),
+    )?;
     validate_proof_plan(
-        &serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?,
+        &registry,
         previous_registry.as_ref().map(Some).map_err(String::as_str),
         &impact.closure.reached.keys().cloned().collect(),
         &methods,
         &global_operations,
+        &continuity,
     )?;
     let global_selected = selected.clone();
     let selected = unit_selection(req, &selected, &global_plans)?;

@@ -1,4 +1,5 @@
 //! 固定请求的只读获取适配。仓内准入与失败状态由 Verus 所有者产生。
+use crate::verified_collection::observe_candidate_bytes;
 use chrono_harness::{
     Request,
     facts::Reader,
@@ -27,9 +28,13 @@ impl CandidateSourceRead for CandidateIo<'_> {
         self.tree.get(path).map(|entry| entry.0.clone())
     }
 
-    fn blob(&self, path: &str) -> Result<Vec<u8>, String> {
-        self.reader
-            .blob(&self.request.host_root, &self.request.candidate, path)
+    fn blobs(&self, paths: &Vec<String>) -> Result<Vec<Vec<u8>>, String> {
+        observe_candidate_bytes(
+            self.reader,
+            (&self.request.host_root, &self.request.candidate),
+            paths,
+            |reader, (root, candidate), paths| reader.blobs(root, candidate, paths),
+        )
     }
 
     fn digest(&self, bytes: &[u8]) -> Vec<u8> {

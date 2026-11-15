@@ -1,6 +1,8 @@
 //! Strict SPEC §3 structure. Reference/activation policy is evaluated separately.
+use chrono_harness::verified_verifier::sources::continuity as source_continuity;
 use chrono_harness::{relative_path, wire};
 use serde_json::{Map, Value};
+pub use source_continuity::validate_reference_syntax;
 use std::collections::BTreeSet;
 type Result<T = ()> = std::result::Result<T, String>;
 pub fn object<'a>(
@@ -512,11 +514,17 @@ pub fn filemap(v: &Value) -> Result {
                 "execution_scheduling",
                 "configuration_edges",
                 "require_new_file_classification",
+                "reference_syntax",
             ],
         )?;
         choice(&v["status"], &["active", "proposed"])?;
         if let Some(required) = v.get("require_new_file_classification") {
             boolean(required)?;
+        }
+        if let Some(declaration) = v.get("reference_syntax") {
+            let syntax: Vec<source_continuity::ReferenceSyntax> =
+                serde_json::from_value(declaration.clone()).map_err(|e| e.to_string())?;
+            validate_reference_syntax(&syntax)?;
         }
         let plans = crate::execution::plans(v)?;
         for plan in plans.values() {

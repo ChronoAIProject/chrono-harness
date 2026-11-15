@@ -2,6 +2,8 @@
 
 `crates/` 下的 `runner`、`judge-registration`、`judge-filemap`、`judge-routes`、`judge-projects`、`judge-ci`、`ci` 都是独立 Rust 生产项目，各有专属 `-tests` 项目、Cargo.lock 和 target。`instructions`／`instructions-tests` 也采用同样布局。容器目录不是 Cargo workspace，也不用于发现测试；每个 manifest、操作、依赖都须明确登记。
 
+本仓启动工具及其测试同样位于 `crates/host-bootstrap`／`crates/host-bootstrap-tests`。宿主 profile、薄启动入口和安装绑定继续放在 `.chrono-harness/ci/`；项目 ID、二进制名、缓存与原件路径由原登记维护。源码搬迁同时更新 FILEMAP、项目操作、Verus 根、共享测试引用及工作流输入，不增加构建、测试或历史兼容入口。
+
 各模块分工如下：
 
 | 模块 | 负责内容 |

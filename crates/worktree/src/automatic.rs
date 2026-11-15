@@ -3475,7 +3475,7 @@ impl Manager {
             let e = self.ledger.entries[i].clone();
             let cache =
                 e.status == "active" && e.ownership.as_ref().is_some_and(|o| o.cache_pending);
-            let age = if matches!(e.status.as_str(), "active" | "retained" | "terminal")
+            let age = if matches!(e.status.as_str(), "active" | "terminal" | "retained")
                 && e.enrollment["age_retirement"].is_null()
             {
                 match self.age_eligible(&e, false) {
@@ -3656,7 +3656,10 @@ impl Manager {
                             && result["age_outcome"]
                                 != "expired-checkout-verified-absent-source-branches-retained");
                     let stage = crate::verified_lifecycle::cleanup_result(
-                        cache_outcome,
+                        // A terminal handoff already establishes completion.
+                        // Its successful cache-only age result retains the
+                        // checkout; it must not leave the handoff pending.
+                        cache_outcome && e.status != "terminal",
                         result["status"].as_str().unwrap_or(""),
                         result["worktree_removal"].as_str().unwrap_or(""),
                     );

@@ -5,14 +5,14 @@ use chrono_harness::verus;
 use vstd::prelude::*;
 
 #[cfg(verus_keep_ghost)]
-#[path = "../../../../crates/identifiers/src/lib.rs"]
+#[path = "../../identifiers/src/lib.rs"]
 mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
 use identifiers::equal_text;
 
 // 复用生命周期所有者的权威类型和发布判断；不复制为宿主私有版本。
-#[path = "../../../../crates/worktree/src/verified_owner_publication.rs"]
+#[path = "../../worktree/src/verified_owner_publication.rs"]
 pub mod owner_publication;
 
 verus! {

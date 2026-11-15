@@ -2026,7 +2026,9 @@ impl Inventory {
         for record in objects.values_mut() {
             record.incoming.retain(|source| {
                 !before.contains_key(source)
-                    || objects_reference(&ledger.outputs, source, &record.id)
+                    || verified::objects_reference(&ledger.outputs, source, &record.id, |output| {
+                        (output.id.as_str(), output.references.as_slice())
+                    })
             });
             for role in roles.values() {
                 if !role.ids.contains(&record.id) {
@@ -2065,9 +2067,4 @@ fn finalized(record: &Object) -> bool {
             .as_ref()
             .map(|output| (output.manifest.sealed, output.phase.as_str())),
     )
-}
-fn objects_reference(outputs: &[OutputRecord], source: &str, target: &str) -> bool {
-    outputs
-        .iter()
-        .any(|o| o.id == source && o.references.iter().any(|r| r == target))
 }
