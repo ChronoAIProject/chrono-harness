@@ -395,7 +395,9 @@ fn unified_maintenance_reclaims_linked_outputs_and_measures_their_actual_root() 
     }
     fs::write(h.root.join(protected), b"a different coordinator file").unwrap();
     for path in [expired, protected] {
-        inventory
+        Inventory::adopted(&target)
+            .unwrap()
+            .unwrap()
             .begin("lifecycle-original", path, value!(null))
             .unwrap()
             .complete(value!({"status":"failed","error":"original failure"}))
@@ -404,7 +406,9 @@ fn unified_maintenance_reclaims_linked_outputs_and_measures_their_actual_root() 
     inventory
         .reference_paths("needed-failure", &[protected.into()])
         .unwrap();
-    let live_publication = inventory
+    let live_publication = Inventory::adopted(&target)
+        .unwrap()
+        .unwrap()
         .begin("lifecycle-original", live, value!(null))
         .unwrap();
     let source = fs::read(target.join("payload")).unwrap();
