@@ -339,5 +339,11 @@ Deserialize／Visitor 本地实现均须实际因 assertion failed 拒绝。未�
 本地方法体继续检查，增加第九项拒绝本地后置条件的独立预期；原完整
 `traits_extend_ensures` 库存仍由同一入口验收，不修改循环判断或增加外部公理。
 
+真实结构／枚举派生还使用 `IgnoredAny` 和 `__private229::de::missing_field`。
+前者复用透明外部类型声明，字段直接来自固定依赖；后者保留原静态字段名、生命周期、
+Deserialize／Error 约束和原 Result，不保证成功或失败。真实缺失 Option 字段可能成功，
+不能把函数名当作恒失败合同。增加参数／结果转交及无依据成功／失败断言的三项独立预期，
+原真实派生和枚举 tuple 变体继续保留，未支持错误不算负例通过。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。

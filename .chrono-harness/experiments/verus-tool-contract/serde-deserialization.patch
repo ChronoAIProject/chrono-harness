@@ -10,12 +10,10 @@ diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
  verus! {
 
  #[verifier::external_trait_specification]
-@@ -274,6 +276,410 @@
-     fn skip_field(&mut self, key: &'static str) -> Result<(), Self::Error>;
-
+@@ -276,8 +278,424 @@
      fn end(self) -> Result<Self::Ok, Self::Error>;
-+}
-+
+ }
+
 +#[verifier::external_trait_specification]
 +pub trait ExDeserialize<'de>: Sized {
 +    type ExternalTraitSpecificationFor: serde::de::Deserialize<'de>;
@@ -418,18 +416,79 @@ diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
 +    ) -> Result<V::Value, Self::Error>
 +    where
 +        V: Visitor<'de>;
- }
-
++}
++
  #[verifier::external_type_specification]
+ pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
++
++#[verifier::external_type_specification]
++pub struct ExIgnoredAny(serde::de::IgnoredAny);
++
++// Missing Option fields can succeed; neither result variant is promised here.
++pub assume_specification<'de, V, E>[serde::__private229::de::missing_field](
++    field: &'static str,
++) -> Result<V, E>
++where
++    V: Deserialize<'de>,
++    E: serde::de::Error,
++;
+
+ #[verifier::external_trait_specification]
+ pub trait ExSerializeError: Sized + core::error::Error {
 diff --git a/source/rust_verify_test/tests/serde_deserialization.rs b/source/rust_verify_test/tests/serde_deserialization.rs
 new file mode 100644
 --- /dev/null
 +++ b/source/rust_verify_test/tests/serde_deserialization.rs
-@@ -0,0 +1,254 @@
+@@ -0,0 +1,299 @@
 +#![feature(rustc_private)]
 +#[macro_use]
 +mod common;
 +use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_missing_field_and_ignored_any_keep_original_parameters_and_results
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Deserializer, Error, IgnoredAny};
++
++        fn missing<'de, T: Deserialize<'de>, E: Error>(field: &'static str) -> Result<T, E> {
++            serde::__private229::de::missing_field(field)
++        }
++        fn ignored<'de, D: Deserializer<'de>>(d: D) -> Result<IgnoredAny, D::Error> {
++            IgnoredAny::deserialize(d)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_missing_field_does_not_assume_success
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Error};
++        fn wrong<'de, T: Deserialize<'de>, E: Error>(field: &'static str) {
++            let result: Result<T, E> = serde::__private229::de::missing_field(field);
++            assert(result is Ok); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_missing_field_does_not_assume_failure
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Error};
++        fn wrong<'de, T: Deserialize<'de>, E: Error>(field: &'static str) {
++            let result: Result<T, E> = serde::__private229::de::missing_field(field);
++            assert(result is Err); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
 +
 +test_verify_one_file_with_options! {
 +    #[test] serde_visitor_forbids_impl_postconditions_on_recursive_exec_interface
