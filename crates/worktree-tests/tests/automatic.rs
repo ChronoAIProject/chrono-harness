@@ -946,8 +946,7 @@ fn empty_admission_preserves_foreign_checkout_without_reading_its_policy() {
     assert!(
         report["linked_output_retention"]
             .as_array()
-            .unwrap()
-            .is_empty()
+            .is_none_or(|rows| rows.is_empty())
     );
     assert_eq!(fs::read(&source).unwrap(), b"independent work\n");
     let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)

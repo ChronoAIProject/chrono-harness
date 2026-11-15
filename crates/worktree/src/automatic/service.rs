@@ -379,6 +379,37 @@ fn round(
 }
 
 #[cfg(not(verus_keep_ghost))]
+fn linked_retention_ready(
+    r: &mut Runner,
+    token: &str,
+    inputs: &PolicyInputs,
+    path: &Path,
+) -> Result<bool, String> {
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.to_string()),
+        Ok(_) => {}
+    }
+    let owner = Manager::open_metadata(
+        r,
+        &inputs.policy.coordinator_root,
+        &inputs.config_path,
+        &inputs.anchor_config_bytes,
+        token,
+        path,
+        false,
+        false,
+    )?
+    .ok_or("cleanup policy disappeared")?;
+    let index = owner
+        .current_entry(path)
+        .ok_or("no current enrollment for retention root")?;
+    let head = r.oid(path, "HEAD")?;
+    owner.check_attachment(r, &owner.ledger.entries[index], &head, None)?;
+    Ok(true)
+}
+
+#[cfg(not(verus_keep_ghost))]
 fn maintain_retention_inventory(
     root: &Path,
     inventory: &mut inventory::Report,
@@ -642,7 +673,14 @@ fn run_round(
         // The linked owner protects its own outputs. Unknown coordinator
         // originals defer the coordinator store, not independent linked stores.
         // No enrollment metadata lease spans this retention IO.
-        match maintain_retention_inventory(&path, &mut inventory) {
+        let result = (|| {
+            if !linked_retention_ready(r, token, inputs, &path)? {
+                inventory.retention(&path, value!({"kind":"source-result","status":"absent"}));
+                return Ok(None);
+            }
+            maintain_retention_inventory(&path, &mut inventory)
+        })();
+        match result {
             Ok(result) => linked_retention.push(value!({"source_root":path,
                 "status":if result.is_some() {"reported"} else {"no-adopted-storage"},
                 "original":"see complete_inventory"})),
