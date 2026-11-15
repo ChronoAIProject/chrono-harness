@@ -4,7 +4,7 @@ use chrono_harness::retained_artifacts::retention::{self, Inventory};
 use serde_json::{Value, json};
 use std::{fs, process::Command};
 use support::Fixture;
-#[path = "../../../../crates/runner-tests/tests/support/isolated_capability.rs"]
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
 mod isolated_capability;
 use isolated_capability::isolated_capability_test;
 

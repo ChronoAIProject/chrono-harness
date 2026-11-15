@@ -152,3 +152,25 @@ filemap、projects、cost、mixed、inputs 和 workflow 六个测试项目各自
 验证统一走[本地与 CI 共用的检查入口](../.chrono-harness/instructions/host-context.md#本地ci-检查)，按 DELTA 选择整 crate 证明、编译和未过滤测试；操作及必要前置由 [projects.json](../.chrono-harness/projects.json) 和[执行计划](execution.md)负责，本文不另复制配方。测试使用本地合成提交，目标候选的生命周期仍由调用方负责。
 
 impact v2 新增工作流选测，v1 不执行这些要求；消费者拒绝不支持的结果格式。Git 中 FILEMAP 登记仍为 schema 2，历史解码不变。共用 mixed 分类和固定对象读取在制定执行计划前完成，无效的已选含义输入会阻止后续操作。`workflow_selection`、`workflow_consumer` 通过真实进程验证这些要求。
+
+## 源码搬迁与分类连续性
+
+源码连续性只解释固定两端的分类历史，负责处是 runner 的 `verified_sources.rs`／
+`verified_continuity.rs`。它使用 projects 的原项目 ID 和根，不产生新身份登记。
+FILEMAP 仍从原 DELTA 及前后两端登记边计算完整影响闭包；连续性不得删除起点、边或测试。
+routes、scoped CI、full 调度和 collection 准备在拆分单元前核同一完整计划。
+分类库存与该计划共用程序产生的固定连续性结果，unknown 保持 unknown；原证明绑定与
+未过滤测试义务不变。产品判法和宿主政策同时修正，详见 [Verus 分类门控](verus.md#受影响文件的分类门控)。
+
+
+## 源码搬迁的引用声明
+
+FILEMAP schema 2 的可选 `reference_syntax` 只用于固定源码连续性，不参与选测。
+每条记录以 `file` 点名当前已登记文件，`before`／`after` 是原／当前路径字面值前的确切字节，
+`trailing` 是闭引号前的共同尾部，`suffix_before`／`suffix_after` 是闭引号后的确切字节。
+`base` 只能为 0（源码目录）、1（显式项目根）或 2（仓库根）。原、当前引用仍须解析到
+两端实际存在的同一对象，或同项目 ID 搬迁的对象；声明之外逐字节比较。
+
+声明最多 250 条，缺失表示没有宿主扩展。声明不授予证明资格，不得把业务逻辑改写伪装成
+引用形式；语言语义责任和本仓六条已审查形式见 [Verus 说明](verus.md#受影响文件的分类门控)。
+真实 FILEMAP 原值传给普通和 scoped 计划，不再只重组 `files` 数组而丢失顶层声明。
