@@ -579,6 +579,56 @@ fn adopt_activation(h: &Host) -> std::path::PathBuf {
 #[test]
 #[cfg(unix)]
 #[cfg(not(verus_keep_ghost))]
+fn linked_business_and_its_nested_runner_send_retention_hints_to_the_coordinator() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = socket_host("nested-maintenance-hint");
+    let path = adopt_activation(&h);
+    let os = UnixDatagram::bind(&path).unwrap();
+    let linked = h.parent.join("linked-business");
+    assert_eq!(h.invoke("feature", "linked-business", &linked).0, 0);
+    os.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let receiver = std::thread::spawn(move || {
+        let mut bytes = [0; 64];
+        loop {
+            match os.recv(&mut bytes) {
+                Ok(count) if &bytes[..count] == b"fixture-release" => return true,
+                Ok(_) => (),
+                Err(_) => return false,
+            }
+        }
+    });
+    let (code, report, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            linked.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    let observed = receiver.join().unwrap();
+    assert_eq!(code, 0, "{report} {error}");
+    let stdout = h
+        .root
+        .join(report["managed_process_original"]["path"].as_str().unwrap())
+        .join("stdout");
+    let receipt = json(&fs::read(stdout).unwrap()).unwrap();
+    assert_eq!(receipt["accepted"], true, "{receipt}");
+    assert_eq!(receipt["socket"], value!(path));
+    assert_eq!(receipt["activation_root"], value!(h.root));
+    assert_eq!(receipt["round_completion"], "not-established");
+    assert!(
+        observed,
+        "the actual coordinator socket must receive the nested hint"
+    );
+    assert!(!linked.join(".chrono-harness/state/s").exists());
+}
+
+#[test]
+#[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_competitor_requests_the_resident_executor_without_a_parallel_round() {
     if !chrono_git_boundary::isolated_git() {
         return;
