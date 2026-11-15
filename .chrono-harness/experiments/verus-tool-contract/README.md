@@ -95,6 +95,8 @@ crate 别名。上游逐项翻译器已经接受 `ExternCrate`，语句翻译器
 `bootstrap-verus-source-regression.json`，只执行这个目标的完整库存，保持单测试线程；
 每个证明仍用两个线程及原严格选项。原 Cargo 配置负责已构建工具、同源 vstd 与 Z3，
 不另造启动器、测试框架或下载路径。
+严格选项由上游测试宏传递；两线程参数通过其现有 `VERUS_EXTRA_ARGS` 接口传给
+验证器，避免交给只接受固定白名单的测试宏参数解析器。
 
 先只加入补丁中的测试文件，沿该入口核原工具的预期失败，再应用编译器 hunk，
 沿原 `investigate.verus-source.bootstrap` 构建并复验同一库存及真实完整根。

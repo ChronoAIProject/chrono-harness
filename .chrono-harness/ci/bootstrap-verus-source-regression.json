@@ -22,7 +22,8 @@
   "report_path": ".chrono-harness/state/verus-source-regression.json",
   "rust_incremental": true,
   "environment": {
-    "RUSTC_BOOTSTRAP": "1"
+    "RUSTC_BOOTSTRAP": "1",
+    "VERUS_EXTRA_ARGS": "--num-threads 2"
   },
   "host_environment": {
     "CARGO_HOME": ".chrono-harness/cache/bootstrap-owner-tooling/cargo",
