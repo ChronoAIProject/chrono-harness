@@ -1,12 +1,13 @@
 diff --git a/source/rust_verify_test/tests/fndef_types.rs b/source/rust_verify_test/tests/fndef_types.rs
 --- a/source/rust_verify_test/tests/fndef_types.rs
 +++ b/source/rust_verify_test/tests/fndef_types.rs
-@@ -1419,27 +1419,31 @@
+@@ -1419,27 +1419,33 @@
  }
 
  test_verify_one_file! {
 -    #[test] unit_struct_as_fn_not_supported verus_code! {
 +    #[test] unit_struct_as_fn verus_code! {
++        use vstd::prelude::*;
          struct A();
 
          fn test()
@@ -26,6 +27,7 @@ diff --git a/source/rust_verify_test/tests/fndef_types.rs b/source/rust_verify_t
 +
 +test_verify_one_file! {
 +    #[test] unit_struct_as_fn_self_ctor verus_code! {
++        use vstd::prelude::*;
          struct A();
 
          impl A {
