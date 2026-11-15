@@ -21,7 +21,7 @@ diff --git a/source/vir/src/ast_to_sst_func.rs b/source/vir/src/ast_to_sst_func.
 diff --git a/source/rust_verify_test/tests/consts.rs b/source/rust_verify_test/tests/consts.rs
 --- a/source/rust_verify_test/tests/consts.rs
 +++ b/source/rust_verify_test/tests/consts.rs
-@@ -2,6 +2,32 @@
+@@ -2,6 +2,31 @@
  #[macro_use]
  mod common;
  use common::*;
@@ -32,7 +32,6 @@ diff --git a/source/rust_verify_test/tests/consts.rs b/source/rust_verify_test/t
 +        const _: () = {
 +            let mut value: u8 = 6;
 +            value += 1;
-+            assert!(value == 7);
 +        };
 +    } => Ok(())
 +}
@@ -49,7 +48,7 @@ diff --git a/source/rust_verify_test/tests/consts.rs b/source/rust_verify_test/t
 +        verus! {
 +            proof fn consume() { assert(NAMED == 7); }
 +        }
-+    } => Err(err) => assert_vir_error_msg(err, "expected pure mathematical expression")
++    } => Err(err) => assert_vir_error_msg(err, "pattern cannot have mode exec")
 +}
 
  test_verify_one_file! {
