@@ -2,7 +2,7 @@ diff --git a/source/rust_verify_test/tests/serde_unexpected.rs b/source/rust_ver
 new file mode 100644
 --- /dev/null
 +++ b/source/rust_verify_test/tests/serde_unexpected.rs
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,167 @@
 +#![feature(rustc_private)]
 +#[macro_use]
 +mod common;
@@ -16,17 +16,25 @@ new file mode 100644
 +
 +        fn scalars(flag: bool, unsigned: u64, signed: i64, character: char, float: f64) {
 +            let value = Unexpected::Bool(flag);
-+            assert(value is Bool);
-+            assert(value->Bool_0 == flag);
++            match value {
++                Unexpected::Bool(actual) => assert(actual == flag),
++                _ => assert(false),
++            }
 +            let value = Unexpected::Unsigned(unsigned);
-+            assert(value is Unsigned);
-+            assert(value->Unsigned_0 == unsigned);
++            match value {
++                Unexpected::Unsigned(actual) => assert(actual == unsigned),
++                _ => assert(false),
++            }
 +            let value = Unexpected::Signed(signed);
-+            assert(value is Signed);
-+            assert(value->Signed_0 == signed);
++            match value {
++                Unexpected::Signed(actual) => assert(actual == signed),
++                _ => assert(false),
++            }
 +            let value = Unexpected::Char(character);
-+            assert(value is Char);
-+            assert(value->Char_0 == character);
++            match value {
++                Unexpected::Char(actual) => assert(actual == character),
++                _ => assert(false),
++            }
 +            let value = Unexpected::Float(float);
 +            assert(value is Float);
 +        }
@@ -40,19 +48,28 @@ new file mode 100644
 +        use serde::de::Unexpected;
 +
 +        fn text<'a>(input: &'a str) -> (result: Unexpected<'a>)
-+            ensures result is Str, result->Str_0@ == input@,
++            ensures match result {
++                Unexpected::Str(actual) => actual@ == input@,
++                _ => false,
++            },
 +        {
 +            Unexpected::Str(input)
 +        }
 +
 +        fn other<'a>(input: &'a str) -> (result: Unexpected<'a>)
-+            ensures result is Other, result->Other_0@ == input@,
++            ensures match result {
++                Unexpected::Other(actual) => actual@ == input@,
++                _ => false,
++            },
 +        {
 +            Unexpected::Other(input)
 +        }
 +
 +        fn bytes<'a>(input: &'a [u8]) -> (result: Unexpected<'a>)
-+            ensures result is Bytes, result->Bytes_0@ == input@,
++            ensures match result {
++                Unexpected::Bytes(actual) => actual@ == input@,
++                _ => false,
++            },
 +        {
 +            Unexpected::Bytes(input)
 +        }
@@ -104,7 +121,10 @@ new file mode 100644
 +
 +        fn wrong() {
 +            let value = Unexpected::Unsigned(42);
-+            assert(value->Unsigned_0 == 43); // FAILS
++            match value {
++                Unexpected::Unsigned(actual) => assert(actual == 43), // FAILS
++                _ => {},
++            }
 +        }
 +    } => Err(err) => {
 +        assert!(err.errors[0].message.contains("assertion failed"));
@@ -120,7 +140,10 @@ new file mode 100644
 +
 +        fn wrong() {
 +            let value = Unexpected::Str("λ\0中");
-+            assert(value->Str_0@ == "λ"@); // FAILS
++            match value {
++                Unexpected::Str(actual) => assert(actual@ == "λ"@), // FAILS
++                _ => {},
++            }
 +        }
 +    } => Err(err) => {
 +        assert!(err.errors[0].message.contains("assertion failed"));
@@ -137,7 +160,10 @@ new file mode 100644
 +        fn wrong() {
 +            let bytes = [0u8, 255u8, 1u8];
 +            let value = Unexpected::Bytes(&bytes);
-+            assert(value->Bytes_0@ == seq![0u8, 255u8]); // FAILS
++            match value {
++                Unexpected::Bytes(actual) => assert(actual@ == seq![0u8, 255u8]), // FAILS
++                _ => {},
++            }
 +        }
 +    } => Err(err) => {
 +        assert!(err.errors[0].message.contains("assertion failed"));
