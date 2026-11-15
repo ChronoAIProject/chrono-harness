@@ -259,6 +259,7 @@ pub(super) struct Gate {
     paths: BTreeMap<String, PathBuf>,
     exclusive_paths: BTreeSet<String>,
     maintenance: bool,
+    partial_membership: bool,
     retiring_report: Option<String>,
     retained_dependencies: BTreeSet<String>,
     unvisited_relations: BTreeSet<String>,
@@ -299,6 +300,140 @@ impl Gate {
 }
 #[cfg(not(verus_keep_ghost))]
 impl Inventory {
+    /// Keep the consumer excluded, visiting only one member at a time. Install
+    /// every requested member before releasing obsolete ones; failures retain
+    /// conservative protection. No file descriptor set scales with membership.
+    pub(super) fn partition_reference_paths(
+        &self,
+        consumer: &str,
+        paths: &[String],
+    ) -> Result<(), String> {
+        if consumer.is_empty() || consumer.len() > 256 {
+            return Err("retention consumer capacity/identity".into());
+        }
+        for path in paths {
+            crate::relative_path(path)?;
+        }
+        let directory = self.role_directory(consumer)?;
+        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        let lease = DirectoryLease::acquire_local(&directory, true, Some(Duration::from_secs(5)))?
+            .ok_or("retention consumer metadata is busy")?;
+        self.stable(&lease)?;
+        let mut role = self.read_role(consumer)?.unwrap_or(Role {
+            observation: None,
+            schema: "chrono-retained-role/v2".into(),
+            directory_identity: identity(&directory)?,
+            role: consumer.into(),
+            ids: vec![],
+            attached: BTreeSet::new(),
+            metadata_expires: now()?.saturating_add(self.policy.metadata_keep_seconds),
+            summaries: vec![],
+        });
+        let mut requested = BTreeMap::new();
+        let mut next = BTreeSet::new();
+        // Resolve and validate the complete explicit input before changing any
+        // membership. Under the held role, path/object gates must never wait:
+        // ordinary publishers acquire paths before the same consumer role.
+        for path in paths {
+            let gate =
+                self.addressed_gate_scope(&[], &[path.clone()], &[], None, false, false, true)?;
+            let ledger = self.load(&gate)?;
+            let output = ledger.outputs.iter().find(|output| {
+                output.path == *path
+                    || (output.tree && path.starts_with(&format!("{}/", output.path)))
+            });
+            if output.is_some_and(|output| output.phase == "disposing") {
+                return Err("referenced original disposal has started".into());
+            }
+            let id = output.map(|output| output.id.clone());
+            next.extend(id.iter().cloned());
+            requested.insert(path.clone(), id);
+        }
+        let related: BTreeSet<_> = role
+            .ids
+            .iter()
+            .chain(role.attached.iter())
+            .chain(next.iter())
+            .collect();
+        if related.len() > self.policy.max_related_outputs {
+            return Err("related retention graph capacity; originals preserved".into());
+        }
+        if role.observation.is_some() {
+            if role.ids.iter().cloned().collect::<BTreeSet<_>>() != next {
+                return Err("observation membership requires its domain transition".into());
+            }
+            return self.stable(&lease);
+        }
+        for (path, expected) in requested {
+            let gate =
+                self.addressed_gate_scope(&[], &[path.clone()], &[], None, false, false, true)?;
+            let ledger = self.load(&gate)?;
+            let actual = ledger
+                .outputs
+                .iter()
+                .find(|output| {
+                    output.path == path
+                        || (output.tree && path.starts_with(&format!("{}/", output.path)))
+                })
+                .map(|output| output.id.clone());
+            if actual != expected {
+                return Err("referenced original address changed; originals preserved".into());
+            }
+            if let Some(id) = expected {
+                self.save_membership_component(gate, &lease, &mut role, Some(&id))?;
+            }
+        }
+        let obsolete: BTreeSet<_> = role
+            .ids
+            .iter()
+            .chain(role.attached.iter())
+            .filter(|id| !next.contains(*id))
+            .cloned()
+            .collect();
+        for id in obsolete {
+            let gate = self.addressed_gate_scope(&[id], &[], &[], None, false, false, true)?;
+            self.save_membership_component(gate, &lease, &mut role, None)?;
+        }
+        let ordered: Vec<_> = next.into_iter().collect();
+        self.stable(&lease)?;
+        if role.ids != ordered {
+            role.ids = ordered;
+            self.write_metadata(&directory.join("record.json"), &role)?;
+        }
+        self.stable(&lease)
+    }
+
+    fn save_membership_component(
+        &self,
+        mut gate: Gate,
+        lease: &DirectoryLease,
+        role: &mut Role,
+        keep: Option<&str>,
+    ) -> Result<(), String> {
+        self.stable(lease)?;
+        // Reuse the existing component projection and conservative inbound /
+        // root / obsolete-backreference publication order. Outward dependencies
+        // and all members outside this exclusion stay unchanged.
+        gate.partial_membership = true;
+        gate.roles
+            .borrow_mut()
+            .insert(role.role.clone(), role.clone());
+        let mut ledger = self.load(&gate)?;
+        if let Some(id) = keep {
+            self.reference_locked(&mut ledger, &role.role, &[id.into()])?;
+        } else {
+            ledger.roots.remove(&role.role);
+        }
+        self.save(&ledger, &gate)?;
+        *role = gate
+            .roles
+            .borrow()
+            .get(&role.role)
+            .ok_or("consumer component disappeared")?
+            .clone();
+        self.stable(lease)
+    }
+
     /// Reserve one request under only this object's existing consumer metadata.
     /// Membership protects the actual pending output, including unknown tasks.
     pub fn reserve_observation(
@@ -1714,6 +1849,7 @@ impl Inventory {
             paths: path_dirs,
             exclusive_paths,
             maintenance,
+            partial_membership: maintenance,
             retiring_report,
             retained_dependencies,
             unvisited_relations,
@@ -1785,7 +1921,7 @@ impl Inventory {
             let ids: Vec<_> = role
                 .ids
                 .iter()
-                .filter(|id| !gate.maintenance || objects.contains_key(*id))
+                .filter(|id| !gate.partial_membership || objects.contains_key(*id))
                 .cloned()
                 .collect();
             if ids.is_empty() {
@@ -2021,7 +2157,7 @@ impl Inventory {
 
         for role in roles.values_mut() {
             let mut next = ledger.roots.get(&role.role).cloned().unwrap_or_default();
-            if gate.maintenance {
+            if gate.partial_membership {
                 // The ledger contains only this reference component. Preserve
                 // every unvisited member and the original membership order.
                 let selected = next;
@@ -2082,7 +2218,7 @@ impl Inventory {
             )?;
         }
         for role in roles.values_mut() {
-            if gate.maintenance {
+            if gate.partial_membership {
                 // Unvisited attachments may be conservative protection from an
                 // interrupted transition. Only reconcile the excluded members.
                 role.attached.retain(|id| !objects.contains_key(id));
