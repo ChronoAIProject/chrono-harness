@@ -16,6 +16,301 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 
 verus! {
+proof fn input_fixture_prefix_member(args: Seq<String>, kind: policy::InputKind, pairs: int, index: int)
+    requires policy::input_prefix_valid(args, kind, pairs), 0 <= index < pairs,
+    ensures policy::input_key_allowed(kind, args[1 + 2 * index]@),
+{
+}
+
+proof fn input_fixture_prefix_distinct(args: Seq<String>, kind: policy::InputKind, pairs: int,
+    left: int, right: int)
+    requires policy::input_prefix_valid(args, kind, pairs), 0 <= left < right < pairs,
+    ensures args[1 + 2 * left]@ != args[1 + 2 * right]@,
+{
+    assert(policy::input_key_allowed(kind, args[1 + 2 * right]@));
+}
+
+fn input_parse_error(args: &[String], expected: &str)
+    requires match policy::input_command_result(args@) {
+        Some(error) => error == expected@,
+        None => false,
+    },
+{
+    match policy::parse_input_command(args) {
+        Err(error) => {
+            let same = composition_text::equal_text(error.as_str(), expected);
+            assert(same);
+            if !same { panic!(); }
+        },
+        Ok(_) => { assert(false); panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn input_commands_keep_exact_modes_and_first_option_error() {
+    proof {
+        reveal(policy::input_command_result);
+        reveal(policy::input_kind);
+        reveal(policy::input_prefix_valid);
+        reveal(policy::input_key_allowed);
+        reveal_strlit("capture"); reveal_strlit("compose"); reveal_strlit("pair"); reveal_strlit("Capture");
+        reveal_strlit("--help"); reveal_strlit("--version"); reveal_strlit("--base");
+        reveal_strlit("--host-root"); reveal_strlit("--config"); reveal_strlit("--commit");
+        reveal_strlit("--output"); reveal_strlit("--unit"); reveal_strlit("--candidate");
+        reveal_strlit("--manifest"); reveal_strlit("--receipt"); reveal_strlit("--unknown");
+        reveal_strlit("--base-snapshot"); reveal_strlit("--candidate-snapshot");
+        reveal_strlit("--base-root"); reveal_strlit("--candidate-root");
+        assert("capture"@.len() == 7); assert("compose"@.len() == 7); assert("pair"@.len() == 4);
+        assert("--version"@.len() == 9); assert("--help"@.len() == 6);
+        assert("capture"@[0] == 'c'); assert("compose"@[0] == 'c');
+        assert(policy::input_kind("--version"@).is_none());
+        assert("Capture"@[0] == 'C'); assert("Capture"@.len() == 7);
+        assert(policy::input_kind("Capture"@).is_none());
+        assert("--host-root"@.len() == 11); assert("--config"@.len() == 8);
+        assert("--commit"@.len() == 8); assert("--output"@.len() == 8);
+        assert("--config"@[2] == 'c'); assert("--output"@[2] == 'o');
+        assert("--unit"@.len() == 6); assert("--unit"@[2] == 'u');
+        assert("--base"@.len() == 6); assert("--base"@[2] == 'b');
+        assert("--base-root"@.len() == 11); assert("--candidate-root"@.len() == 16);
+        assert("--base-snapshot"@.len() == 15); assert("--candidate-snapshot"@.len() == 20);
+        reveal_strlit("capture\0"); assert("capture\0"@.len() == 8);
+        reveal_strlit("--output\0"); assert("--output\0"@.len() == 9);
+        assert(!policy::input_key_allowed(policy::InputKind::Capture, "--base"@));
+        assert(!policy::input_key_allowed(policy::InputKind::Capture, "--output\0"@));
+    }
+    input_parse_error(&[], "E_USAGE: capture or pair required");
+    input_parse_error(&["--version".to_string(), "x".to_string()], "E_USAGE: unknown command");
+    input_parse_error(&["--help".to_string(), "x".to_string()], "E_USAGE: unknown command");
+    input_parse_error(&["Capture".to_string()], "E_USAGE: unknown command");
+    input_parse_error(&["capture\0".to_string()], "E_USAGE: unknown command");
+    let args = ["capture".to_string(), "--base".to_string(), "x".to_string()];
+    proof {
+        if policy::input_prefix_valid(args@, policy::InputKind::Capture, 1) {
+            input_fixture_prefix_member(args@, policy::InputKind::Capture, 1, 0);
+        }
+        assert(!policy::input_prefix_valid(args@, policy::InputKind::Capture, 1));
+    }
+    input_parse_error(&args, "E_USAGE: unknown or duplicate option");
+    input_parse_error(&["capture".to_string(), "--base".to_string()],
+        "E_USAGE: option needs a value");
+    let args = ["capture".to_string(), "--output\0".to_string(), "x".to_string()];
+    proof {
+        if policy::input_prefix_valid(args@, policy::InputKind::Capture, 1) {
+            input_fixture_prefix_member(args@, policy::InputKind::Capture, 1, 0);
+        }
+        assert(!policy::input_prefix_valid(args@, policy::InputKind::Capture, 1));
+    }
+    input_parse_error(&args, "E_USAGE: unknown or duplicate option");
+    let args = ["pair".to_string(), "--config".to_string(), "x".to_string(), "--unknown".to_string()];
+    proof {
+        if policy::input_prefix_valid(args@, policy::InputKind::Pair, 1) {
+            input_fixture_prefix_member(args@, policy::InputKind::Pair, 1, 0);
+        }
+        assert(!policy::input_prefix_valid(args@, policy::InputKind::Pair, 1));
+    }
+    input_parse_error(&args, "E_USAGE: unknown or duplicate option");
+    let args = ["compose".to_string(), "--output".to_string(), "".to_string(),
+        "--output".to_string(), "second".to_string(), "--unknown".to_string()];
+    proof {
+        assert("capture"@[1] == 'a'); assert("compose"@[1] == 'o');
+        if policy::input_prefix_valid(args@, policy::InputKind::Compose, 2) {
+            input_fixture_prefix_distinct(args@, policy::InputKind::Compose, 2, 0, 1);
+        }
+        assert(!policy::input_prefix_valid(args@, policy::InputKind::Compose, 2));
+    }
+    input_parse_error(&args, "E_USAGE: unknown or duplicate option");
+}
+
+fn input_valid_command(args: &[String], kind: policy::InputKind) -> (command: policy::InputCommand<'_>)
+    requires args.len() > 0, args.len() % 2 == 1,
+        policy::input_kind(args@[0]@) == Some(kind),
+        policy::input_prefix_valid(args@, kind, (args.len() - 1) / 2),
+    ensures policy::input_command_valid(command), command.arguments@ == args@, command.kind == kind,
+{
+    proof {
+        reveal_strlit("capture"); reveal_strlit("compose"); reveal_strlit("pair");
+        reveal_strlit("--version"); reveal_strlit("--help");
+        reveal(policy::input_command_result);
+        reveal(policy::input_kind);
+        assert("capture"@.len() == 7); assert("compose"@.len() == 7); assert("pair"@.len() == 4);
+        assert("--version"@.len() == 9); assert("--help"@.len() == 6);
+        assert("capture"@[0] == 'c'); assert("compose"@[0] == 'c');
+        assert(policy::input_kind("--version"@).is_none());
+        assert(policy::input_kind("--help"@).is_none());
+    }
+    match policy::parse_input_command(args) {
+        Ok(policy::InputAction::Command(command)) => command,
+        _ => { assert(false); panic!(); },
+    }
+}
+
+fn input_value(command: &policy::InputCommand, key: &str, expected: &str, index: usize)
+    requires policy::input_command_valid(*command),
+        index < (command.arguments@.len() - 1) / 2,
+        command.arguments@[1 + 2 * index]@ == key@,
+        command.arguments@[2 + 2 * index]@ == expected@,
+{
+    match command.required(key) {
+        Ok(value) => {
+            let same = composition_text::equal_text(value, expected);
+            assert(same);
+            if !same { panic!(); }
+        },
+        Err(_) => { assert(false); panic!(); },
+    }
+}
+
+fn input_missing(command: &policy::InputCommand, key: &str)
+    requires policy::input_command_valid(*command),
+        forall|i: int| 0 <= i < (command.arguments@.len() - 1) / 2
+            ==> (#[trigger] command.arguments@[1 + 2 * i])@ != key@,
+{
+    let absent = command.option(key).is_none();
+    assert(absent);
+    if !absent { panic!(); }
+    match command.required(key) {
+        Err(missing) => {
+            let same = composition_text::equal_text(missing.key, key);
+            assert(same);
+            if !same { panic!(); }
+        },
+        Ok(_) => { assert(false); panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn input_commands_preserve_all_values_and_missing_keys() {
+    use policy::InputKind;
+    proof {
+        reveal(policy::input_prefix_valid);
+        reveal(policy::input_key_allowed);
+        reveal_strlit("capture"); reveal_strlit("compose"); reveal_strlit("pair");
+        assert("capture"@.len() == 7); assert("compose"@.len() == 7); assert("pair"@.len() == 4);
+        assert("capture"@[1] == 'a'); assert("compose"@[1] == 'o');
+        reveal_strlit("--help"); reveal_strlit("--version");
+        reveal_strlit("--host-root"); reveal_strlit("--config"); reveal_strlit("--commit");
+        reveal_strlit("--output"); reveal_strlit("--unit"); reveal_strlit("--base");
+        reveal_strlit("--candidate"); reveal_strlit("--manifest"); reveal_strlit("--receipt");
+        reveal_strlit("--base-snapshot"); reveal_strlit("--candidate-snapshot");
+        reveal_strlit("--base-root"); reveal_strlit("--candidate-root"); reveal_strlit("缺键\0\n");
+        assert("--host-root"@.len() == 11); assert("--host-root"@[2] == 'h'); assert("--host-root"@[4] == 's');
+        assert("--config"@.len() == 8); assert("--config"@[2] == 'c'); assert("--config"@[4] == 'n');
+        assert("--commit"@.len() == 8); assert("--commit"@[2] == 'c'); assert("--commit"@[4] == 'm');
+        assert("--output"@.len() == 8); assert("--output"@[2] == 'o'); assert("--output"@[4] == 't');
+        assert("--unit"@.len() == 6); assert("--unit"@[2] == 'u'); assert("--unit"@[4] == 'i');
+        assert("--base"@.len() == 6); assert("--base"@[2] == 'b'); assert("--base"@[4] == 's');
+        assert("--candidate"@.len() == 11); assert("--candidate"@[2] == 'c'); assert("--candidate"@[4] == 'n');
+        assert("--manifest"@.len() == 10); assert("--manifest"@[2] == 'm'); assert("--manifest"@[4] == 'n');
+        assert("--receipt"@.len() == 9); assert("--receipt"@[2] == 'r'); assert("--receipt"@[4] == 'c');
+        assert("--base-snapshot"@.len() == 15); assert("--base-snapshot"@[2] == 'b'); assert("--base-snapshot"@[4] == 's');
+        assert("--candidate-snapshot"@.len() == 20); assert("--candidate-snapshot"@[2] == 'c'); assert("--candidate-snapshot"@[4] == 'n');
+        assert("--base-root"@.len() == 11); assert("--base-root"@[2] == 'b'); assert("--base-root"@[4] == 's');
+        assert("--candidate-root"@.len() == 16); assert("--candidate-root"@[2] == 'c'); assert("--candidate-root"@[4] == 'n');
+        assert("缺键\0\n"@.len() == 4);
+
+    }
+    let args = ["capture".to_string(), "--unit".to_string(), "--output".to_string(),
+        "--commit".to_string(), "原值\0\n".to_string(), "--output".to_string(), "".to_string(),
+        "--config".to_string(), "配置".to_string(), "--host-root".to_string(), "根".to_string()];
+    let args: &[String] = &args;
+    proof {
+        assert(args@[1]@ == "--unit"@);
+        assert(args@[3]@ == "--commit"@);
+        assert(args@[5]@ == "--output"@);
+        assert(args@[7]@ == "--config"@);
+        assert(args@[9]@ == "--host-root"@);
+        assert forall|i: int| 0 <= i < 5 implies
+            policy::input_key_allowed(InputKind::Capture, (#[trigger] args@[1 + 2 * i])@)
+                && forall|j: int| 0 <= j < i ==> (#[trigger] args@[1 + 2 * j])@ != args@[1 + 2 * i]@ by {
+            assert(i == 0 || i == 1 || i == 2 || i == 3 || i == 4);
+            assert forall|j: int| 0 <= j < i implies (#[trigger] args@[1 + 2 * j])@ != args@[1 + 2 * i]@ by {
+                assert(j == 0 || j == 1 || j == 2 || j == 3);
+            }
+        }
+    }
+    let command = input_valid_command(args, InputKind::Capture);
+    input_value(&command, "--unit", "--output", 0);
+    input_value(&command, "--commit", "原值\0\n", 1);
+    input_value(&command, "--output", "", 2);
+    input_value(&command, "--config", "配置", 3);
+    input_value(&command, "--host-root", "根", 4);
+    input_missing(&command, "缺键\0\n");
+    let args = ["compose".to_string(), "--receipt".to_string(), "r".to_string(),
+        "--manifest".to_string(), "m".to_string(), "--candidate".to_string(), "c".to_string(),
+        "--base".to_string(), "b".to_string(), "--output".to_string(), "o".to_string(),
+        "--config".to_string(), "p".to_string(), "--host-root".to_string(), "h".to_string()];
+    let args: &[String] = &args;
+    proof {
+        assert forall|i: int| 0 <= i < 7 implies
+            policy::input_key_allowed(InputKind::Compose, (#[trigger] args@[1 + 2 * i])@)
+                && forall|j: int| 0 <= j < i ==> (#[trigger] args@[1 + 2 * j])@ != args@[1 + 2 * i]@ by {
+            assert(i == 0 || i == 1 || i == 2 || i == 3 || i == 4 || i == 5 || i == 6);
+            assert forall|j: int| 0 <= j < i implies (#[trigger] args@[1 + 2 * j])@ != args@[1 + 2 * i]@ by {
+                assert(j == 0 || j == 1 || j == 2 || j == 3 || j == 4 || j == 5);
+            }
+        }
+    }
+    let command = input_valid_command(args, InputKind::Compose);
+    input_value(&command, "--receipt", "r", 0);
+    input_value(&command, "--manifest", "m", 1);
+    input_value(&command, "--candidate", "c", 2);
+    input_value(&command, "--base", "b", 3);
+    input_value(&command, "--output", "o", 4);
+    input_value(&command, "--config", "p", 5);
+    input_value(&command, "--host-root", "h", 6);
+    input_missing(&command, "--unit");
+    let args = ["pair".to_string(), "--candidate-root".to_string(), "cr".to_string(),
+        "--base-root".to_string(), "br".to_string(), "--output".to_string(), "o".to_string(),
+        "--candidate-snapshot".to_string(), "cs".to_string(), "--base-snapshot".to_string(), "bs".to_string(),
+        "--host-root".to_string(), "h".to_string()];
+    let args: &[String] = &args;
+    proof {
+        assert forall|i: int| 0 <= i < 6 implies
+            policy::input_key_allowed(InputKind::Pair, (#[trigger] args@[1 + 2 * i])@)
+                && forall|j: int| 0 <= j < i ==> (#[trigger] args@[1 + 2 * j])@ != args@[1 + 2 * i]@ by {
+            assert(i == 0 || i == 1 || i == 2 || i == 3 || i == 4 || i == 5);
+            assert forall|j: int| 0 <= j < i implies (#[trigger] args@[1 + 2 * j])@ != args@[1 + 2 * i]@ by {
+                assert(j == 0 || j == 1 || j == 2 || j == 3 || j == 4);
+            }
+        }
+    }
+    let command = input_valid_command(args, InputKind::Pair);
+    input_value(&command, "--candidate-root", "cr", 0);
+    input_value(&command, "--base-root", "br", 1);
+    input_value(&command, "--output", "o", 2);
+    input_value(&command, "--candidate-snapshot", "cs", 3);
+    input_value(&command, "--base-snapshot", "bs", 4);
+    input_value(&command, "--host-root", "h", 5);
+    input_missing(&command, "--config");
+    let args = ["pair".to_string()];
+    let command = input_valid_command(&args, InputKind::Pair);
+    input_missing(&command, "--host-root");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn input_commands_accept_only_single_argument_help_and_version() {
+    proof {
+        reveal(policy::input_command_result);
+        reveal(policy::input_kind);
+        reveal_strlit("capture"); reveal_strlit("compose"); reveal_strlit("pair");
+        reveal_strlit("--version"); reveal_strlit("--help");
+        assert("capture"@.len() == 7); assert("compose"@.len() == 7); assert("pair"@.len() == 4);
+        assert("--version"@.len() == 9); assert("--help"@.len() == 6);
+        assert("capture"@[0] == 'c'); assert("compose"@[0] == 'c');
+        assert(policy::input_kind("--version"@).is_none());
+        assert(policy::input_kind("--help"@).is_none());
+    }
+    let args = ["--version".to_string()];
+    assert(args@[0]@ == "--version"@);
+    let version = matches!(policy::parse_input_command(&args), Ok(policy::InputAction::Version));
+    assert(version);
+    if !version { panic!(); }
+    let args = ["--help".to_string()];
+    let help = matches!(policy::parse_input_command(&args), Ok(policy::InputAction::Help));
+    assert(help);
+    if !help { panic!(); }
+}
+
 fn composition_result(result: Result<(), String>, success: bool, expected: &str)
     requires result.is_ok() == success,
         match result { Err(error) => error@ == expected@, _ => true, },
