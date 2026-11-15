@@ -1,0 +1,104 @@
+diff --git a/source/rust_verify_test/tests/serde_deserialization.rs b/source/rust_verify_test/tests/serde_deserialization.rs
+--- a/source/rust_verify_test/tests/serde_deserialization.rs
++++ b/source/rust_verify_test/tests/serde_deserialization.rs
+@@ -297,3 +297,100 @@
+         assert_one_fails(err);
+     }
+ }
++
++test_verify_one_file_with_options! {
++    #[test] option_slots_prove_each_back_edge_fills_a_new_slot
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        fn fill() {
++            let mut first: Option<u64> = None;
++            let mut second: Option<u64> = None;
++            loop {
++                if first.is_none() { first = Some(7); continue; }
++                if second.is_none() { second = Some(11); continue; }
++                break;
++            }
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_closed_real_derives_prove_termination
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        #[derive(serde::Deserialize)]
++        #[serde(deny_unknown_fields)]
++        struct IndexFlag { path: String, tag: String }
++        #[derive(serde::Deserialize)]
++        #[serde(tag = "kind", deny_unknown_fields)]
++        enum Scope { Unit { unit: String }, Collect { manifest: String } }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] option_slot_repeated_assignment_does_not_prove_termination
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        fn wrong() {
++            let mut slot: Option<u64> = None;
++            loop { slot = Some(7); }
++        }
++    } => Err(err) => assert_vir_error_msg(err, "decreases not satisfied")
++}
++
++test_verify_one_file_with_options! {
++    #[test] option_slot_reset_does_not_prove_termination
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        fn wrong() {
++            let mut slot: Option<u64> = Some(7);
++            loop { slot = None; }
++        }
++    } => Err(err) => assert_vir_error_msg(err, "decreases not satisfied")
++}
++
++test_verify_one_file_with_options! {
++    #[test] option_slot_nonprogress_branch_does_not_prove_termination
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        fn wrong(choose: bool) {
++            let mut slot: Option<u64> = None;
++            loop {
++                if choose {
++                    if slot.is_some() { break; }
++                    slot = Some(7);
++                }
++            }
++        }
++    } => Err(err) => assert_vir_error_msg(err, "decreases not satisfied")
++}
++
++test_verify_one_file_with_options! {
++    #[test] option_slot_declared_inside_loop_is_not_a_progress_measure
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        fn wrong() {
++            loop {
++                let mut slot: Option<u64> = None;
++                slot = Some(7);
++            }
++        }
++    } => Err(err) => assert_vir_error_msg(err, "loop must have a `decreases` clause")
++}
++
++test_verify_one_file_with_options! {
++    #[test] option_slot_inference_does_not_replace_explicit_decreases
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        fn wrong() {
++            let mut slot: Option<u64> = None;
++            loop
++                decreases 0,
++            {
++                if slot.is_some() { break; }
++                slot = Some(7);
++            }
++        }
++    } => Err(err) => assert_vir_error_msg(err, "decreases not satisfied")
++}
++
