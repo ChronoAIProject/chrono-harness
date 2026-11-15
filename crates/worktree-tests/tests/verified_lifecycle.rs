@@ -279,6 +279,12 @@ fn terminal_cache_results_preserve_completion_and_actual_removal_priority() {
         reveal_strlit("preserved"); reveal_strlit("");
         reveal_strlit("reusable-source-preserved");
         reveal_strlit("expired-checkout-verified-absent-source-branches-retained");
+        assert("active"@.len() != "terminal"@.len());
+        assert("failed"@.len() != "cleaned"@.len());
+        assert("preserved"@.len() != "verified-absent"@.len());
+        assert("preserved"@.len() != "already-absent"@.len());
+        assert("reusable-source-preserved"@.len()
+            != "expired-checkout-verified-absent-source-branches-retained"@.len());
     }
     let terminal = policy::observed_cleanup_result(false, "terminal",
         Some("reusable-source-preserved"), Some("cleaned"), Some("preserved"));
@@ -314,6 +320,19 @@ fn cleanup_observations_keep_missing_unknown_and_complete_text_distinct() {
         reveal_strlit("cleaned\0"); reveal_strlit("verified-absent\n");
         reveal_strlit("reusable-source-preserved\0");
         reveal_strlit("expired-checkout-verified-absent-source-branches-retained\n");
+        assert(""@.len() != "reusable-source-preserved"@.len());
+        assert(""@.len() != "expired-checkout-verified-absent-source-branches-retained"@.len());
+        assert(""@.len() != "cleaned"@.len());
+        assert(""@.len() != "verified-absent"@.len());
+        assert(""@.len() != "already-absent"@.len());
+        assert("unknown λ\0\n"@.len() != "terminal"@.len());
+        assert("terminal\0"@.len() != "terminal"@.len());
+        assert("cleaned\0"@.len() != "cleaned"@.len());
+        assert("verified-absent\n"@.len() != "verified-absent"@.len());
+        assert("verified-absent\n"@.len() != "already-absent"@.len());
+        assert("reusable-source-preserved\0"@.len() != "reusable-source-preserved"@.len());
+        assert("expired-checkout-verified-absent-source-branches-retained\n"@.len()
+            != "expired-checkout-verified-absent-source-branches-retained"@.len());
     }
     let missing = policy::observed_cleanup_result(false, "terminal", None, None, None);
     expect_cleanup_outcome(missing, false, false, Failed);
