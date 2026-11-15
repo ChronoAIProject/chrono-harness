@@ -97,8 +97,10 @@ fn report_scope_case(operation: &str, publication: Option<u8>,
     result: Result<(u8, u8), (u32, u64)>, expected: u8)
     requires expected <= 3,
         expected == 0 ==> operation@ == "maintain"@ && publication.is_none(),
-        expected == 1 ==> operation@ == "maintain"@ && publication.is_some(),
-        expected == 2 ==> operation@ != "maintain"@ && publication.is_some(),
+        expected == 1 ==> (operation@ == "maintain"@ || operation@ == "use"@
+            || operation@ == "check"@ || operation@ == "bootstrap"@) && publication.is_some(),
+        expected == 2 ==> operation@ != "maintain"@ && operation@ != "use"@
+            && operation@ != "check"@ && operation@ != "bootstrap"@ && publication.is_some(),
         expected == 3 ==> operation@ != "maintain"@ && publication.is_none(),
 {
     let outputs = |state: (u8, u8, u8), publication: u8|
@@ -154,14 +156,26 @@ fn unpublished_maintenance_calls_no_input_or_output_scope_even_on_callback_error
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn ordinary_published_activity_retains_only_its_publication_inputs() {
+fn managed_published_activity_keeps_outputs_under_the_original_domain_custody() {
+    report_scope_case("use", Some(0), Ok((17, 39)), 1);
+    report_scope_case("check", Some(127), Err((u32::MAX, u64::MAX)), 1);
+    report_scope_case("bootstrap", Some(255), Ok((255, 0)), 1);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn other_published_activity_retains_its_actual_inputs() {
     proof {
-        reveal_strlit("use"); reveal_strlit("bootstrap"); reveal_strlit("maintain");
-        assert("use"@.len() != "maintain"@.len());
-        assert("bootstrap"@.len() != "maintain"@.len());
+        reveal_strlit("finish"); reveal_strlit("migrate"); reveal_strlit("use\0");
+        reveal_strlit("maintain"); reveal_strlit("use");
+        reveal_strlit("check"); reveal_strlit("bootstrap");
+        assert("finish"@.len() == 6); assert("migrate"@.len() == 7);
+        assert("use\0"@.len() == 4); assert("maintain"@.len() == 8);
+        assert("use"@.len() == 3); assert("check"@.len() == 5);
+        assert("bootstrap"@.len() == 9);
     }
-    report_scope_case("use", Some(0), Ok((17, 39)), 2);
-    report_scope_case("bootstrap", Some(255), Err((u32::MAX, u64::MAX)), 2);
+    report_scope_case("finish", Some(0), Ok((17, 39)), 2);
+    report_scope_case("migrate", Some(255), Err((u32::MAX, u64::MAX)), 2);
+    report_scope_case("use\0", Some(127), Err((0, 0)), 2);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

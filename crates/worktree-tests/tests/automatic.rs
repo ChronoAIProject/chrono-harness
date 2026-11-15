@@ -697,7 +697,9 @@ fn ordinary_handoff_keeps_each_sealed_reports_inputs_out_of_the_callers_relation
             output.exit_code, 0,
             "an absent checkout cannot execute work"
         );
-        let report = json(output.stdout.as_bytes()).unwrap();
+        let report = json(output.stdout.as_bytes()).unwrap_or_else(|error| {
+            panic!("{error}: stdout={} stderr={}", output.stdout, output.stderr)
+        });
         assert!(report["result_handoff_error"].is_null(), "{report}");
         assert!(
             !report

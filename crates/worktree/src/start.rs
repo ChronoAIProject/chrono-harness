@@ -1,5 +1,9 @@
 #[cfg(verus_keep_ghost)]
 use super::identifiers;
+#[cfg(verus_keep_ghost)]
+use super::ordinary_admission;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_lifecycle::ordinary_admission;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
 #[cfg(not(verus_keep_ghost))]
@@ -25,7 +29,8 @@ pub open spec fn report_input_scope_result<S, T, R, E, O, P, C>(
     match selected {
         None => operation == "maintain"@ && publication.is_none() && out.0 == initial,
         Some(selected) => match publication {
-            Some(publication) => if operation == "maintain"@ {
+            Some(publication) => if operation == "maintain"@ || operation == "use"@
+                || operation == "check"@ || operation == "bootstrap"@ {
                 outputs.ensures((initial, publication), selected)
             } else {
                 inputs.ensures((initial, publication), selected)
@@ -35,7 +40,7 @@ pub open spec fn report_input_scope_result<S, T, R, E, O, P, C>(
     }
 }
 
-/// 维护只保管子输出；普通活动保管实际发布方或调用方读取的输入。
+/// 维护及托管消费由领域保护既有原件，报告只接收子输出；其余活动保管实际输入。
 pub fn select_report_input_scope<S, T, R, E, O, P, C>(
     state: S, operation: &str, publication: Option<T>, outputs: O, inputs: P, caller: C,
 ) -> (out: (S, Result<Option<R>, E>))
@@ -50,8 +55,9 @@ pub fn select_report_input_scope<S, T, R, E, O, P, C>(
     let ghost initial = state;
     let ghost original = publication;
     let maintenance = identifiers::equal_text(operation, "maintain");
+    let domain_owned = maintenance || ordinary_admission(operation);
     let selected = match publication {
-        Some(publication) => if maintenance {
+        Some(publication) => if domain_owned {
             outputs(state, publication)
         } else {
             inputs(state, publication)
@@ -70,7 +76,7 @@ pub fn select_report_input_scope<S, T, R, E, O, P, C>(
     });
     proof {
         match original {
-            Some(publication) => if maintenance {
+            Some(publication) => if domain_owned {
                 assert(outputs.ensures((initial, publication), completed));
             } else {
                 assert(inputs.ensures((initial, publication), completed));

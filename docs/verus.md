@@ -778,9 +778,11 @@ Display 与 `Option<String>` 的 Debug 编码；JSON 沿用 serde_json 的既有
 ## 生命周期报告的保管范围选择
 
 `start.rs` 的 `select_report_input_scope` 用同源 Verus 选择实际保管回调，并完整保留
-回调返回的状态、scope 或错误：`maintain` 有 publication 时只调用子输出保管；没有时
-不建立 scope。普通活动有 publication 时调用该 publication 的输入保管，否则保管
-原调用方输入。独立 Verus 预期覆盖四种组合、原 publication 身份、成功值、完整错误载荷，
+回调返回的状态、scope 或错误：`maintain` 及 `use`／`check`／`bootstrap` 有 publication
+时只调用子输出保管。维护没有 publication 时不建立 scope；其余没有 publication 的
+活动继续保管原调用方输入，其他已发布活动继续保管该 publication 的实际输入。
+托管消费复用 `ordinary_admission` 的完整名称判断；独立 Verus 预期覆盖各分支、
+原 publication 身份、成功值、完整错误载荷，
 以及空、大小写、Unicode、NUL 操作名；这些预期同时作为 Rust 测试运行。
 
 生命周期入口已在准备阶段确定协调者作为报告发布方，随后只消费这次已选 scope。
@@ -788,6 +790,11 @@ Display 与 `Option<String>` 的 Debug 编码；JSON 沿用 serde_json 的既有
 独立保管的输入重复累计到同一调用方关系集合。创建路径仍在调用方发布报告，保留原有
 协调者保护。真实容量回归沿原 512 项 fixture 分别核 main／linked 调用的合格回收与必需
 原件保留，不增加容量、预算或等待机制。
+
+普通准入的历史结果交接同样由本地址的领域引用保护，核验后由原报告自己的依赖继续
+持有输入。当前调用报告只接收新产生的原件，不因读取历史回执而累计全部历史输入。
+关系容量 8 的独立 Rust 回归保存六对原件并混入部分报告，核封存兄弟的交接、部分结果
+继续待办、实际读者的原字节及原工作状态；它不代替真实宿主恢复或完整 DELTA 验收。
 
 容量用例验证 main／linked 的边界保留行为；它们在删除重复 scope 前也能通过，
 不把它们当作原输入累计失败的复现。原回归另发现，等待指定原件跨对象回收的辅助函数
