@@ -17,6 +17,17 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn imported_policy_source_preserves_explicit_field_and_only_uses_absent_field_source() {
+    let policy = "policy";
+    let source = "source";
+    require_absence_expectation(absence_policy::imported_policy_source_commit(true, Some(policy), Some(source)) == Some(policy));
+    require_absence_expectation(absence_policy::imported_policy_source_commit(true, Some(policy), None) == Some(policy));
+    require_absence_expectation(absence_policy::imported_policy_source_commit(true, None, Some(source)).is_none());
+    require_absence_expectation(absence_policy::imported_policy_source_commit(false, None, Some(source)) == Some(source));
+    require_absence_expectation(absence_policy::imported_policy_source_commit(false, None, None).is_none());
+}
+
 fn require_capacity_fixture_exit(code: i32)
     requires code == 0,
     ensures code == 0,
@@ -272,10 +283,10 @@ impl EnrollmentOriginalsFixture {
             }
             retained.insert(POLICY.into(), config_bytes.clone());
             retained.insert(AUTO_POLICY.into(), policy_bytes.clone());
-            if fault == "config-bytes" {
+            if matches!(fault, "config-bytes" | "source-only-config-bytes") {
                 retained.insert(POLICY.into(), format!("{config_bytes}\n"));
             }
-            if fault == "policy-bytes" {
+            if matches!(fault, "policy-bytes" | "source-only-policy-bytes") {
                 retained.insert(AUTO_POLICY.into(), format!("{policy_bytes}\n"));
             }
             if fault == "registration" {
@@ -308,12 +319,27 @@ impl EnrollmentOriginalsFixture {
             .unwrap();
             let mut report = value!({
                 "schema":"chrono-worktree-report/v1","operation":"import","status":"imported",
-                "source_root":root,"policy_source_root":root,"policy_source_commit":source,
+                "source_root":root,"source_commit":source,"policy_source_root":root,"policy_source_commit":source,
                 "report_path":original,"config_path":POLICY,
                 "config_sha256":sha256(config_bytes.as_bytes())
             });
             match fault {
+                "source-only" | "source-only-config-bytes" | "source-only-policy-bytes" => {
+                    report.as_object_mut().unwrap().remove("policy_source_commit");
+                }
+                "null-policy-source" => report["policy_source_commit"] = Value::Null,
+                "invalid-policy-source" => report["policy_source_commit"] = value!(17),
+                "short-policy-source" => report["policy_source_commit"] = value!("not-an-oid"),
+                "source-only-null" | "source-only-invalid" | "source-only-short" => {
+                    report.as_object_mut().unwrap().remove("policy_source_commit");
+                    report["source_commit"] = match fault {
+                        "source-only-null" => Value::Null,
+                        "source-only-invalid" => value!(17),
+                        _ => value!("not-an-oid"),
+                    };
+                }
                 "missing-source" => {
+                    report.as_object_mut().unwrap().remove("source_commit");
                     report
                         .as_object_mut()
                         .unwrap()
@@ -460,6 +486,29 @@ fn present_import_restores_adopted_caller_policy_without_reinterpreting_target_i
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn import_uses_original_fixed_caller_source_only_when_policy_field_is_absent() {
+    if !chrono_git_boundary::isolated_git() { return; }
+    for present in [false, true] {
+        let h = EnrollmentOriginalsFixture::build(Some("source-only"));
+        if present { h.make_present(); }
+        let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+        let original = fs::read(h.root.join(&h.original)).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{report}");
+        assert_eq!(report["cleanup_failures"], value!([]), "{report}");
+        assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+        assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
+        assert_eq!(h.target.exists(), present);
+        if present {
+            assert_eq!(fs::read(h.target.join("unsaved-source.rs")).unwrap(), b"unique source\n");
+        } else {
+            assert_eq!(attention_row(&report, &h.target)["work_state"], "unknown");
+        }
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_import_after_explicit_migration_uses_the_last_target_binding() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -533,6 +582,14 @@ fn assert_import_recovery_rejects_faults(present: bool) {
     }
     for fault in [
         "missing-source",
+        "null-policy-source",
+        "invalid-policy-source",
+        "short-policy-source",
+        "source-only-null",
+        "source-only-invalid",
+        "source-only-short",
+        "source-only-config-bytes",
+        "source-only-policy-bytes",
         "schema",
         "operation",
         "status",
