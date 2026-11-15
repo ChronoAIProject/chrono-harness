@@ -5145,6 +5145,12 @@ fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
     let out = policy::record_git_index_stage(&mut stages, copied_path, "0");
     expect_index_stage_duplicate(out);
     assert(stages@ == before);
+    proof {
+        assert(stages@.contains_key(policy::GitIndexStage { path: a, stage: "3" }));
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == a.spec_bytes()
+            && key.stage.spec_bytes() == "3".spec_bytes());
+    }
     let out = policy::record_git_index_stage(&mut stages, a, "3");
     expect_index_stage_duplicate(out);
     assert(stages@ == before);
