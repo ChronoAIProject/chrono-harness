@@ -488,6 +488,32 @@ fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
             for entry in h.ledger()["entries"].as_array().unwrap() {
                 assert_eq!(entry["cleanup"]["stage"], "waiting-for-consumers");
             }
+            let state = retention_state::snapshot(&h.root);
+            let parents: Vec<_> = state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|output| output["path"].as_str())
+                .filter(|path| path.starts_with(".chrono-harness/state/worktrees/maintain-"))
+                .collect();
+            assert_eq!(
+                parents.len(),
+                1,
+                "the actual unpublished round owns its report"
+            );
+            let parent = parents[0];
+            let mut address = h
+                .root
+                .join(".chrono-harness/state/output-retention-v1/paths");
+            for component in parent.split('/') {
+                address.push(sha256(component.as_bytes()));
+            }
+            // Hold the exact report path at its publication boundary. Business
+            // must finish without acquiring this unrelated publisher's gate.
+            let publishing =
+                chrono_harness::ownership::DirectoryLease::acquire_local(&address, true, None)
+                    .unwrap()
+                    .unwrap();
             let main = h.auto("use", &["--operation", "use.consumer"]);
             let other = h.auto(
                 "use",
@@ -498,6 +524,8 @@ fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
                     "use.consumer",
                 ],
             );
+            publishing.stable().unwrap();
+            drop(publishing);
             (main, other)
         }))
     });
@@ -529,7 +557,7 @@ fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
     assert_eq!(report["owned_work_joined"], true);
     assert!(report["complete_inventory"]["receipt"]["sha256"].is_string());
     for path in [&h.root, &linked] {
-        assert!(path.join("output λ/cache").is_file());
+        assert!(path.join("output λ/data").is_file());
         assert!(path.join("payload").is_file());
     }
     drop(holders);
