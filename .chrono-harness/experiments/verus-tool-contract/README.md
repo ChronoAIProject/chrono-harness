@@ -474,7 +474,7 @@ loop_isolation_boundary、mut_refs_loops 和 exec_termination 六个完整目标
 
 完整 runner 的固定原件 `bootstrap-63898-1794763069667180000-0` 在翻译阶段报告
 54 个未显式声明模式的静态变量，涉及普通 Rust、tracing 和 thread_local 展开。
-这些都是运行时对象，不能作为规格态常量。拟仅让未经过 `verus!` 的普通 Rust
+这些都是运行时对象，不能作为规格态常量。`rust-statics-exec.patch` 仅让未经过 `verus!` 的普通 Rust
 静态变量沿现有 exec static 路径翻译；宏内的显式模式要求、初始化体、前置条件、
 模式隔离及已有 ensures 检查继续保留，不新增静态值等于初始化表达式的假设。
 
