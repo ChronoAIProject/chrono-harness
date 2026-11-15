@@ -210,18 +210,20 @@ impl Manager {
                 facts::full_oid(&commit)?;
                 Ok(commit)
             };
-        let index_commit = if r.oid(&e.path, &format!("{head}^{{tree}}"))? == index {
-            head.clone()
+        let head_tree = r.oid(&e.path, &format!("{head}^{{tree}}"))?;
+        let (index_commit, index_ref) = if head_tree == index {
+            (head.clone(), original_ref.clone())
         } else {
-            commit_tree(
+            let commit = commit_tree(
                 r,
                 &index,
                 &head,
                 b"Preserve lifecycle index before age reuse\n",
-            )?
+            )?;
+            let reference = format!("{prefix}index-{commit}");
+            self.retained_branch(r, &reference, &commit)?;
+            (commit, reference)
         };
-        let index_ref = format!("{prefix}index-{index_commit}");
-        self.retained_branch(r, &index_ref, &index_commit)?;
         let host_config = r.config.host_config.clone();
         let (regs, _) = start::registrations(r, &e.path, &head, &host_config)?;
         let tracked = start::paths(r.git(&e.path, &["ls-files", "-z"])?)?;
@@ -271,18 +273,21 @@ impl Manager {
             }
         }
         let tree = r.text(&e.path, &["write-tree"])?.trim().to_owned();
-        let saved = if r.oid(&e.path, &format!("{head}^{{tree}}"))? == tree {
-            head.clone()
+        let (saved, reference) = if head_tree == tree {
+            (head.clone(), original_ref.clone())
+        } else if index == tree {
+            (index_commit.clone(), index_ref.clone())
         } else {
-            commit_tree(
+            let commit = commit_tree(
                 r,
                 &tree,
                 &head,
                 b"Preserve source before automatic worktree age reuse\n",
-            )?
+            )?;
+            let reference = format!("{prefix}source-{commit}");
+            self.retained_branch(r, &reference, &commit)?;
+            (commit, reference)
         };
-        let reference = format!("{prefix}source-{saved}");
-        self.retained_branch(r, &reference, &saved)?;
         self.check_entry(r, e, &head, None)?;
         if saved != head {
             r.git(
