@@ -11,6 +11,7 @@
     "investigate.verus-source.z3-extract",
     "investigate.verus-source.build",
     "investigate.verus-source.version",
+    "investigate.verus-source.dependencies",
     "investigate.verus-source.vstd"
   ],
   "install": [],

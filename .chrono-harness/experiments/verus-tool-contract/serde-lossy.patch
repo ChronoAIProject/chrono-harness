@@ -1,3 +1,34 @@
+diff --git a/source/vstd/vstd.rs b/source/vstd/vstd.rs
+index f61a786..7ce640b 100644
+--- a/source/vstd/vstd.rs
++++ b/source/vstd/vstd.rs
+@@ -83,6 +83,8 @@ pub mod resource;
+ pub mod rwlock;
+ pub mod seq;
+ pub mod seq_lib;
++#[cfg(all(feature = "std", verus_keep_ghost))]
++pub mod serde_specs;
+ pub mod set;
+ pub mod set_lib;
+ pub mod shared;
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+new file mode 100644
+--- /dev/null
++++ b/source/vstd/serde_specs.rs
+@@ -0,0 +1,13 @@
++//! External interfaces used by the actual Serde 1.0.229 derive expansion.
++use crate::prelude::*;
++use std::borrow::Cow;
++
++verus! {
++
++// This opaque boundary does not promise decoded text, allocation, or ownership.
++pub assume_specification<'a>[serde::__private229::from_utf8_lossy](
++    bytes: &'a [u8],
++) -> Cow<'a, str>
++;
++
++}
 diff --git a/source/rust_verify_test/tests/serde_lossy.rs b/source/rust_verify_test/tests/serde_lossy.rs
 new file mode 100644
 --- /dev/null

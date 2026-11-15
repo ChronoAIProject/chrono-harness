@@ -5456,7 +5456,11 @@
             "vstd/Cargo.toml",
             "--",
             "--num-threads",
-            "2"
+            "2",
+            "--extern",
+            "serde=../../runner-dependencies/debug/deps/libserde-da85fb7ff7ebe563.rlib",
+            "-L",
+            "dependency=../../runner-dependencies/debug/deps"
           ]
         },
         "verus-source-bootstrap": {
