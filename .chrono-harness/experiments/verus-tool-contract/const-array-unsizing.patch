@@ -287,3 +287,16 @@
                      }
                      ExprX::Call {
                          target: CallTarget::Fun(kind, name, _, _impl_paths, attrs),
+--- a/source/vir/src/modes.rs
++++ b/source/vir/src/modes.rs
+@@ -4234,7 +4234,9 @@
+
+     if let Some(body) = &function.x.body {
+         let mut body_typing = fun_typing.push_ret_mode(ret_mode);
+-        let body_ghostness = if dual_mode_fn && ctxt.check_ghost_blocks {
++        // A dual-use const has an executable initializer even outside verus!.
++        // Disabling explicit ghost-block checks must not turn its temporaries into proof values.
++        let body_ghostness = if dual_mode_fn {
+             Ghost::Exec
+         } else {
+             Ghost::of_mode(function.x.mode)
