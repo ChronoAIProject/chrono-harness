@@ -193,7 +193,7 @@ diff --git a/source/rust_verify/src/rust_to_vir.rs b/source/rust_verify/src/rust
      crate::rust_to_vir_adts::setup_type_invariants(&mut vir, &function_stubs)
          .map_err(|e| (vec![e], None))?;
 
-+    crate::rust_to_vir_ctor::register_constructor_functions(&ctxt, &vir, &mut infos);
++    crate::rust_to_vir_ctor::register_constructor_functions(&ctxt, &vir, &mut state, &mut infos);
 +
      let mut fun_warn_configs: HashMap<Fun, Option<WarningConfig>> = HashMap::new();
      for krate in imported {
@@ -231,7 +231,7 @@ diff --git a/source/rust_verify/src/rust_to_vir_expr.rs b/source/rust_verify/src
 diff --git a/source/rust_verify/src/rust_to_vir_ctor.rs b/source/rust_verify/src/rust_to_vir_ctor.rs
 --- a/source/rust_verify/src/rust_to_vir_ctor.rs
 +++ b/source/rust_verify/src/rust_to_vir_ctor.rs
-@@ -4,6 +4,107 @@
+@@ -4,6 +4,109 @@
  use rustc_span::Span;
  use rustc_span::def_id::DefId;
  use vir::ast::VirErr;
@@ -242,6 +242,7 @@ diff --git a/source/rust_verify/src/rust_to_vir_ctor.rs b/source/rust_verify/src
 +pub(crate) fn register_constructor_functions<'tcx>(
 +    ctxt: &crate::context::Context<'tcx>,
 +    krate: &vir::ast::KrateX,
++    state: &mut crate::rust_to_vir::State,
 +    infos: &mut Vec<crate::rust_to_vir_func::FunctionOrConstInfo<'tcx>>,
 +) {
 +    use crate::rust_to_vir_func::{FunctionOrConstInfo, TranslatedFunctionInfo};
@@ -330,6 +331,7 @@ diff --git a/source/rust_verify/src/rust_to_vir_ctor.rs b/source/rust_verify/src
 +                extra_dependencies: vec![],
 +                hidden: Arc::new(vec![]),
 +            });
++            state.insert_fun_warn_config(ctxt, &function.x.name, ctor_id);
 +            infos.push(FunctionOrConstInfo::TranslatedFunction(TranslatedFunctionInfo {
 +                function_stub: function_to_stub(&function), function_full: function,
 +            }));
