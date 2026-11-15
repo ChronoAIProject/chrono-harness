@@ -119,6 +119,174 @@ fn host(nodes: usize, summaries: usize) -> tempfile::TempDir {
 fn inventory(root: &Path) -> Inventory {
     Inventory::adopted(root).unwrap().unwrap()
 }
+
+#[test]
+fn explicit_quota_observes_more_members_than_one_address_budget() {
+    if !isolated_capability_test("explicit_quota_observes_more_members_than_one_address_budget") {
+        return;
+    }
+    let d = host(32, 2);
+    let path = d.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    policy["keep_seconds"] = json!(3600);
+    policy["max_millis_per_round"] = json!(25);
+    policy["terminal_limits"] = json!({"fixture": {
+        "keep_seconds": 3600, "max_count": 2, "max_bytes": 1024,
+        "metadata_keep_seconds": 0
+    }});
+    fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(d.path());
+    let mut files = Vec::new();
+    for i in 0..40 {
+        let file = d
+            .path()
+            .join(format!(".chrono-harness/state/fixtures/quota-{i}"));
+        let output = retained_artifacts::retention::create_adopted(
+            d.path(),
+            "fixture",
+            &file,
+            false,
+            json!({}),
+        )
+        .unwrap()
+        .unwrap();
+        fs::write(&file, b"cache").unwrap();
+        output.complete(json!({"status":"passed"})).unwrap();
+        files.push(file);
+    }
+    let live = d.path().join(".chrono-harness/state/fixtures/live");
+    let publication =
+        retained_artifacts::retention::create_adopted(d.path(), "fixture", &live, false, json!({}))
+            .unwrap()
+            .unwrap();
+    fs::write(&live, b"active producer").unwrap();
+    let round = owner.maintain_explicit().unwrap();
+    assert_eq!(
+        round["terminal_quotas"]["fixture"]["scope_complete"], true,
+        "{round}"
+    );
+    assert_eq!(
+        round["terminal_quotas"]["fixture"]["errors"],
+        json!([]),
+        "{round}"
+    );
+    assert_eq!(
+        files.iter().filter(|file| file.exists()).count(),
+        2,
+        "{round}"
+    );
+    assert_eq!(fs::read(&live).unwrap(), b"active producer");
+    publication.complete(json!({"status":"passed"})).unwrap();
+}
+
+#[test]
+fn unknown_quota_member_preserves_other_outputs_until_its_scope_is_known() {
+    if !isolated_capability_test(
+        "unknown_quota_member_preserves_other_outputs_until_its_scope_is_known",
+    ) {
+        return;
+    }
+    let d = host(32, 2);
+    let path = d.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    policy["keep_seconds"] = json!(3600);
+    policy["terminal_limits"] = json!({"fixture": {
+        "keep_seconds": 3600, "max_count": 1, "max_bytes": 1024,
+        "metadata_keep_seconds": 0
+    }});
+    fs::write(&path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(d.path());
+    let mut files = Vec::new();
+    let mut first = None;
+    for i in 0..3 {
+        let file = d
+            .path()
+            .join(format!(".chrono-harness/state/fixtures/unknown-quota-{i}"));
+        let output = retained_artifacts::retention::create_adopted(
+            d.path(),
+            "fixture",
+            &file,
+            false,
+            json!({}),
+        )
+        .unwrap()
+        .unwrap();
+        first.get_or_insert_with(|| output.id().to_owned());
+        fs::write(&file, b"required original").unwrap();
+        output.complete(json!({"status":"passed"})).unwrap();
+        files.push(file);
+    }
+    let record = d
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/objects")
+        .join(first.unwrap())
+        .join("record.json");
+    let original = fs::read(&record).unwrap();
+    fs::write(&record, b"unknown declaration").unwrap();
+    let round = owner.maintain_explicit().unwrap();
+    assert_eq!(
+        round["terminal_quotas"]["fixture"]["scope_complete"], false,
+        "{round}"
+    );
+    for file in &files {
+        assert_eq!(fs::read(file).unwrap(), b"required original", "{round}");
+    }
+    fs::write(record, original).unwrap();
+}
+
+#[test]
+fn retired_metadata_does_not_exclude_a_populated_parent_address() {
+    if !isolated_capability_test("retired_metadata_does_not_exclude_a_populated_parent_address") {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["metadata_keep_seconds"] = json!(0);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(h.path());
+    let obsolete = ".chrono-harness/state/fixtures/obsolete";
+    fs::write(h.path().join(obsolete), b"rebuildable").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", obsolete, json!(null))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete(json!({"exit": 0})).unwrap();
+    let sibling = ".chrono-harness/state/fixtures/current";
+    fs::write(h.path().join(sibling), b"current original").unwrap();
+    let current = inventory(h.path())
+        .begin("fixture", sibling, json!(null))
+        .unwrap();
+    let mut parent_address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
+    for component in ".chrono-harness/state/fixtures".split('/') {
+        parent_address.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    // A sibling reader shares this parent. Cleanup can retire obsolete leaf
+    // metadata without requesting an exclusive lease on this populated parent.
+    let parent_reader =
+        chrono_harness::ownership::DirectoryLease::acquire(&parent_address, false, None)
+            .unwrap()
+            .unwrap();
+    let round = owner.maintain_explicit().unwrap();
+    assert!(!h.path().join(obsolete).exists(), "{round}");
+    assert!(
+        !h.path()
+            .join(".chrono-harness/state/output-retention-v1/objects")
+            .join(id)
+            .exists(),
+        "obsolete metadata must retire while its populated parent is shared: {round}"
+    );
+    assert!(parent_address.join("address.json").is_file());
+    assert_eq!(
+        fs::read(h.path().join(sibling)).unwrap(),
+        b"current original"
+    );
+    parent_reader.stable().unwrap();
+    drop(parent_reader);
+    current.complete(json!({"exit": 0})).unwrap();
+}
 #[cfg(not(verus_keep_ghost))]
 fn maintenance(root: &Path) -> Value {
     let round = inventory(root).maintain().unwrap();

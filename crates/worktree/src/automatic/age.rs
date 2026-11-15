@@ -5,6 +5,13 @@ use chrono_harness::verus;
 use vstd::prelude::*;
 
 verus! {
+pub fn age_preservation_required(disposable_present: bool, retained_file_present: bool)
+    -> (required: bool)
+    ensures required == (disposable_present || !retained_file_present),
+{
+    disposable_present || !retained_file_present
+}
+
 pub fn reusable_release(terminal_handoff: bool, expired_source_preserved: bool, generation: u64,
     requested_generation: Option<u64>) -> (release: bool)
     ensures release <==> (terminal_handoff || expired_source_preserved || (requested_generation.is_some()
@@ -55,6 +62,44 @@ impl AgePolicy {
 }
 #[cfg(not(verus_keep_ghost))]
 impl Manager {
+    // Sufficient evidence that this attempt has no physical effect. Probe only
+    // declared roots and one immediate retained entry per root; other layouts
+    // continue through the original preservation and retirement implementation.
+    fn age_has_no_effect(&self, e: &Entry) -> Result<bool, String> {
+        if e.cache_attempts.last().is_some_and(|a| a.receipt.is_none()) {
+            return Ok(false);
+        }
+        let mut retained_file = false;
+        for artifact in &self.inputs.policy.artifacts {
+            let path = no_symlink_parents(&e.path, artifact.path.trim_end_matches('/'))?;
+            let metadata = match fs::symlink_metadata(&path) {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.to_string()),
+            };
+            if select_artifact(&artifact.disposition, true, false) {
+                return Ok(!age_preservation_required(true, retained_file));
+            }
+            if !metadata.is_dir() || metadata.file_type().is_symlink() {
+                return Err(
+                    "retained age artifact is not a physical directory; preserve it".into(),
+                );
+            }
+            if let Some(entry) = fs::read_dir(&path)
+                .map_err(|error| error.to_string())?
+                .next()
+                .transpose()
+                .map_err(|error| error.to_string())?
+            {
+                retained_file |= entry
+                    .file_type()
+                    .map_err(|error| error.to_string())?
+                    .is_file();
+            }
+        }
+        Ok(!age_preservation_required(false, retained_file))
+    }
+
     pub(super) fn age_eligible(&self, e: &Entry, deleting: bool) -> Result<bool, String> {
         let Some(policy) = &self.inputs.policy.age_policy else {
             return Ok(false);
@@ -323,10 +368,21 @@ impl Manager {
             return Err("checkout has not passed its reuse age".into());
         }
         self.birth_ready(&e)?;
-        let (head, reference) = self.preserve_age_source(r, &e, report)?;
         report["age_policy"] = value!({"reuse_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().reuse_after_seconds,
             "delete_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().delete_after_seconds,
             "clock":"physical-checkout-creation","task_completion":"not-claimed"});
+        if self.age_has_no_effect(&e)? {
+            let head = r.oid(&e.path, "HEAD")?;
+            self.check_entry(r, &e, &head, None)?;
+            report["source_preservation"] = value!({"status":"not-needed",
+                "reason":"all disposable roots absent; retained file prevents checkout retirement"});
+            report["age_outcome"] = value!("no-disposable-output-retained-checkout");
+            if let Some(owner) = &mut self.ledger.entries[i].ownership {
+                owner.cache_pending = false;
+            }
+            return self.save();
+        }
+        let (head, reference) = self.preserve_age_source(r, &e, report)?;
         let expired_source_preserved = self.age_eligible(&e, true)?;
         if expired_source_preserved {
             let names: Vec<_> = self

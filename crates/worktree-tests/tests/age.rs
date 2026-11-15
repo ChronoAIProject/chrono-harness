@@ -13,6 +13,14 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 verus! {
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn age_preservation_is_skipped_only_without_disposal_and_with_retained_file() {
+    expect(!policy::age_preservation_required(false, true));
+    expect(policy::age_preservation_required(false, false));
+    expect(policy::age_preservation_required(true, false));
+    expect(policy::age_preservation_required(true, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn only_actual_unreleased_evidence_blocks_checkout_removal() {
     let needed = policy::retain_evidence(false, true);
     let absent = policy::retain_evidence(false, false);
@@ -951,6 +959,54 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     assert_eq!(
         fs::read(target.join(".chrono-harness/state/needed-original")).unwrap(),
         b"needed original\0\xff"
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn empty_aged_cache_preserves_working_source_until_an_effect_is_needed() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = Host::new("payload");
+    policy(&h, 1, 3, "evidence-retain");
+    let target = h.parent.join("empty-aged-cache");
+    start(&h, "empty-aged-cache", &target);
+    let original_head = git(&target, &["rev-parse", "HEAD"]);
+    fs::write(target.join("payload"), "staged source").unwrap();
+    git(&target, &["add", "payload"]);
+    let original_index = git(&target, &["write-tree"]);
+    fs::write(target.join("payload"), "working source").unwrap();
+    fs::create_dir_all(target.join(".chrono-harness/state")).unwrap();
+    let evidence = target.join(".chrono-harness/state/needed-original");
+    fs::write(&evidence, b"required failure original\0\xff").unwrap();
+    older_than(&target, 3);
+
+    for _ in 0..2 {
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
+        assert_eq!(git(&target, &["rev-parse", "HEAD"]), original_head);
+        assert_eq!(git(&target, &["write-tree"]), original_index);
+        assert_eq!(fs::read(target.join("payload")).unwrap(), b"working source");
+        assert_eq!(
+            fs::read(&evidence).unwrap(),
+            b"required failure original\0\xff"
+        );
+        let current = entry(&h, &target);
+        assert!(current["terminal"].is_null(), "{current}");
+        assert!(target.exists());
+    }
+
+    // A new disposable output must still take the original preservation route.
+    output(&target);
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(!target.join("output λ").exists());
+    assert_eq!(fs::read(target.join("payload")).unwrap(), b"working source");
+    assert_ne!(git(&target, &["rev-parse", "HEAD"]), original_head);
+    assert_eq!(
+        fs::read(&evidence).unwrap(),
+        b"required failure original\0\xff"
     );
 }
 
