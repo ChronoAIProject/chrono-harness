@@ -1,3 +1,39 @@
+diff --git a/source/vir/src/well_formed.rs b/source/vir/src/well_formed.rs
+--- a/source/vir/src/well_formed.rs
++++ b/source/vir/src/well_formed.rs
+@@ -113,10 +113,13 @@
+ /// trait hasn't been computed yet.
+ pub fn finish_dyn_compatability_checks(
+     krate: &Krate,
++    imported: &[Krate],
+     checks: Vec<DynCompatabilityChecks>,
+ ) -> Result<(), Vec<VirErr>> {
+     let mut trait_map = HashMap::new();
+-    for traitt in krate.traits.iter() {
++    // Imported traits already carry the compatibility computed by their producer.
++    // Keep the local definition last, as in set_krate_dyn_compatibility.
++    for traitt in imported.iter().flat_map(|k| k.traits.iter()).chain(krate.traits.iter()) {
+         trait_map.insert(traitt.x.name.clone(), traitt.clone());
+     }
+
+diff --git a/source/rust_verify/src/query.rs b/source/rust_verify/src/query.rs
+--- a/source/rust_verify/src/query.rs
++++ b/source/rust_verify/src/query.rs
+@@ -592,8 +592,12 @@
+         self.emit_diags(diags);
+         let () = check.map_err(|e| self.emit_error(e))?;
+
+-        vir::well_formed::finish_dyn_compatability_checks(&krate, all_dyn_compatability_checks)
+-            .map_err(|e| self.emit_errors(e))?;
++        vir::well_formed::finish_dyn_compatability_checks(
++            &krate,
++            &other_vir_crates,
++            all_dyn_compatability_checks,
++        )
++        .map_err(|e| self.emit_errors(e))?;
+
+         Ok(krate)
+     }
 diff --git a/source/rust_verify_test/tests/traits_dyn.rs b/source/rust_verify_test/tests/traits_dyn.rs
 --- a/source/rust_verify_test/tests/traits_dyn.rs
 +++ b/source/rust_verify_test/tests/traits_dyn.rs
