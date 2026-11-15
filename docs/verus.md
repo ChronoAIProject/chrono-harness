@@ -1,5 +1,70 @@
 # Verus 实施范围
 
+## 输入快照的 selector 分支选择
+
+`judge-registration/src/inputs.rs` 的 `snapshot_shape` 和端点快照校验直接调用
+同源 Verus 的 `snapshot_uses_selector`。只有完整 `chrono-input-snapshot/v3`
+文字才进入 selector 内容或端点绑定分支；缺值、v1／v2 和任意其他文字均不选择。
+原 schema 准入和错误顺序继续由各调用方先执行。
+
+两组独立 Verus 预期同体普通运行，覆盖三种有效版本、缺值、未知版本，以及
+NUL、Unicode 和换行后缀；泛化预期核任意非 v3 文字。生产复用已有完整文本比较，
+保留原借用和单次比较，不增加内容复制、文件 IO、进程、依赖、证明入口或预算。
+外部观察只沿用固定 Serde JSON 字段索引和 `Value::as_str`；分支选择本身由 Verus
+证明，不把仓内函数声明为外部公理。完整 JSON 观察对应、分支内其余路径／端点
+绑定和事务仍未闭合，完整成本未测。
+
+## 输入快照的 selector 绑定准入
+
+`judge-registration/src/inputs.rs::snapshot_shape` 的 v3 selector 内容分支直接调用
+同源 Verus 的 `admit_snapshot_selector_binding`。只有完整
+`chrono-registry-selection/v1`、非空且与标准 trim 观察全文相同的平台文字，以及
+入口匹配、已选配置匹配和非自链接三项关系同时成立时通过；其余观察产生原完整
+`E_INPUT_SNAPSHOT: invalid selector binding schema`。不归一化文字，内部空格、
+NUL 和 Unicode 保留原义，路径格式仍由原后续校验负责。
+
+五组独立 Verus 预期同体普通运行，覆盖 ASCII／Unicode、内部空格和 NUL、
+缺失／空平台、ASCII 和 Unicode 的 trim 差异、未知 schema，以及全部七种错误
+关系组合；泛化辅助函数核任意非空原文字、任意 trim 差异和错误关系。
+沿原两项严格整 crate 根、未过滤行为测试和已有 FILEMAP 消费边验收，没有新增
+项目、依赖、入口、仓内公理、过滤或证明预算。
+
+外部观察逐项限于固定 Serde JSON 的字段索引、`Value::as_str`、`Value::PartialEq`
+全值相等，以及固定 Rust 的 `str::trim`、Option::map 和错误 ToString。
+适配器只交付原文字、trim 结果和三项全值相等观察；Verus 决定完整准入及错误。
+原短路路径可能提前返回，新调用会先取得全部只读观察，可能增加 JSON 全值比较；
+没有新增复制、文件 IO 或进程，完整运行、构建、证明及存储成本未测。
+
+JSON 全值比较与原树的完整机械对应、对象字段和路径格式校验及外层
+事务仍有各自证明义务；局部观察合同不证明完整快照或全仓覆盖。Python 暂缓。
+
+## 输入快照的 schema 准入与缺失表示
+
+`judge-registration/src/inputs.rs::snapshot_shape` 在原对象字段准入后直接调用同源 Verus 的
+`admit_snapshot_header` 和 `admit_snapshot_retained`。前者只接受完整的 v1／v2／v3
+schema 字符串；未知或非字符串观察优先产生原 unsupported 错误；有效的 v1／v2
+携带任一 selector 字段时，产生原 requires-v3 错误。v3 的四种字段存在组合均交给
+原 selector 内容校验继续处理。后者按实际 `Retained` 变体判断：Absent 仅允许
+v2／v3，Bytes／Blob 的内容义务继续由原调用者处理。完整错误字符串由 Verus 产生。
+
+分类、首错和全部观察的结果合同由同一源码定义并证明，复用仓内已证明的完整文本
+比较。六组独立 Verus 预期同体普通运行，覆盖三种 schema、字段存在组合、缺值、
+空串、其它版本、大小写、NUL／Unicode 后缀、三种保留表示及长度零／u64 上界；
+泛化辅助函数还核任意未知文本和字段组合、任意 schema 与 Blob 长度的内容义务边界。
+沿现有两项严格整 crate CI 根及原未过滤消费测试验收。FILEMAP 已把这些文件、
+根和实际输入捕获／离线组合／登记消费边连接起来，没有新增证明入口或分类政策。
+
+明确外部观察仅沿用固定 Serde JSON 的字段索引、`Value::as_str`（缺值或非字符串
+得到 None）和 `Value::get`（字段存在时保留包含 null 在内的值），以及固定 Rust
+的 `Option::is_some` 和错误字符串 `ToString`。新准入没有把仓内函数当作外部公理。
+header 现在也在 v3／未知 schema 路径读取两个字段的存在性；这是只读观察。
+分类最多进行三次固定 schema 的完整文本比较，保留值只借用，没有新增集合、内容
+复制、文件 IO 或进程。构建、证明、CI 和完整生命周期成本未测。
+
+该局部证明覆盖观察到准入结果的对应。JSON 观察的完整机械精化、v3 selector 内容、
+其余 commit／路径／环境／文件判断和外层事务仍有自身证明义务；全仓覆盖门仍未完成。
+没有修改 Python、工具版本、证明过滤或预算。
+
 ## 输入快照的 schema 选择
 
 `judge-registration/src/inputs.rs::select_snapshot_schema` 直接拥有真实输入捕获、离线
