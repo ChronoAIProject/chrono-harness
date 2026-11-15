@@ -24,7 +24,8 @@ mod attempt;
 mod recovery_source;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::attempt::{
-    accept_original, confirmed_probe, release_custody, replay_attempt, same_attempt,
+    accept_original, admit_attempt_inventory, confirmed_probe, publish_cache_plan,
+    release_cache_plan, release_custody, replay_attempt, same_attempt,
 };
 #[cfg(not(verus_keep_ghost))]
 pub use crate::recovery::{
@@ -37,7 +38,12 @@ pub use crate::recovery::{
 };
 #[cfg(verus_keep_ghost)]
 pub use attempt::{
-    accept_original, confirmed_probe, release_custody, replay_attempt, same_attempt,
+    accept_original, admit_attempt_inventory, confirmed_probe, publish_cache_plan,
+    release_cache_plan, release_custody, replay_attempt, same_attempt,
+};
+#[cfg(verus_keep_ghost)]
+pub use attempt::{
+    attempt_inventory_result, cache_plan_publication_result, cache_plan_release_result,
 };
 #[cfg(verus_keep_ghost)]
 pub use recovery_source::*;

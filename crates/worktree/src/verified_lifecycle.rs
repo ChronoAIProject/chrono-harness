@@ -11,6 +11,14 @@ use chrono_harness::verified_identifiers as identifiers;
 pub use identifiers::equal_text;
 
 #[cfg(verus_keep_ghost)]
+#[path = "maintenance.rs"]
+mod maintenance_verification;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::maintenance::retained_reference_ancestor_required;
+#[cfg(verus_keep_ghost)]
+pub use maintenance_verification::retained_reference_ancestor_required;
+
+#[cfg(verus_keep_ghost)]
 #[path = "start.rs"]
 mod start_verification;
 #[cfg(not(verus_keep_ghost))]
@@ -43,11 +51,17 @@ pub use automatic_verification::age::reusable_release;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::inventory::append_action_index;
 #[cfg(not(verus_keep_ghost))]
-pub use crate::automatic::service::{maintenance_idle_exit, validate_activation_sequence};
+pub use crate::automatic::service::{
+    maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,
+    validate_activation_sequence,
+};
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::inventory::append_action_index;
 #[cfg(verus_keep_ghost)]
-pub use automatic_verification::service::{maintenance_idle_exit, validate_activation_sequence};
+pub use automatic_verification::service::{
+    maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,
+    validate_activation_sequence,
+};
 
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::producer::rolling::{rolling_disposal, rolling_keep};

@@ -24,6 +24,83 @@ fn maintenance_pending_work_wins_every_idle_boundary() {
     expect(!policy::maintenance_idle_exit(true, true, true));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_keeps_coordinator_and_invoking_roots_in_order() {
+    let roots = policy::maintenance_exclusions(17u64, u64::MAX);
+    expect(roots.len() == 2);
+    expect(roots[0] == 17);
+    expect(roots[1] == u64::MAX);
+    let same = policy::maintenance_exclusions(0u64, 0u64);
+    expect(same.len() == 2);
+    expect(same[0] == 0 && same[1] == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_keeps_complete_root_text_and_repeated_values() {
+    let roots = policy::maintenance_exclusions(
+        "/coordinator λ/source\n".to_string(), "/caller λ/source\0\n".to_string());
+    expect(roots.len() == 2);
+    expect(policy::equal_text(roots[0].as_str(), "/coordinator λ/source\n"));
+    expect(policy::equal_text(roots[1].as_str(), "/caller λ/source\0\n"));
+    let same = policy::maintenance_exclusions("".to_string(), "".to_string());
+    expect(same.len() == 2);
+    expect(policy::equal_text(same[0].as_str(), ""));
+    expect(policy::equal_text(same[1].as_str(), ""));
+}
+
+fn retention_phase_case(complete: bool, unprotected: usize, succeeds: bool,
+    payload: Option<u64>, message: &str, expected_stage: u8, expected_code: u64)
+    requires if complete && unprotected == 0 {
+        if succeeds { expected_stage == 2 && expected_code == 22 }
+        else { expected_stage == 3 && expected_code == 23 }
+    } else { expected_stage == 4 && expected_code == 24 },
+{
+    let attempt = |state: (u8, bool)| -> (out: ((u8, bool), Result<Option<u64>, String>))
+        ensures out.0 == (1u8, state.1 && state.0 == 0u8),
+            match out.1 {
+                Ok(value) => succeeds && value == payload,
+                Err(error) => !succeeds && error@ == message@,
+            },
+    {
+        ((1, state.1 && state.0 == 0),
+            if succeeds { Ok(payload) } else { Err(message.to_string()) })
+    };
+    let completed = |state: (u8, bool), value: Option<u64>| -> (out: ((u8, bool), u64))
+        ensures out == ((2u8, state.1 && state.0 == 1u8 && value == payload), 22u64),
+    { ((2, state.1 && state.0 == 1 && value == payload), 22) };
+    let failed = |state: (u8, bool), error: String| -> (out: ((u8, bool), u64))
+        ensures out == ((3u8, state.1 && state.0 == 1u8 && error@ == message@), 23u64),
+    { ((3, state.1 && state.0 == 1 && policy::equal_text(error.as_str(), message)), 23) };
+    let deferred = |state: (u8, bool)| -> (out: ((u8, bool), u64))
+        ensures out == ((4u8, state.1 && state.0 == 0u8), 24u64),
+    { ((4, state.1 && state.0 == 0), 24) };
+    let (state, code) = policy::maintenance_retention_phase(
+        (0u8, true), complete, unprotected, attempt, completed, failed, deferred);
+    expect(state.1);
+    expect(state.0 == expected_stage);
+    expect(code == expected_code);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_retention_defers_before_access_when_original_protection_is_unknown() {
+    retention_phase_case(false, 0, true, None, "unused", 4, 24);
+    retention_phase_case(false, 0, false, Some(0), "unused error", 4, 24);
+    retention_phase_case(false, 1, true, Some(u64::MAX), "unused", 4, 24);
+    retention_phase_case(false, usize::MAX, false, None, "unused error", 4, 24);
+    retention_phase_case(true, 1, true, None, "unused", 4, 24);
+    retention_phase_case(true, usize::MAX, false, Some(u64::MAX), "unused error", 4, 24);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_retention_preserves_observed_values_and_complete_errors() {
+    retention_phase_case(true, 0, true, None, "unused", 2, 22);
+    retention_phase_case(true, 0, true, Some(0), "unused", 2, 22);
+    retention_phase_case(true, 0, true, Some(u64::MAX), "unused", 2, 22);
+    retention_phase_case(true, 0, false, None, "", 3, 23);
+    retention_phase_case(true, 0, false, Some(0), "read λ failed\0\n", 3, 23);
+    retention_phase_case(true, 0, false, Some(u64::MAX), "second error", 3, 23);
+}
+
 // Each row specifies its own final observation, independent of the production predicates.
 // Stages also record that every observation received its exact predecessor and address.
 fn activation_case(query_result: (i32, i32), path: (bool, bool, bool, u32, u32),
