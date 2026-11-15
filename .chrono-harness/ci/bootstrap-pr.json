@@ -1,0 +1,31 @@
+{
+  "schema": "chrono-bootstrap/v1",
+  "report_path": ".chrono-harness/state/pr-bootstrap.json",
+  "projects": ".chrono-harness/projects.json",
+  "rust_toolchain": "1.95.0",
+  "tools": {
+    "bash": "/bin/bash"
+  },
+  "operations": [
+    "build.pr"
+  ],
+  "install": [
+    {
+      "source": "crates/pr/target/debug/chrono-pr",
+      "destination": ".chrono-harness/bin/chrono-pr"
+    }
+  ],
+  "participation": {
+    "coordinator_root": "git-main-worktree",
+    "program": ".chrono-harness/bin/chrono-worktree",
+    "git": "/usr/bin/git",
+    "config": ".chrono-harness/worktree.json"
+  },
+  "entrypoint": {
+    "tool": "bash",
+    "script": ".chrono-harness/ci/bootstrap-native.sh"
+  },
+  "rust_incremental": true,
+  "require_tool_bindings": true,
+  "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json"
+}
