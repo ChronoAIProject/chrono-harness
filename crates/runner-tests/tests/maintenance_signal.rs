@@ -437,3 +437,67 @@ fn maintenance_report_publication_does_not_wake_itself_or_suppress_other_threads
         true
     );
 }
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn linked_retention_routes_only_its_own_hint_to_the_known_physical_owner() {
+    let (owner, owner_path) = host();
+    let (linked, linked_path) = host();
+    let (other, other_path) = host();
+    let owner_socket = UnixDatagram::bind(&owner_path).unwrap();
+    let linked_socket = UnixDatagram::bind(&linked_path).unwrap();
+    let other_socket = UnixDatagram::bind(&other_path).unwrap();
+    for socket in [&owner_socket, &linked_socket, &other_socket] {
+        socket.set_nonblocking(true).unwrap();
+    }
+    let context = signal::RequestContext::new(linked.path(), owner.path()).unwrap();
+    let encoded = serde_json::to_string(&context).unwrap();
+    let receipt = signal::request_with_context(linked.path(), "retention-release", Some(&encoded));
+    assert_eq!(receipt["accepted"], true);
+    assert_eq!(receipt["socket"], serde_json::json!(owner_path));
+    let mut bytes = [0; 64];
+    let n = owner_socket.recv(&mut bytes).unwrap();
+    assert_eq!(&bytes[..n], b"retention-release");
+    assert_eq!(linked_socket.recv(&mut bytes).unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+
+    let receipt = signal::request_with_context(other.path(), "other-owner", Some(&encoded));
+    assert_eq!(receipt["accepted"], true);
+    assert_eq!(receipt["socket"], serde_json::json!(other_path));
+    assert_eq!(other_socket.recv(&mut bytes).unwrap(), b"other-owner".len());
+    assert_eq!(owner_socket.recv(&mut bytes).unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn destination_context_rejects_invalid_input_and_preserves_the_original_responsibility() {
+    let (owner, owner_path) = host();
+    let (linked, _) = host();
+    let owner_socket = UnixDatagram::bind(owner_path).unwrap();
+    owner_socket.set_nonblocking(true).unwrap();
+    let original = linked.path().join(".chrono-harness/state/original.json");
+    fs::write(&original, b"unresolved responsibility").unwrap();
+    for input in ["{}", "null", "{", r#"{"source_root":"relative","owner_root":"/absolute"}"#] {
+        let receipt = signal::request_with_context(linked.path(), "released", Some(input));
+        assert_eq!(receipt["status"], "wake-failed");
+        assert_eq!(receipt["accepted"], false);
+        assert_eq!(receipt["responsibility"], "existing-owner-state");
+        assert_eq!(fs::read(&original).unwrap(), b"unresolved responsibility");
+    }
+    let mut bytes = [0; 64];
+    assert_eq!(owner_socket.recv(&mut bytes).unwrap_err().kind(), std::io::ErrorKind::WouldBlock);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn nested_commands_forward_the_route_and_an_explicit_new_owner_takes_precedence() {
+    use std::collections::BTreeMap;
+    let mut declared = BTreeMap::from([("PATH".into(), "declared-path".into())]);
+    signal::forward_context(&mut declared, Some("original route"));
+    assert_eq!(declared[signal::CONTEXT_ENV], "original route");
+    assert_eq!(declared["PATH"], "declared-path");
+    signal::forward_context(&mut declared, Some("unrelated enclosing route"));
+    assert_eq!(declared[signal::CONTEXT_ENV], "original route");
+    let mut absent = BTreeMap::new();
+    signal::forward_context(&mut absent, None);
+    assert!(absent.is_empty());
+}
