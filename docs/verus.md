@@ -3110,7 +3110,11 @@ FIFO 首次发现生成确定的最短跳数和前驱；传播行逐槽对应原
 直接消费这些函数；原子计数更新失败发生在位置发布前，不留下初始化中的位置。
 独立预期核第一／最后位置、最大可编码身份及紧邻非法边界，并沿现有
 `verify.runner-limits`／`verify.runner-limits-tests` 及未过滤 runner 测试验收。
-本候选尚待执行这些检查；完整 runner 的共享映射、权限与 Send／Sync 证明仍未完成。
+固定候选 `a08e58cf` 的两项严格整 crate 证明分别为 55／74 verified、0 errors；
+两项格式检查通过。原未过滤 runner 测试为 764 passed、1 failed、1 ignored、0 filtered：
+失败是 `published_output_scope_keeps_child_reports_without_accumulating_their_inputs`
+未在原八轮内回收完可回收输入，原件与现场保留，不能算整套测试通过。
+完整 runner 的共享映射、权限与 Send／Sync 证明仍未完成。
 没有新增依赖、证明根、受信接口、线程或预算，完整验证与运行成本未知。
 
 `crates/runner/src/verified_limits.rs` 负责执行资源准入的唯一判断：超时为正 `u64`，
