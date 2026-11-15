@@ -5305,6 +5305,12 @@
             "const_array_unsizing",
             "--test",
             "nested_extern_crate",
+            "--test",
+            "literal_patterns",
+            "--test",
+            "match",
+            "--test",
+            "strings",
             "--",
             "--test-threads=1"
           ]

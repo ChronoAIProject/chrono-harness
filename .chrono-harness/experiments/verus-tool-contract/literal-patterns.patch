@@ -1,0 +1,133 @@
+diff --git a/source/rust_verify_test/tests/literal_patterns.rs b/source/rust_verify_test/tests/literal_patterns.rs
+new file mode 100644
+index 0000000..3d89fdc
+--- /dev/null
++++ b/source/rust_verify_test/tests/literal_patterns.rs
+@@ -0,0 +1,127 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] string_literal_patterns_preserve_complete_contents
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        broadcast use vstd::string::group_string_axioms;
++
++        fn classify(s: &str) -> (r: u8)
++            ensures
++                (r == 0) <==> s@ == seq![],
++                (r == 1) <==> s@ == seq!['u', 'n', 'i', 't'],
++                (r == 2) <==> s@ == seq!['λ', '\0', '中'],
++                r <= 3,
++        {
++            match s {
++                "" => 0,
++                "unit" => 1,
++                "λ\0中" => 2,
++                _ => 3,
++            }
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] string_literal_pattern_rejects_wrong_content
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        broadcast use vstd::string::group_string_axioms;
++
++        fn wrong(s: &str) {
++            match s {
++                "unit" => { assert(s@[3] == 'x'); } // FAILS
++                _ => {},
++            }
++        }
++    } => Err(err) => assert_one_fails(err)
++}
++
++test_verify_one_file_with_options! {
++    #[test] empty_string_pattern_rejects_nonempty_claim
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        broadcast use vstd::string::group_string_axioms;
++
++        fn wrong(s: &str) {
++            match s {
++                "" => { assert(s@.len() > 0); } // FAILS
++                _ => {},
++            }
++        }
++    } => Err(err) => assert_one_fails(err)
++}
++
++test_verify_one_file_with_options! {
++    #[test] byte_slice_literal_patterns_preserve_complete_contents
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn classify(s: &[u8]) -> (r: u8)
++            ensures
++                (r == 0) <==> s@ == seq![],
++                (r == 1) <==> s@ == seq![117u8, 110u8, 105u8, 116u8],
++                (r == 2) <==> s@ == seq![0u8, 255u8],
++                r <= 3,
++        {
++            match s {
++                b"" => 0,
++                b"unit" => 1,
++                b"\0\xff" => 2,
++                _ => 3,
++            }
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] byte_array_literal_patterns_preserve_complete_contents
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn classify(s: &[u8; 2]) -> (r: bool)
++            ensures r <==> s@ == seq![0u8, 255u8],
++        {
++            match s {
++                b"\0\xff" => true,
++                _ => false,
++            }
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] byte_literal_pattern_rejects_wrong_content
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong(s: &[u8]) {
++            match s {
++                b"\0\xff" => { assert(s@[1] == 0u8); } // FAILS
++                _ => {},
++            }
++        }
++    } => Err(err) => assert_one_fails(err)
++}
++
++test_verify_one_file_with_options! {
++    #[test] nested_literals_keep_or_patterns_and_guards
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        broadcast use vstd::string::group_string_axioms;
++
++        fn nested(s: Option<&str>, enabled: bool) -> (r: bool)
++            ensures r <==> enabled && s is Some
++                && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b']),
++        {
++            match s {
++                Some("a" | "b") if enabled => true,
++                _ => false,
++            }
++        }
++    } => Ok(())
++}
