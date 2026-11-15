@@ -434,6 +434,15 @@ fn explicit_maintenance_writes_local_record_references_and_keeps_live_originals(
     fs::write(&leaf_path, b"required leaf").unwrap();
     let leaf_id = leaf.id().to_owned();
     leaf.complete_sealed(value!({"status":"passed"})).unwrap();
+    // Two independent leaves reach the same rooted parent. Its unchanged
+    // declaration is observed from both components regardless of address order.
+    let peer_path = h.root.join(".chrono-harness/state/required-peer.json");
+    let peer = create_adopted(&h.root, "lifecycle-original", &peer_path, false, value!({}))
+        .unwrap()
+        .unwrap();
+    fs::write(&peer_path, b"required peer").unwrap();
+    let peer_id = peer.id().to_owned();
+    peer.complete_sealed(value!({"status":"passed"})).unwrap();
     let parent_path = h.root.join(".chrono-harness/state/required-parent.json");
     let parent = create_adopted(
         &h.root,
@@ -446,7 +455,9 @@ fn explicit_maintenance_writes_local_record_references_and_keeps_live_originals(
     .unwrap();
     fs::write(&parent_path, b"required parent").unwrap();
     let parent_id = parent.id().to_owned();
-    owner.dependencies(&parent_id, &[leaf_id.clone()]).unwrap();
+    owner
+        .dependencies(&parent_id, &[leaf_id.clone(), peer_id.clone()])
+        .unwrap();
     parent.complete_sealed(value!({"status":"passed"})).unwrap();
     owner
         .reference("actual-inventory-consumer", &[parent_id.clone()])
@@ -481,7 +492,9 @@ fn explicit_maintenance_writes_local_record_references_and_keeps_live_originals(
     }
     assert!(references > 0);
     assert!(members.contains(&leaf_id));
+    assert!(members.contains(&peer_id));
     assert!(members.contains(&parent_id));
     assert_eq!(fs::read(&leaf_path).unwrap(), b"required leaf");
+    assert_eq!(fs::read(&peer_path).unwrap(), b"required peer");
     assert_eq!(fs::read(&parent_path).unwrap(), b"required parent");
 }
