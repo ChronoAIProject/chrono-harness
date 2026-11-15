@@ -324,16 +324,23 @@ impl EnrollmentOriginalsFixture {
                 "config_sha256":sha256(config_bytes.as_bytes())
             });
             match fault {
+                "explicit-policy-source" => report["source_commit"] = value!("b".repeat(64)),
                 "source-only" | "source-only-config-bytes" | "source-only-policy-bytes" => {
-                    report.as_object_mut().unwrap().remove("policy_source_commit");
+                    report
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("policy_source_commit");
                 }
-                "null-policy-source" => report["policy_source_commit"] = Value::Null,
+                "null-policy-source" => report["policy_source_commit"] = value!(null),
                 "invalid-policy-source" => report["policy_source_commit"] = value!(17),
                 "short-policy-source" => report["policy_source_commit"] = value!("not-an-oid"),
                 "source-only-null" | "source-only-invalid" | "source-only-short" => {
-                    report.as_object_mut().unwrap().remove("policy_source_commit");
+                    report
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("policy_source_commit");
                     report["source_commit"] = match fault {
-                        "source-only-null" => Value::Null,
+                        "source-only-null" => value!(null),
                         "source-only-invalid" => value!(17),
                         _ => value!("not-an-oid"),
                     };
@@ -487,10 +494,19 @@ fn present_import_restores_adopted_caller_policy_without_reinterpreting_target_i
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn import_uses_original_fixed_caller_source_only_when_policy_field_is_absent() {
-    if !chrono_git_boundary::isolated_git() { return; }
-    for present in [false, true] {
-        let h = EnrollmentOriginalsFixture::build(Some("source-only"));
-        if present { h.make_present(); }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for (present, fault) in [
+        (false, "source-only"),
+        (true, "source-only"),
+        (false, "explicit-policy-source"),
+        (true, "explicit-policy-source"),
+    ] {
+        let h = EnrollmentOriginalsFixture::build(Some(fault));
+        if present {
+            h.make_present();
+        }
         let ledger = fs::read(h.record.join("ledger.json")).unwrap();
         let original = fs::read(h.root.join(&h.original)).unwrap();
         let (code, report) = h.invoke("maintain", false);
@@ -500,7 +516,10 @@ fn import_uses_original_fixed_caller_source_only_when_policy_field_is_absent() {
         assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
         assert_eq!(h.target.exists(), present);
         if present {
-            assert_eq!(fs::read(h.target.join("unsaved-source.rs")).unwrap(), b"unique source\n");
+            assert_eq!(
+                fs::read(h.target.join("unsaved-source.rs")).unwrap(),
+                b"unique source\n"
+            );
         } else {
             assert_eq!(attention_row(&report, &h.target)["work_state"], "unknown");
         }
@@ -746,7 +765,7 @@ fn absent_adoption_rejects_invalid_addresses_and_original_drift() {
         let h = EnrollmentOriginalsFixture::new();
         let mut config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
         match fault {
-            "host-type" => config["host_config"] = Value::Null,
+            "host-type" => config["host_config"] = value!(null),
             "policy-type" => config["automatic_cleanup"] = value!(7),
             "relocated-policy" => {
                 config["automatic_cleanup"] = value!(".chrono-harness/other.json")
