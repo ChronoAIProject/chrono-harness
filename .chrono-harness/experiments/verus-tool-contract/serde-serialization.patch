@@ -1,3 +1,29 @@
+diff --git a/source/rust_verify/src/rust_to_vir_func.rs b/source/rust_verify/src/rust_to_vir_func.rs
+--- a/source/rust_verify/src/rust_to_vir_func.rs
++++ b/source/rust_verify/src/rust_to_vir_func.rs
+@@ -28,7 +28,7 @@
+ use rustc_mir_build_verus::verus::BodyErasure;
+ use rustc_span::Span;
+ use rustc_span::def_id::DefId;
+-use rustc_span::symbol::Ident;
++use rustc_span::symbol::{Ident, kw};
+ use std::collections::{HashMap, HashSet};
+ use std::sync::Arc;
+ use std::vec;
+@@ -3393,8 +3393,11 @@
+         (Mode::Exec, Mode::Exec, Mode::Exec)
+     } else {
+         match mode_opt {
+-            // Anonymous constants are evaluated in executable Rust contexts.
+-            None if matches!(ctxt.tcx.def_kind(id), rustc_hir::def::DefKind::AnonConst) => {
++            // Anonymous expressions and placeholder const items have no named spec value.
++            None
++                if matches!(ctxt.tcx.def_kind(id), rustc_hir::def::DefKind::AnonConst)
++                    || ctxt.tcx.opt_item_name(id) == Some(kw::Underscore) =>
++            {
+                 (Mode::Exec, Mode::Exec, Mode::Exec)
+             }
+             // By default, a named const is dual-use as spec and exec,
 diff --git a/source/vir/src/ast_to_sst_func.rs b/source/vir/src/ast_to_sst_func.rs
 --- a/source/vir/src/ast_to_sst_func.rs
 +++ b/source/vir/src/ast_to_sst_func.rs
@@ -21,7 +47,7 @@ diff --git a/source/vir/src/ast_to_sst_func.rs b/source/vir/src/ast_to_sst_func.
 diff --git a/source/rust_verify_test/tests/consts.rs b/source/rust_verify_test/tests/consts.rs
 --- a/source/rust_verify_test/tests/consts.rs
 +++ b/source/rust_verify_test/tests/consts.rs
-@@ -2,6 +2,31 @@
+@@ -2,6 +2,44 @@
  #[macro_use]
  mod common;
  use common::*;
@@ -34,6 +60,19 @@ diff --git a/source/rust_verify_test/tests/consts.rs b/source/rust_verify_test/t
 +            value += 1;
 +        };
 +    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] placeholder_const_checks_initializer_precondition
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        use vstd::prelude::*;
++        verus! {
++            const fn under_ten(value: u8) -> u8
++                requires value < 10,
++            { value }
++        }
++        const _: u8 = under_ten(10); // FAILS
++    } => Err(err) => assert_one_fails(err)
 +}
 +
 +test_verify_one_file_with_options! {
