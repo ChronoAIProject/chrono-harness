@@ -2091,8 +2091,7 @@ pub fn insert_git_tree_entry(
                 let stored = choose|stored: TreePath| (#[trigger] before.contains_key(stored))
                     && path.cmp_spec(&stored) is Equal && old_entry == before[stored]
                     && tree@ == before.insert(stored, entry);
-                vstd::utf8::encode_utf8_decode_utf8(path@);
-                vstd::utf8::encode_utf8_decode_utf8(stored@);
+                tree_path_same_text(&path, &stored);
                 assert(stored@ == path@);
             }
             Err("duplicate Git tree path".to_owned())
@@ -2371,7 +2370,8 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
             None => {
                 proof {
                     git_index_stage_obeys_cmp();
-                    vstd::laws_cmp::lemma_ref_obeys_cmp_spec::<GitIndexStage>();
+                    broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+                    assert(vstd::laws_cmp::obeys_cmp::<&GitIndexStage>());
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
                     assert(keys@ == all.unref());
                     assert forall|i: int, j: int| 0 <= i < j < keys.len()
@@ -2832,8 +2832,7 @@ pub fn record_checkout_owned_change(changes: &mut CheckoutChanges, path: String)
             proof {
                 let stored = choose|stored: TreePath| (#[trigger] before.contains_key(stored))
                     && key.cmp_spec(&stored) is Equal && changes@ == before.insert(stored, ());
-                vstd::utf8::encode_utf8_decode_utf8(key@);
-                vstd::utf8::encode_utf8_decode_utf8(stored@);
+                tree_path_same_text(&key, &stored);
                 assert(stored@ == path@);
                 assert(changes@ =~= before);
                 assert(checkout_change_has_path(before, path@));
@@ -2968,7 +2967,8 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
             None => {
                 proof {
                     tree_path_obeys_cmp();
-                    vstd::laws_cmp::lemma_ref_obeys_cmp_spec::<TreePath>();
+                    broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+                    assert(vstd::laws_cmp::obeys_cmp::<&TreePath>());
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
                     assert(paths.len() == all.len());
                     assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
