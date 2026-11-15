@@ -871,6 +871,17 @@ impl RetainedArtifact {
         producer: &str,
         temporary: bool,
     ) -> Result<(PathBuf, Vec<String>, PathBuf), String> {
+        Self::resolve_stores(host_root, config_path, &[producer], temporary)?
+            .pop()
+            .ok_or("retained producer store was not resolved".into())
+    }
+
+    fn resolve_stores(
+        host_root: &Path,
+        config_path: &str,
+        producers: &[&str],
+        temporary: bool,
+    ) -> Result<Vec<(PathBuf, Vec<String>, PathBuf)>, String> {
         let root = fs::canonicalize(host_root).map_err(|e| e.to_string())?;
         let (config, bytes) = crate::configuration(&root, config_path)?;
         let mut selected = None;
@@ -884,26 +895,31 @@ impl RetainedArtifact {
             |r, _token, report| {
                 let inputs = PolicyInputs::load(r, &root, config_path, &bytes)?
                     .ok_or("retained producer owner is not opted in")?;
-                let declaration = inputs
-                    .anchor_policy
-                    .retained_producers
-                    .iter()
-                    .find(|p| p.id == producer)
-                    .ok_or("retained producer store is not declared by its owner")?;
-                if temporary && !declaration.temporary {
-                    return Err("temporary producer is not prospectively adopted".into());
+                let mut stores = Vec::with_capacity(producers.len());
+                for producer in producers {
+                    let declaration = inputs
+                        .anchor_policy
+                        .retained_producers
+                        .iter()
+                        .find(|p| p.id == *producer)
+                        .ok_or("retained producer store is not declared by its owner")?;
+                    if temporary && !declaration.temporary {
+                        return Err("temporary producer is not prospectively adopted".into());
+                    }
+                    stores.push((
+                        declaration.directory(&inputs.policy.coordinator_root)?,
+                        declaration.generated_outputs.clone(),
+                        inputs.policy.coordinator_root.clone(),
+                    ));
                 }
-                let directory = declaration.directory(&inputs.policy.coordinator_root)?;
                 inputs.anchor_stable(r)?;
-                report["producer"] = value!(producer);
                 report["coordinator_root"] = value!(inputs.policy.coordinator_root);
-                report["directory"] = value!(directory);
-                report["generated_outputs"] = value!(declaration.generated_outputs);
-                selected = Some((
-                    directory,
-                    declaration.generated_outputs.clone(),
-                    inputs.policy.coordinator_root.clone(),
-                ));
+                if let [(directory, outputs, _)] = stores.as_slice() {
+                    report["producer"] = value!(producers[0]);
+                    report["directory"] = value!(directory);
+                    report["generated_outputs"] = value!(outputs);
+                }
+                selected = Some(stores);
                 Ok(())
             },
         )?;

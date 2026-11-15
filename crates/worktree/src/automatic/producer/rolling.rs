@@ -114,6 +114,24 @@ pub(super) fn physical_stable(directory: &Path, object: &Object) -> Result<(), S
 
 #[cfg(not(verus_keep_ghost))]
 impl TemporaryHost {
+    /// Resolve one committed owner snapshot after the original test child joins,
+    /// then inspect every requested store under its own existing exclusion.
+    #[cfg(feature = "producer-birth-test")]
+    #[doc(hidden)]
+    pub fn retired_registered_fixture_stores(
+        host_root: &Path,
+        config_path: &str,
+        producers: &[&str],
+    ) -> Result<bool, String> {
+        let stores = RetainedArtifact::resolve_stores(host_root, config_path, producers, true)?;
+        for (producer, (directory, _, _)) in producers.iter().zip(stores) {
+            if !Self::retired_fixture_store(&directory, producer)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
     /// Read the existing producer's retirement state for its private test owner.
     /// The caller must first join all allocators. This neither retires an object
     /// nor grants deletion rights over a shared store or any enclosing checkout.
