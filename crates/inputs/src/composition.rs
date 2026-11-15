@@ -54,16 +54,16 @@ fn source_bytes(root: &Path, source: &Source) -> Result<Vec<u8>, String> {
 }
 #[cfg(not(verus_keep_ghost))]
 fn import_blob(root: &Path, f: &Value, source: &Source) -> Result<Value, String> {
-    let Retained::Blob {
-        path,
-        digest,
-        length,
-    } = retained_shape(f)?
-    else {
-        return match retained_shape(f)? {
-            Retained::Absent => Ok(f.clone()),
-            _ => Err("E_COMPOSE_ORIGINAL: capture blob reference required".into()),
-        };
+    let (path, digest, length) = match retained_shape(f)? {
+        Retained::Blob {
+            path,
+            digest,
+            length,
+        } => (path, digest, length),
+        Retained::Absent => return Ok(f.clone()),
+        Retained::Bytes(_) => {
+            return Err("E_COMPOSE_ORIGINAL: capture blob reference required".into());
+        }
     };
     let Some(a) = &source.artifacts else {
         let original = Original {
@@ -137,7 +137,9 @@ fn import_source(
             continue;
         }
         let snapshot = if single { &v } else { &v[name] };
-        snapshot_shape(snapshot)?;
+        if !single {
+            snapshot_shape(snapshot)?;
+        }
         if snapshot["schema"] != snapshot_schema_for(r)
             || snapshot["commit"] != commit
             || snapshot["config_path"] != config
