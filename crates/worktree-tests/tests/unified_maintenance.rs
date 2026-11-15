@@ -494,7 +494,10 @@ fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
                 .unwrap()
                 .iter()
                 .filter_map(|output| output["path"].as_str())
-                .filter(|path| path.starts_with(".chrono-harness/state/worktrees/maintain-"))
+                .filter(|path| {
+                    path.starts_with(".chrono-harness/state/worktrees/maintain-")
+                        && path.ends_with(".json")
+                })
                 .collect();
             assert_eq!(
                 parents.len(),
