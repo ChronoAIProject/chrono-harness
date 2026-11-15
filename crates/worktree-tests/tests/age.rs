@@ -438,6 +438,32 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     temporary_output(&target);
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
+    let repeated = drain_report(
+        maintained["drain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["path"] == value!(target) && !row["receipt"].is_null())
+            .unwrap(),
+    );
+    for reference in saved["reflog_refs"].as_object().unwrap().keys() {
+        assert!(
+            repeated["processes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|p| !p["argv"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|arg| arg == reference)),
+            "already retained reflog commit was queried separately: {reference}"
+        );
+        assert_eq!(
+            git(&h.root, &["rev-parse", reference]),
+            saved["reflog_refs"][reference].as_str().unwrap()
+        );
+    }
     assert_eq!(cache_identity(&target), cache);
     assert!(!target.join("nested/cache").exists());
     let (code, reused, error) = h.auto(
@@ -496,6 +522,83 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
         ),
         "source at deletion"
     );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn reflog_custody_rejects_conflicting_direct_symbolic_and_dangling_refs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for conflict in ["different-oid", "symbolic", "dangling"] {
+        let h = Host::new("payload");
+        policy(&h, 1, 3600, "dispose");
+        let target = h.parent.join("conflicting-reflog-custody");
+        start(&h, "conflicting-reflog-custody", &target);
+        let head = git(&target, &["rev-parse", "HEAD"]);
+        fs::write(target.join("payload"), "reflog-only-source").unwrap();
+        let unique = commit(&target);
+        git(&target, &["reset", "--hard", &head]);
+        fs::write(target.join("payload"), "source must survive failed custody").unwrap();
+        let ledger = h.ledger();
+        let entry = ledger["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["path"] == value!(target))
+            .unwrap();
+        let reference = format!(
+            "refs/heads/preserved/age/{}/reflog-{unique}",
+            sha256(entry["ownership"]["id"].as_str().unwrap().as_bytes())
+        );
+        match conflict {
+            "different-oid" => {
+                git(&h.root, &["update-ref", &reference, &head]);
+            }
+            "symbolic" => {
+                git(&h.root, &["symbolic-ref", &reference, "refs/heads/dev"]);
+            }
+            "dangling" => {
+                git(
+                    &h.root,
+                    &["symbolic-ref", &reference, "refs/heads/missing-source"],
+                );
+            }
+            _ => unreachable!(),
+        }
+        output(&target);
+        temporary_output(&target);
+        older_than(&target, 1);
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 2, "{conflict}: {maintained} {error}");
+        assert!(
+            !maintained["cleanup_failures"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+        assert_eq!(
+            fs::read_to_string(target.join("payload")).unwrap(),
+            "source must survive failed custody"
+        );
+        assert_eq!(
+            fs::read(target.join("nested/cache/temporary")).unwrap(),
+            b"disposable"
+        );
+        if conflict == "different-oid" {
+            assert_eq!(git(&h.root, &["rev-parse", &reference]), head);
+        } else {
+            assert_eq!(
+                git(&h.root, &["symbolic-ref", &reference]),
+                if conflict == "symbolic" {
+                    "refs/heads/dev"
+                } else {
+                    "refs/heads/missing-source"
+                }
+            );
+        }
+    }
 }
 
 #[test]
