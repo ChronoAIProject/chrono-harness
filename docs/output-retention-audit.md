@@ -60,7 +60,7 @@
 | Python 示例 `message.py`、`check.py` 及 install／verify shell | 示例程序打印 `message.txt` 内容，测试断言 greeting；install 复制四个实际 CLI，verify 消费 CI 配置 | stdout 归调用方；CPython 可能创建 `__pycache__`，安装副本和 bytecode 没有示例自己的 TTL；不能从 Rust target 的登记推及它们 |
 | Git branches、临时 fetch ref、保全分支、rebind backup | 创建／恢复、保存源码／索引／独有提交；清理需要实际保全证据 | 临时 ref／rebind 有明确恢复入口；`remove_branch:false` 与保全目标不承诺自动删除永久 Git 历史，不应以清缓存替代源码保管 |
 | GitHub Actions artifacts、cache、日志和 `$GITHUB_OUTPUT`／临时 runner 文件 | 单元／collection、发布 collector、晋升和安装 job；原生输出传递选择和 artifact ID。startup 也由始终运行的 aggregate 下载、核验和安装，不依赖业务单元是否被选中 | workflow 没有显式 `retention-days`；后续精确运行 API 已证实 12 项 artifact 有有限 `expires_at`，见下文。其余 artifact、cache 淘汰、日志与 runner 文件仍由 provider 负责；未取得全局有效设置及实际释放证据，不能泛化为全链回收 |
-| 公开 GitHub Release／tag／发行资产及下游安装 | 下载者、四个示例宿主、正式版晋升和固定版本恢复；需求见[发布合同](release-ci.md)与[示例](examples.md) | 代码／文档有当前需求和具名采用入口；本次未验证所有下游的实际安装与释放，不按“本宿主没读”判废。没有本仓时间滚动退役公开版本的合同 |
+| 公开 GitHub Release／tag／发行资产及下游安装 | 下载者、四个示例宿主、正式版晋升和固定版本恢复；需求见[发布合同](release-ci.md)与[示例](examples.md) | 已核四个固定 dev 的版本选择，以及首次接入示例的 macOS 安装和实际检查执行物，见下文；其余采用、用途与最终释放保持 unknown。没有本仓时间滚动退役公开版本的合同 |
 | 固定报告、当前安装指针、OS plist／socket、租约／owner 文件 | 当前位置查询、当前执行物／启动、互斥与恢复；删除它们可能使仍在使用的工具失效 | 固定数量与内容到期是不同性质。卸载、换代和释放后才可退休；不得泛化为按目录年龄删 state／bin |
 
 隔离测试还存在一层独立保管链：[`isolated_capability.rs`](../crates/runner-tests/tests/support/isolated_capability.rs) 先分配外层临时目录，复制 Git／Cargo 替身，再把其 `custody/` 交给子测试。[`fixture_coordinator.rs`](../crates/worktree-tests/tests/support/fixture_coordinator.rs) 只在该子目录采用上述四类 producer，并覆盖已删除元数据的期限。外层实际持有目录租约、等待最初启动的子测试进程结束，再调用退休观察；只有子测试成功且观察确认退休，才删除整个外层目录。复制的替身由该子测试实际执行，失败原件由调试和回归验收消费；子测试失败或退休未确认时，外层 `.keep()` 保留原件。内层登记没有把整个外层目录交给定期维护者，打印路径及“按已登记政策处理”的提示也不构成持久交接。因此，迁移某个内层分配不能单独关闭外层失败／中断后的回收缺口。
@@ -149,6 +149,14 @@ SHA-256 `a341e3a55313142df09c02ebeade9bbed307ea8346262d03b81d40158c9249dd`，
 `physical_release_bytes:null`。这更新的是实际失败证据，不能计为三次连续成功定时验收，
 也不能把非原子库存体积变化当作物理释放量。本次没有重启或改配该服务。
 
+第四轮这个固定库存还包含前三轮父报告及各自 JSONL 的六份声明。三份父报告均为
+`phase:released`，持久 `roles` 和 `incoming` 都为空；各自 JSONL 也为 released，
+只被自己的父报告引用，没有其他持久角色。父报告的 `expires` 分别为
+`1794918017`、`1794922306`、`1794927159` Unix 秒，直接依赖数分别为 202、204、204；
+未观察到这三份父报告直接互相引用。JSONL 的原期限虽已到达，父引用仍保护它。
+这为 O8 补上了具体的有限期限和父子交接观察；实际内核使用凭据、后续完整依赖关系、
+公平维护和到期删除仍须核验，不能由六份声明推出全库报告都能退休。
+
 本次候选 `bc4d037b…` 的本地 canonical check 实际通过，原件为 `preparation/check-a8cf1a68df21d2ced9cf2e0304b60023f32b17e527aee736f854a781924ecd7c.json`。原 judge 退出 0、`failure:null`、`owned_work_joined:true`，两流完整且摘要与原字节相符。但控制台同时报告维护请求 `wake-failed`，原错误为 `No buffer space available (os error 55)`；它没有宣称轮次完成或删除。这是 O7 的实际激活缺口，不能用业务检查通过覆盖它，也没有据此重启或重复启动维护。
 
 外部只读 API 在同日返回 Actions cache 29 项、10,412,706,640 字节；这是 provider 的逻辑大小观察，不是本机占用或永久容量界。公开版本 `v0.1.5-dev.43667091970.1.g92022124cdf26b4bab71b135ec78f13a6318de4e` 的安装器和 manifest 各有 3 次下载、两平台 worktree 程序各有 2 次下载。这支持“确有下载消费”，不能识别下载者、证明当前安装或区分内部安装验收与外部用户。首次读取仓库级 artifacts 列表失败；补取 HTTP 原响应为 500、空正文、请求号 `F953:1CD415:70E10A4:B2233F8:6AFB0357`，当时有效过期信息保持 unknown，没有用默认天数补值。
@@ -169,6 +177,30 @@ SHA-256 `a341e3a55313142df09c02ebeade9bbed307ea8346262d03b81d40158c9249dd`，
 登记；[生成工作流](../.github/workflows/chrono-ci.yml) 的 aggregate 以
 `needs.detect.outputs.startup_artifact` 这个精确 ID 下载，按 aggregate profile 安装，
 随后执行 `check --collect`。文档 DELTA 没有业务单元也不取消这条使用链，不能据此退役 startup。
+
+同日还只读核对四个示例仓库的固定 dev。它们的 `.chrono-harness/distribution.json`
+都选择 `v0.1.5-dev.43590532131.1.ge307951ea6ebe94c7f91300a315249079fccbe6b`，
+每个固定提交均有成功的 dev push CI：
+
+| 示例仓库 | 固定 dev 提交 | 同提交的成功运行 |
+| --- | --- | --- |
+| chrono-harness-examples-go | `bac97bf72bcfa4596da685911d570d6aacb00aab` | [43594251829](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/43594251829) |
+| chrono-harness-examples-ts | `b1eb024a2f1340208857ea34c6350d3b92a04a03` | [43594250908](https://github.com/ChronoAIProject/chrono-harness-examples-ts/actions/runs/43594250908) |
+| chrono-harness-examples-mix | `313773ecb309e9c73617a4db30232a6237d0d4bb` | [43594252987](https://github.com/ChronoAIProject/chrono-harness-examples-mix/actions/runs/43594252987) |
+| chrono-harness-examples-initial | `0dacf9660af0791c40e650cdad37c0634a40ce29` | [43594251814](https://github.com/ChronoAIProject/chrono-harness-examples-initial/actions/runs/43594251814) |
+
+首次接入示例的 workflow 在该固定提交先调用 `install.sh`，再运行标准 `check`。
+原 artifact `14113503015` 的 ZIP 为 179,853 字节，SHA-256
+`9806ec085cc905bb56ba2f34ed0e07f68d10d22821908d3ac1cfd6880d68d0a5`，已完整核对。
+其中 `distribution.json` 为 `chrono-install-result/v1`，选择 macos-aarch64，
+16 条安装记录的摘要／长度均匹配该公开版本的原 `release.json`；清单为 6,649 字节，
+摘要 `9ec8035524d16f8e13bb9088c3ede78a0d457ae27bfcaa9d28e6cf88940a240d`。
+原检查候选匹配该示例提交，judge 退出 0、子任务已等待，两流完整且摘要已核，原响应 passed。
+runner 的实际摘要 `d9891811d8248f6eb3fe290b6d9e38812d9c9177aacf8c8777bcd57bf782d2b5`
+和 judge 的实际摘要 `96e94b2b37ea951b2d3c348e575d3b76b3783c741d9aec5dcc3bef4ed1abd751`
+分别匹配公开的 `chrono-harness`、`chrono-judge-ci` 资产。这建立了这两个文件的具名实际使用关系；
+其余资产的安装后用途、另外三个示例的原安装、其他外部用户和全部最终释放仍为 unknown。
+本次没有重跑下游 CI 或改变其采用版本；后续版本不能沿用这份固定采用结论。
 
 本次源码检出开始时没有构建输出，`du -sk .` 为 14,116 KiB；卷可用空间为 178,987,352 KiB。主库 bin／state／cache 的另一次计量没有收取到完整退出和输出，保持 unknown，未将它当成零或空间收益。本次没有运行新的全库维护，也没有声称已完成三次定时验收。
 
