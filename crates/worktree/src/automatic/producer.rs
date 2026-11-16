@@ -78,6 +78,12 @@ pub fn find_producer_declaration<R: ProducerDeclarations>(rows: &R, producer: &s
         },
     },
 {
+    proof {
+        reveal_strlit("retained producer store is not declared by its owner");
+        reveal_strlit("temporary producer is not prospectively adopted");
+        assert("retained producer store is not declared by its owner"@.len()
+            != "temporary producer is not prospectively adopted"@.len());
+    }
     let count = rows.len();
     let mut index = 0usize;
     while index < count
@@ -87,6 +93,9 @@ pub fn find_producer_declaration<R: ProducerDeclarations>(rows: &R, producer: &s
     {
         if equal_text(rows.name(index), producer) {
             if temporary && !rows.temporary(index) {
+                assert(exists|found: int| 0 <= found < rows.count()
+                    && rows.name_at(found)@ == producer@ && !rows.temporary_at(found)
+                    && forall|j: int| 0 <= j < found ==> rows.name_at(j)@ != producer@);
                 return Err("temporary producer is not prospectively adopted");
             }
             return Ok(index);
@@ -123,7 +132,7 @@ pub fn visit_producer_stores<S, T, E, F>(state: S, rows: &[T], visit: &F)
     let mut current = state;
     let mut index = 0usize;
     while index < rows.len()
-        invariant index <= rows.len(), states.len() == index + 1,
+        invariant initial == state, index <= rows.len(), states.len() == index + 1,
             states.last() == current,
             producer_visit_prefix(rows@, states, initial, visit),
             forall|state: S, index: usize, row: &T| visit.requires((state, index, row)),
@@ -148,7 +157,20 @@ pub fn visit_producer_stores<S, T, E, F>(state: S, rows: &[T], visit: &F)
                 }
                 current = next;
             },
-            _ => return (next, result),
+            Ok(false) => {
+                let out = (next, Ok::<bool, E>(false));
+                assert(states.len() <= rows.len());
+                assert(visit.ensures((states.last(), (states.len() - 1) as usize,
+                    &rows@[states.len() - 1]), out));
+                return out;
+            },
+            Err(error) => {
+                let out = (next, Err::<bool, E>(error));
+                assert(states.len() <= rows.len());
+                assert(visit.ensures((states.last(), (states.len() - 1) as usize,
+                    &rows@[states.len() - 1]), out));
+                return out;
+            },
         }
         index += 1;
     }
