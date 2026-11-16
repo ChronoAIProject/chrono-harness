@@ -26,6 +26,25 @@ use crate::verified_identifiers as identifiers;
 
 verus! {
 
+/// 退役尚未准入时，只报告预算停止，不声称已尝试或完成处置。
+pub fn retirement_deferral(metadata_room: bool, nodes: usize, node_limit: usize,
+    elapsed_millis: u128, max_millis: u64) -> (reason: Option<&'static str>)
+    ensures
+        reason.is_none() == (metadata_room && nodes < node_limit
+            && elapsed_millis < max_millis as u128),
+        match reason {
+            Some(text) => text@ == "retirement round budget exhausted; original not attempted"@,
+            None => true,
+        },
+{
+    if !metadata_room || nodes >= node_limit || elapsed_millis >= max_millis as u128 {
+        Some("retirement round budget exhausted; original not attempted")
+    } else {
+        None
+    }
+}
+
+
 /// 中间树游标必须落盘；耗尽的游标交给现役终态／引用脱离保存。
 /// 选择和原结果转交归此函数，保存回调仍由保留声明的所有者执行。
 pub fn checkpoint_disposal<S, E, F>(state: S, tree: bool, remaining: usize, persist: &F)

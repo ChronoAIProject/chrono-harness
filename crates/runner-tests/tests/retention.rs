@@ -121,6 +121,44 @@ fn inventory(root: &Path) -> Inventory {
 }
 
 #[test]
+fn exhausted_retirement_budget_reports_the_unattempted_original() {
+    if !isolated_capability_test("exhausted_retirement_budget_reports_the_unattempted_original") {
+        return;
+    }
+    let mut h = host(1, 16);
+    h.disable_cleanup(true);
+    eprintln!("retention budget fixture originals: {}", h.path().display());
+    let path = ".chrono-harness/state/fixtures/interrupted-accounting";
+    fs::write(h.path().join(path), b"original interrupted producer").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!({"completion":"unknown"}))
+        .unwrap();
+    let id = publication.id().to_owned();
+    drop(publication);
+    let round = inventory(h.path())
+        .maintain_originals_at(std::slice::from_ref(&id), u64::MAX)
+        .unwrap();
+    assert_eq!(round["nodes"], 1, "{round}");
+    assert_eq!(round["disposed"], json!([]), "{round}");
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
+    assert_eq!(
+        fs::read(h.path().join(path)).unwrap(),
+        b"original interrupted producer"
+    );
+    assert!(
+        round["protected"].as_array().unwrap().iter().any(|row| {
+            row["id"] == id
+                && row["reason"] == "retirement round budget exhausted; original not attempted"
+        }),
+        "the owning round must explain its unattempted original: {round}"
+    );
+    h.disable_cleanup(false);
+}
+
+#[test]
 fn explicit_quota_observes_more_members_than_one_address_budget() {
     if !isolated_capability_test("explicit_quota_observes_more_members_than_one_address_budget") {
         return;
