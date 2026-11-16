@@ -152,6 +152,17 @@ fn producer_lookup_rejects_absence_and_nearby_full_names() {
     }
 }
 
+proof fn producer_trace_prefix_step<S, T, E, F>(rows: Seq<T>, states: Seq<S>, initial: S,
+    visit: &F, index: int)
+    where F: Fn(S, usize, &T) -> (S, Result<bool, E>),
+    requires policy::producer_visit_prefix(rows, states, initial, visit),
+        0 <= index < states.len() - 1,
+    ensures visit.ensures((states[index], index as usize, &rows[index]),
+        (states[index + 1], Ok::<bool, E>(true))),
+{
+    reveal(policy::producer_visit_prefix);
+}
+
 fn producer_visit_case(stop: usize, failure: bool)
     requires stop <= 2,
 {
@@ -192,13 +203,15 @@ fn producer_visit_case(stop: usize, failure: bool)
         assert(1 <= states.len() <= 3);
         assert(states[0]@ == Seq::<(usize, u8)>::empty());
         if states.len() >= 2 {
-            assert(visit.ensures((states[0], 0usize, &rows@[0]),
+            producer_trace_prefix_step(rows@, states, original, &visit, 0);
+            assert((&visit).ensures((states[0], 0usize, &rows@[0]),
                 (states[1], Ok::<bool, (u32, u64)>(true))));
             assert(stop != 0);
             assert(states[1]@ == seq![(0usize, 17u8)]);
         }
         if states.len() == 3 {
-            assert(visit.ensures((states[1], 1usize, &rows@[1]),
+            producer_trace_prefix_step(rows@, states, original, &visit, 1);
+            assert((&visit).ensures((states[1], 1usize, &rows@[1]),
                 (states[2], Ok::<bool, (u32, u64)>(true))));
             assert(stop == 2);
             assert(states[2]@ == seq![(0usize, 17u8), (1usize, 239u8)]);
