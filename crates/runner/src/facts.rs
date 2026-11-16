@@ -471,7 +471,10 @@ impl Reader {
             cfg!(unix),
             &SnapshotExportIo {
                 prefetch: |reader, paths: &Vec<String>| {
-                    (reader, self.immutable_blobs(root, oid, paths).map(|_| ()))
+                    (
+                        reader,
+                        self.acquire_missing_blobs(root, oid, paths).map(|_| ()),
+                    )
                 },
                 locate: |reader, path: &String| (reader, no_symlink_parents(dest, path)),
                 parent: |reader, path: &std::path::PathBuf| {

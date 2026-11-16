@@ -411,7 +411,7 @@
     {"path":"crates/judge-registration-tests/tests/git_inputs.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/input_coverage.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-workflow-tests/tests/git_facts.rs","owner":"judge-workflow-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow-tests"}]},
-    {"path":"docs/git-facts.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
+    {"path":"docs/git-facts.md","verification":{"role":"data","roots":[]},"owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/ci-tests/tests/git_facts.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
     {"path":"crates/ci/src/event_git.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":"crates/ci/src/release.rs","verification":{"role":"program","roots":[{"path":"crates/ci/src/verified_literals.rs","operation":"verify.ci-literals"},{"path":"crates/ci-tests/tests/verified_literals.rs","operation":"verify.ci-literals-tests"}]},"owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
