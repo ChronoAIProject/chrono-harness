@@ -25,10 +25,12 @@ verus! {
 
 #[cfg(verus_keep_ghost)]
 fn initial_inventory_rejects_unregistered_files_and_collection_avoids_extra_acquisition() {
-    assert(initial_expectations::initial_inventory_exit(false) == 0);
-    assert(initial_expectations::initial_inventory_exit(true) == 1);
-    assert(gating_expectations::parent_lookup_count(false) == 1);
-    assert(gating_expectations::parent_lookup_count(true) == 2);
+    let registered = initial_expectations::initial_inventory_exit(false);
+    let unregistered = initial_expectations::initial_inventory_exit(true);
+    let empty = gating_expectations::parent_lookup_count(false);
+    let selected = gating_expectations::parent_lookup_count(true);
+    assert(registered == 0 && unregistered == 1);
+    assert(empty == 1 && selected == 2);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
