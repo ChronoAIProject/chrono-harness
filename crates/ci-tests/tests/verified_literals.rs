@@ -1,17 +1,17 @@
 //! CI 字面文本判断的独立成功、失败与边界预期。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
+#[path = "gating.rs"]
+mod gating_expectations;
+#[cfg(verus_keep_ghost)]
+#[path = "initial_short.rs"]
+mod initial_expectations;
+#[cfg(verus_keep_ghost)]
 #[path = "../../ci/src/verified_literals.rs"]
 mod policy;
 #[cfg(verus_keep_ghost)]
 #[path = "release.rs"]
 mod release_expectations;
-#[cfg(verus_keep_ghost)]
-#[path = "initial_short.rs"]
-mod initial_expectations;
-#[cfg(verus_keep_ghost)]
-#[path = "gating.rs"]
-mod gating_expectations;
 #[cfg(not(verus_keep_ghost))]
 use chrono_ci::verified_literals as policy;
 #[cfg(not(verus_keep_ghost))]
