@@ -106,7 +106,11 @@ fn producer_lookup_preserves_first_match_and_temporary_admission() {
         Ok(index) => expect(index == 0), _ => expect(false),
     }
     match policy::find_producer_declaration(&rows, "fixture λ\0\n", true) {
-        Err(error) => expect(policy::equal_text(error, "temporary producer is not prospectively adopted")),
+        Err(policy::ProducerLookupError::NotTemporary(index)) => {
+            expect(index == 0);
+            expect(policy::equal_text(policy::ProducerLookupError::NotTemporary(index).message(),
+                "temporary producer is not prospectively adopted"));
+        },
         _ => expect(false),
     }
     match policy::find_producer_declaration(&rows, "", true) {
@@ -123,7 +127,8 @@ fn producer_lookup_rejects_absence_and_nearby_full_names() {
     }
     let rows = DeclarationRows { rows: Vec::new() };
     match policy::find_producer_declaration(&rows, "", false) {
-        Err(error) => expect(policy::equal_text(error, "retained producer store is not declared by its owner")),
+        Err(policy::ProducerLookupError::Missing) => expect(policy::equal_text(
+            policy::ProducerLookupError::Missing.message(), "retained producer store is not declared by its owner")),
         _ => expect(false),
     }
     let mut entries = Vec::new();
@@ -131,7 +136,8 @@ fn producer_lookup_rejects_absence_and_nearby_full_names() {
     entries.push(("Fixture", true));
     let rows = DeclarationRows { rows: entries };
     match policy::find_producer_declaration(&rows, "fixture", true) {
-        Err(error) => expect(policy::equal_text(error, "retained producer store is not declared by its owner")),
+        Err(policy::ProducerLookupError::Missing) => expect(policy::equal_text(
+            policy::ProducerLookupError::Missing.message(), "retained producer store is not declared by its owner")),
         _ => expect(false),
     }
 }
@@ -160,6 +166,7 @@ fn producer_visit_case(stop: usize, failure: bool)
     let ghost original = initial;
     let (trace, result) = policy::visit_producer_stores(initial, &rows, &visit);
     proof {
+        reveal(policy::producer_visit_prefix);
         let states = choose|states: Seq<Vec<(usize, u8)>>|
             policy::producer_visit_prefix(rows@, states, original, &visit)
                 && match result {

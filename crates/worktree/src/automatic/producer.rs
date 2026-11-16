@@ -60,30 +60,38 @@ pub trait ProducerDeclarations {
         ensures out == self.temporary_at(index as int);
 }
 
+pub enum ProducerLookupError { Missing, NotTemporary(usize) }
+
+impl ProducerLookupError {
+    pub fn message(&self) -> (out: &'static str)
+        ensures out@ == match self {
+            Self::Missing => "retained producer store is not declared by its owner"@,
+            Self::NotTemporary(_) => "temporary producer is not prospectively adopted"@,
+        },
+    {
+        match self {
+            Self::Missing => "retained producer store is not declared by its owner",
+            Self::NotTemporary(_) => "temporary producer is not prospectively adopted",
+        }
+    }
+}
+
 /// Preserve the first exact declaration and the existing admission error order.
 pub fn find_producer_declaration<R: ProducerDeclarations>(rows: &R, producer: &str,
-    temporary: bool) -> (out: Result<usize, &'static str>)
+    temporary: bool) -> (out: Result<usize, ProducerLookupError>)
     ensures match out {
         Ok(index) => index < rows.count()
             && rows.name_at(index as int)@ == producer@
             && (!temporary || rows.temporary_at(index as int))
             && forall|j: int| 0 <= j < index ==> rows.name_at(j)@ != producer@,
-        Err(error) => if error@ == "retained producer store is not declared by its owner"@ {
+        Err(ProducerLookupError::Missing) =>
             forall|j: int| 0 <= j < rows.count() ==> rows.name_at(j)@ != producer@
-        } else {
-            error@ == "temporary producer is not prospectively adopted"@
-                && temporary && exists|index: int| 0 <= index < rows.count()
-                    && rows.name_at(index)@ == producer@ && !rows.temporary_at(index)
-                    && forall|j: int| 0 <= j < index ==> rows.name_at(j)@ != producer@
-        },
+        ,
+        Err(ProducerLookupError::NotTemporary(index)) => temporary && index < rows.count()
+            && rows.name_at(index as int)@ == producer@ && !rows.temporary_at(index as int)
+            && forall|j: int| 0 <= j < index ==> rows.name_at(j)@ != producer@,
     },
 {
-    proof {
-        reveal_strlit("retained producer store is not declared by its owner");
-        reveal_strlit("temporary producer is not prospectively adopted");
-        assert("retained producer store is not declared by its owner"@.len()
-            != "temporary producer is not prospectively adopted"@.len());
-    }
     let count = rows.len();
     let mut index = 0usize;
     while index < count
@@ -93,16 +101,13 @@ pub fn find_producer_declaration<R: ProducerDeclarations>(rows: &R, producer: &s
     {
         if equal_text(rows.name(index), producer) {
             if temporary && !rows.temporary(index) {
-                assert(exists|found: int| 0 <= found < rows.count()
-                    && rows.name_at(found)@ == producer@ && !rows.temporary_at(found)
-                    && forall|j: int| 0 <= j < found ==> rows.name_at(j)@ != producer@);
-                return Err("temporary producer is not prospectively adopted");
+                return Err(ProducerLookupError::NotTemporary(index));
             }
             return Ok(index);
         }
         index += 1;
     }
-    Err("retained producer store is not declared by its owner")
+    Err(ProducerLookupError::Missing)
 }
 
 pub open spec fn producer_visit_prefix<S, T, E, F>(rows: Seq<T>, states: Seq<S>,
@@ -1067,7 +1072,8 @@ impl RetainedArtifact {
                                 &inputs.anchor_policy.retained_producers,
                                 producer,
                                 temporary,
-                            )?;
+                            )
+                            .map_err(|error| error.message())?;
                             let declaration = &inputs.anchor_policy.retained_producers[index];
                             stores.push((
                                 declaration.directory(&inputs.policy.coordinator_root)?,
