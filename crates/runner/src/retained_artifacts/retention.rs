@@ -15,6 +15,22 @@ pub fn accounting_releases(completing: bool, sealed: bool) -> (released: bool)
 {
     completing && sealed
 }
+
+/// A creation window is closed at its deadline. Clock rollback does not admit
+/// a reader before the recorded birth either.
+pub fn within_creation_window(created_at: u64, deadline: u64, observed: u64) -> (admitted: bool)
+    ensures admitted == (created_at <= observed && observed < deadline),
+{
+    created_at <= observed && observed < deadline
+}
+
+/// Completion and diagnostic requests never extend eligibility beyond birth's deadline.
+pub fn bounded_expiry(requested: u64, deadline: u64) -> (expires: u64)
+    ensures expires <= deadline, expires <= requested,
+        expires == if requested < deadline { requested } else { deadline },
+{
+    if requested < deadline { requested } else { deadline }
+}
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -107,6 +123,9 @@ fn retained_measurements(
 #[cfg(not(verus_keep_ghost))]
 pub struct Policy {
     pub schema: String,
+    /// Adopt only after compatible readers and explicit migration are ready.
+    #[serde(default)]
+    pub max_lifetime_seconds: Option<u64>,
     #[serde(default)]
     pub terminal_limits: BTreeMap<String, TerminalLimits>,
     pub producers: BTreeMap<String, Vec<String>>,
@@ -183,6 +202,28 @@ struct Creation {
     parent_identity: String,
     staged: String,
 }
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
+struct Lifetime {
+    created_at: u64,
+    deadline: u64,
+}
+#[cfg(not(verus_keep_ghost))]
+impl Lifetime {
+    fn new(created_at: u64, seconds: u64) -> Result<Self, String> {
+        let deadline = created_at
+            .checked_add(seconds)
+            .ok_or("output deadline overflow")?;
+        if seconds == 0 {
+            return Err("output lifetime must be positive".into());
+        }
+        Ok(Self {
+            created_at,
+            deadline,
+        })
+    }
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg(not(verus_keep_ghost))]
@@ -202,6 +243,8 @@ struct Output {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     observed_return: Option<Value>,
     expires: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lifetime: Option<Lifetime>,
     references: Vec<String>,
     stack: Vec<Node>,
     removed_logical_bytes: u64,
@@ -215,6 +258,25 @@ struct Output {
     creation: Option<Creation>,
     #[serde(default)]
     overflow_disposal: bool,
+}
+#[cfg(not(verus_keep_ghost))]
+impl Output {
+    fn bound_expiry(&self, requested: u64) -> u64 {
+        self.lifetime.as_ref().map_or(requested, |window| {
+            bounded_expiry(requested, window.deadline)
+        })
+    }
+    fn admit(&self, observed: u64) -> Result<(), String> {
+        if self.lifetime.as_ref().is_some_and(|window| {
+            !within_creation_window(window.created_at, window.deadline, observed)
+        }) {
+            return Err(format!(
+                "output creation deadline closed: {}; transfer valuable bytes and consumers before expiry",
+                self.id
+            ));
+        }
+        Ok(())
+    }
 }
 
 // A round owns typed records for only the explicitly addressed graph.
@@ -565,6 +627,7 @@ impl Inventory {
         };
         let policy: Policy = decode(&bytes)?;
         if policy.schema != "chrono-output-retention/v2"
+            || policy.max_lifetime_seconds == Some(0)
             || policy.max_related_outputs == 0
             || policy.max_related_outputs > 4096
             || policy.max_summaries == 0
@@ -671,6 +734,12 @@ impl Inventory {
             crate::relative_path(&o.path)?;
             crate::relative_path(&o.lease)?;
             if !ids.insert(o.id.clone())
+                || o.lifetime.as_ref().is_some_and(|window| {
+                    window.deadline <= window.created_at || o.expires > window.deadline
+                })
+                || (self.policy.max_lifetime_seconds.is_some()
+                    && o.lifetime.is_none()
+                    && policy_digest == sha256(&self.policy_bytes))
                 || o.path.len() > 4096
                 || o.byte_limit
                     .is_some_and(|n| n == 0 || n > self.policy.max_output_bytes)
@@ -742,6 +811,49 @@ impl Inventory {
             }
         }
         Ok(l)
+    }
+    // Only newly admitted members are checked. Release, preservation and
+    // retirement must remain possible after a deadline, without inventing a
+    // successful domain result or ignoring a live capability.
+    fn admit(&self, ledger: &Ledger, ids: &[String]) -> Result<(), String> {
+        let observed = now()?;
+        for id in ids {
+            ledger
+                .outputs
+                .iter()
+                .find(|output| output.id == *id)
+                .ok_or("required original unavailable")?
+                .admit(observed)?;
+        }
+        Ok(())
+    }
+    fn lifetime_for_existing(&self, output: &Output) -> Result<Option<Lifetime>, String> {
+        if output.lifetime.is_some() || self.policy.max_lifetime_seconds.is_none() {
+            return Ok(output.lifetime.clone());
+        }
+        let path = no_symlink_parents(&self.root, &output.path)?;
+        if identity(&path)? != output.identity {
+            return Err("original identity changed before creation-window migration".into());
+        }
+        let created_at = fs::symlink_metadata(&path)
+            .map_err(|e| e.to_string())?
+            .created()
+            .map_err(|e| {
+                format!("original birth time unavailable; preserve before migration: {e}")
+            })?
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| e.to_string())?
+            .as_secs();
+        if identity(&path)? != output.identity {
+            return Err("original identity changed while reading birth evidence".into());
+        }
+        if created_at > now()? {
+            return Err("original birth time is in the future; preserve before migration".into());
+        }
+        Ok(Some(Lifetime::new(
+            created_at,
+            self.policy.max_lifetime_seconds.unwrap(),
+        )?))
     }
     fn save(&self, l: &Ledger, gate: &Gate) -> Result<(), String> {
         self.stable(gate)?;
@@ -894,7 +1006,8 @@ impl Inventory {
     /// Explicit owner migration. The caller supplies the exact prior policy bytes;
     /// each selected output and its forward dependencies must still be declared,
     /// and their old producers/readers must be excluded. None selects the inventory.
-    /// This changes no output identity, original outcome, expiry, root, or completion state.
+    /// A creation-window adoption uses the exact physical original's birth time;
+    /// missing birth evidence fails. Existing deadlines are never renewed.
     pub fn migrate_policy(
         &self,
         previous_policy: &[u8],
@@ -985,11 +1098,16 @@ impl Inventory {
                             .ok_or("live output producer/consumer prevents retention migration")?,
                     );
                 }
+                let lifetimes = l
+                    .outputs
+                    .iter()
+                    .map(|output| Ok((output.id.clone(), self.lifetime_for_existing(output)?)))
+                    .collect::<Result<BTreeMap<_, _>, String>>()?;
                 if publish {
                     for owner in &owners {
                         owner.stable()?;
                     }
-                    self.partition_rebind_policy(&gate)?;
+                    self.partition_rebind_policy(&gate, &lifetimes)?;
                     preserved.extend(l.outputs.iter().map(|output| output.id.clone()));
                     roots.extend(l.roots.keys().cloned());
                 }
@@ -1232,6 +1350,32 @@ impl Inventory {
         if lease_path.exists() {
             return Err("reserved output capability already exists; preserve it".into());
         }
+        let lifetime = self
+            .policy
+            .max_lifetime_seconds
+            .map(|seconds| {
+                let created_at = if create.is_some() {
+                    now()?
+                } else {
+                    let created = fs::symlink_metadata(&physical)
+                        .map_err(|e| e.to_string())?
+                        .created()
+                        .map_err(|e| format!("original birth time unavailable: {e}"))?;
+                    created
+                        .duration_since(UNIX_EPOCH)
+                        .map_err(|e| e.to_string())?
+                        .as_secs()
+                };
+                if created_at > now()? {
+                    return Err("original birth time is in the future".into());
+                }
+                Lifetime::new(created_at, seconds)
+            })
+            .transpose()?;
+        let requested_expiry = now()?.saturating_add(self.keep_seconds(producer));
+        let expires = lifetime.as_ref().map_or(requested_expiry, |window| {
+            bounded_expiry(requested_expiry, window.deadline)
+        });
         let object = Output {
             id: id.clone(),
             producer: producer.into(),
@@ -1245,7 +1389,8 @@ impl Inventory {
             outcome,
             phase: "reserving".into(),
             observed_return: None,
-            expires: now()?.saturating_add(self.keep_seconds(producer)),
+            expires,
+            lifetime,
             references: vec![],
             stack: vec![],
             removed_logical_bytes: 0,
@@ -1262,6 +1407,7 @@ impl Inventory {
             },
             overflow_disposal: false,
         };
+        object.admit(now()?)?;
         for role in roots {
             if role.is_empty()
                 || role.len() > 256
@@ -1317,6 +1463,7 @@ impl Inventory {
         let gate = self.member_gate(&[], &[path.into()])?;
         let l = self.load(&gate)?;
         if let Some(o) = l.outputs.iter().find(|o| o.path == path) {
+            o.admit(now()?)?;
             if o.phase == "disposing"
                 || identity(&no_symlink_parents(&self.root, path)?)? != o.identity
             {
@@ -1382,6 +1529,7 @@ impl Inventory {
                     && output.phase == "released"
                     && output.manifest.sealed =>
             {
+                output.admit(now()?)?;
                 if identity(&no_symlink_parents(&self.root, tree)?)? != output.identity {
                     return Err("published tree identity changed; preserve originals".into());
                 }
@@ -1438,6 +1586,7 @@ impl Inventory {
             .iter_mut()
             .find(|o| o.path == path)
             .ok_or("staged directory has no original publication")?;
+        output.admit(now()?)?;
         if output.producer != producer
             || !output.tree
             || output.creation.is_some()
@@ -1511,14 +1660,17 @@ impl Inventory {
             .iter_mut()
             .find(|output| output.path == path)
             .ok_or("diagnostic original is not enrolled")?;
+        output.admit(now()?)?;
         if !matches!(output.phase.as_str(), "publishing" | "released" | "sealing")
             || identity(&no_symlink_parents(&self.root, path)?)? != output.identity
         {
             return Err("diagnostic original is unfinished, disposing or replaced".into());
         }
-        output.expires = output
-            .expires
-            .max(now()?.saturating_add(self.policy.diagnostic_keep_seconds));
+        output.expires = output.bound_expiry(
+            output
+                .expires
+                .max(now()?.saturating_add(self.policy.diagnostic_keep_seconds)),
+        );
         self.save(&ledger, &gate)
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
@@ -1543,6 +1695,7 @@ impl Inventory {
             return Ok(());
         };
         let id = o.id.clone();
+        self.admit(&l, std::slice::from_ref(&id))?;
         if !l.roots.contains_key(consumer) && l.roots.len() >= self.policy.max_related_outputs {
             return Err("retention consumer capacity".into());
         }
@@ -1565,6 +1718,7 @@ impl Inventory {
             true,
         )?;
         let mut ledger = self.load(&gate)?;
+        self.admit(&ledger, &[source.into(), target.into()])?;
         if !ledger
             .outputs
             .iter()
@@ -1638,6 +1792,10 @@ impl Inventory {
                 .any(|o| ids.contains(&o.id) && o.phase == "disposing")
             {
                 return Err("report original disposal has started".into());
+            }
+            let added: Vec<_> = ids.difference(&expected).cloned().collect();
+            if !added.is_empty() {
+                self.admit(&ledger, &[added, vec![source.clone()]].concat())?;
             }
             let next: BTreeSet<_> = expected.union(&ids).cloned().collect();
             self.replace_dependency_members(&mut ledger, &source, &expected, &next)?;
@@ -1721,6 +1879,12 @@ impl Inventory {
                 return Err(format!("original output unavailable/disposing: {id}"));
             }
         }
+        let added: Vec<_> = ids
+            .iter()
+            .filter(|id| !l.roots.get(consumer).is_some_and(|old| old.contains(id)))
+            .cloned()
+            .collect();
+        self.admit(l, &added)?;
         if ids.is_empty() {
             l.roots.remove(consumer);
         } else {
@@ -1772,6 +1936,9 @@ impl Inventory {
                 || !matches!(o.phase.as_str(), "publishing" | "sealing" | "released")
             {
                 return Err("required consumer original binding/phase changed".into());
+            }
+            if !exclusive {
+                o.admit(now()?)?;
             }
             let lease = Lease::acquire(
                 &self.directory.join(&o.lease),
@@ -1856,6 +2023,7 @@ impl Inventory {
             .position(|o| o.path == destination && o.phase != "disposing")
             .ok_or("caller handoff destination unavailable")?;
         let output = &l.outputs[target];
+        self.admit(&l, &[ids.clone(), vec![output.id.clone()]].concat())?;
         let protected = if let Some(publication) = publication {
             publication.lease.stable()?;
             if output.id != publication.id
@@ -2086,6 +2254,19 @@ impl Inventory {
         {
             return Err("unavailable output dependency".into());
         }
+        let existing = l
+            .outputs
+            .iter()
+            .find(|o| o.id == id)
+            .ok_or("output unavailable/disposing")?;
+        let added: Vec<_> = references
+            .iter()
+            .filter(|target| !existing.references.contains(target))
+            .cloned()
+            .collect();
+        if !added.is_empty() {
+            self.admit(&l, &[added, vec![id.into()]].concat())?;
+        }
         let o = l
             .outputs
             .iter_mut()
@@ -2201,7 +2382,7 @@ impl Inventory {
         };
         let records: Vec<_> = outputs.iter().map(|o| json!({
             "id":o.id,"path":o.path,"identity":o.identity,"phase":o.phase,
-            "outcome":o.outcome,"observed_return":o.observed_return,"sealed":o.manifest.sealed,"expires":o.expires,
+            "outcome":o.outcome,"observed_return":o.observed_return,"sealed":o.manifest.sealed,"expires":o.expires,"lifetime":o.lifetime,
             "logical_bytes":if o.manifest.sealed { Some(o.manifest.bytes) } else { None },
         })).collect();
         Ok(
@@ -2731,9 +2912,14 @@ impl Inventory {
                 .ok_or("output disappeared")?;
             l.cursor = (i + 1) % count.max(1);
             if rooted.contains(&id) {
-                protected.push(
-                    json!({"id":id,"reason":protection_reasons.get(&id).map(String::as_str).unwrap_or("current consumer/reference closure")}),
-                );
+                let mut protection = json!({"id":id,"reason":protection_reasons.get(&id).map(String::as_str).unwrap_or("current consumer/reference closure")});
+                if let Some(window) = &l.outputs[i].lifetime {
+                    if observed >= window.deadline {
+                        protection["deadline_missed"] = json!(true);
+                        protection["deadline"] = json!(window.deadline);
+                    }
+                }
+                protected.push(protection);
                 continue;
             }
             nodes += 1;
@@ -3241,6 +3427,7 @@ impl Inventory {
             .iter()
             .find(|o| o.id == id && o.phase != "disposing")
             .ok_or("original evidence unavailable or disposed")?;
+        o.admit(now()?)?;
         let lease = Lease::acquire(
             &self.directory.join(&o.lease),
             Some(&o.lease_id),
@@ -3692,7 +3879,8 @@ impl Publication {
                 o.phase = "released".into();
             }
             if completing {
-                o.expires = now()?.saturating_add(self.inventory.keep_seconds(&o.producer));
+                o.expires =
+                    o.bound_expiry(now()?.saturating_add(self.inventory.keep_seconds(&o.producer)));
             } else if sealed && measured.0 <= self.byte_limit() {
                 // The caller can still write its domain result. Persist a fresh
                 // cursor so the eventual completion must account those bytes too.
@@ -3724,6 +3912,7 @@ impl Publication {
                 || current.identity != owned.identity
                 || current.lease != owned.lease
                 || current.lease_id != owned.lease_id
+                || current.lifetime != owned.lifetime
                 || current.phase == "disposing"
             {
                 return Err("publication binding changed while sealing; preserve originals".into());
@@ -3973,6 +4162,7 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     if o.phase == "disposing" {
         return Err("original evidence unavailable: disposal has started".into());
     }
+    o.admit(now()?)?;
     let lease = Lease::acquire(
         &inventory.directory.join(&o.lease),
         Some(&o.lease_id),
