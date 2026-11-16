@@ -1759,6 +1759,7 @@ impl Inventory {
         let mut retiring_report = None;
         let mut retained_dependencies = BTreeSet::new();
         let mut maintenance_targets = BTreeSet::new();
+        let mut pending_dependencies = BTreeSet::new();
         // Nonblocking maintenance can hold each declaration while discovering
         // its edges. A busy metadata or path lease refuses the activity, so this
         // order never waits behind an ordinary publisher holding path locks.
@@ -1876,8 +1877,11 @@ impl Inventory {
                         report_frontier = true;
                     }
                     verified::FinalizedExpansion::Related => {
-                        selected.extend(output.references.iter().cloned());
+                        // Find current consumers before opening this original's
+                        // inputs. An upstream root may preserve this whole
+                        // boundary without holding its width simultaneously.
                         selected.extend(record.incoming.iter().cloned());
+                        pending_dependencies.insert(id);
                     }
                 }
                 continue;
@@ -1889,6 +1893,15 @@ impl Inventory {
                 })
                 .cloned();
             let Some(id) = next else {
+                if let Some(id) = pending_dependencies.pop_first() {
+                    if !retained_dependencies.contains(&id) {
+                        let record = observed
+                            .get(&id)
+                            .ok_or("pending dependency declaration was not read")?;
+                        selected.extend(record.output.as_ref().unwrap().references.iter().cloned());
+                    }
+                    continue;
+                }
                 break;
             };
             let directory = self.object_directory(&id)?;
