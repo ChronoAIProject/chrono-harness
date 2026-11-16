@@ -7067,6 +7067,18 @@ fn preserved_original_release_requires_exact_archive_roles_and_closed_users() {
         assert_eq!(ledger(h.path())["outputs"], before["outputs"]);
         assert_eq!(ledger(h.path())["roots"], before["roots"]);
     }
+    // An address outside the checkout is insufficient: the archive must not
+    // alias the original's physical file, even when every byte matches.
+    let alias = survivor.path().join("hardlink.json");
+    fs::hard_link(h.path().join(path), &alias).unwrap();
+    let mut linked = declaration.clone();
+    linked["survivor_path"] = json!("hardlink.json");
+    let rejected = consumer_call(h.path(), linked);
+    assert_eq!(rejected.exit_code, 2, "{}", rejected.stdout);
+    assert_eq!(ledger(h.path())["outputs"], before["outputs"]);
+    assert_eq!(ledger(h.path())["roots"], before["roots"]);
+    assert_eq!(fs::read(&alias).unwrap(), raw);
+    fs::remove_file(alias).unwrap();
     let result = consumer_call(h.path(), declaration.clone());
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     let output = &ledger(h.path())["outputs"][0];

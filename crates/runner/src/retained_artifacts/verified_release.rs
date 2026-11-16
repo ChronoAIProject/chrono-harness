@@ -26,6 +26,13 @@ use crate::verified_identifiers as identifiers;
 
 verus! {
 
+/// 不同地址及相同字节不能证明独立保管；硬链接仍有同一物理身份。
+pub fn independent_original(source: &str, survivor: &str) -> (independent: bool)
+    ensures independent == (source@ != survivor@),
+{
+    !identifiers::equal_text(source, survivor)
+}
+
 /// 退役尚未准入时，只报告预算停止，不声称已尝试或完成处置。
 pub fn retirement_deferral(metadata_room: bool, nodes: usize, node_limit: usize,
     elapsed_millis: u128, max_millis: u64) -> (reason: Option<&'static str>)

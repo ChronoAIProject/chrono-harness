@@ -2172,6 +2172,9 @@ impl Inventory {
             Ok(signature)
         };
         let survivor_identity = verify(&survivor)?;
+        if !crate::verified_release::independent_original(&original.identity, &survivor_identity) {
+            return Err("preserved original must have an independent physical identity; hard links are not a transfer".into());
+        }
         let receipt = json!({"schema":"chrono-preserved-original-release/v1","id":original.id,
             "original":original,"roles":roles,"survivor_root":survivor_root,
             "survivor_path":survivor_path,"survivor_identity":survivor_identity,
