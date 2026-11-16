@@ -72,13 +72,13 @@ fn compiler_receipt_observes_original_library_and_preserves_io_failure() {
     let op = &plan.operations[0];
     let tool = &plan.tools["routes-helper"];
     let command = CommandSpec {
-        program: tool.path.to_str().unwrap().into(),
+        program: tool.version.executable.to_str().unwrap().into(),
         args: op.method.argv.clone(),
         env: plan.environment.clone(),
         timeout_seconds: 10,
         output_limit_bytes: 4096,
     };
-    let run = || run_process_observed(root, &command, &[], &tool.sha256).unwrap();
+    let run = || run_process_observed(root, &command, &[], &tool.version.sha256).unwrap();
 
     let missing = Receipt::new(&plan, op, run()).unwrap();
     assert_eq!(missing.process.exit_code, 0);
@@ -410,14 +410,14 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     let process = run_process_observed(
         &plan.root,
         &CommandSpec {
-            program: tool.path.to_str().unwrap().into(),
+            program: tool.version.executable.to_str().unwrap().into(),
             args,
             env: plan.environment.clone(),
             timeout_seconds: 10,
             output_limit_bytes: 4096,
         },
         &[],
-        &tool.sha256,
+        &tool.version.sha256,
     )
     .unwrap();
     let data: serde_json::Value = serde_json::from_slice(&process.stdout_bytes).unwrap();
@@ -562,13 +562,13 @@ fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
     let op = &plan.operations[0];
     let tool = &plan.tools["routes-helper"];
     let spec = CommandSpec {
-        program: tool.path.to_str().unwrap().into(),
+        program: tool.version.executable.to_str().unwrap().into(),
         args: op.method.argv.clone(),
         env: BTreeMap::from([("PATH".into(), b.to_str().unwrap().into())]),
         timeout_seconds: 10,
         output_limit_bytes: 4096,
     };
-    let actual = run_process_observed(dir.path(), &spec, &[], &tool.sha256).unwrap();
+    let actual = run_process_observed(dir.path(), &spec, &[], &tool.version.sha256).unwrap();
     assert_eq!(actual.exit_code, 0);
     assert_eq!(actual.stdout, "bound-rust\n");
     let receipt = Receipt::new(&plan, op, actual).unwrap();
@@ -579,7 +579,7 @@ fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
     fs::remove_file(a.join("routes-helper")).unwrap();
     symlink(&shadow, a.join("routes-helper")).unwrap();
     assert!(
-        run_process_observed(dir.path(), &spec, &[], &tool.sha256)
+        run_process_observed(dir.path(), &spec, &[], &tool.version.sha256)
             .unwrap_err()
             .contains("digest mismatch")
     );

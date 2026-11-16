@@ -1,18 +1,11 @@
 //! Factual process/tool observations, without expected-version policy or work selection.
 use crate::{CommandSpec, ProcessResult, resolve_program, run_process_observed, sha256};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, fs, path::Path};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tool {
     pub program: String,
-    pub path: PathBuf,
-    pub basename: String,
-    pub sha256: String,
     pub version: ProcessResult,
 }
 pub fn tool(
@@ -43,14 +36,6 @@ pub fn tool(
     let version = run_process_observed(root, &spec, &[], &hash)?;
     Ok(Tool {
         program: program.into(),
-        basename: path
-            .file_name()
-            .ok_or("tool basename")?
-            .to_str()
-            .ok_or("tool basename UTF-8")?
-            .into(),
-        path,
-        sha256: hash,
         version,
     })
 }

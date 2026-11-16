@@ -480,13 +480,10 @@ fn validate_tool_inner(
 ) -> Result<(), String> {
     let actual = &tool.version;
     process_success(actual).map_err(|e| format!("E_TOOL_BINDING: {e}"))?;
-    let mut invocation = vec![tool.path.to_str().ok_or("tool path")?.to_string()];
+    let mut invocation = vec![actual.executable.to_str().ok_or("tool path")?.to_string()];
     invocation.extend_from_slice(argv);
     if tool.program != program
-        || !tool.path.is_absolute()
-        || tool.path.file_name().and_then(|s| s.to_str()) != Some(&tool.basename)
-        || actual.executable != tool.path
-        || actual.sha256 != tool.sha256
+        || !actual.executable.is_absolute()
         || actual.argv != invocation
         || actual.cwd != root
         || actual.environment != *env
@@ -498,11 +495,11 @@ fn validate_tool_inner(
         || actual.stdout_sha256 != chrono_harness::sha256(&actual.stdout_bytes)
         || actual.stdout.as_bytes() != actual.stdout_bytes
         || live
-            && fs::read(&tool.path)
+            && fs::read(&actual.executable)
                 .map(|b| chrono_harness::sha256(&b))
                 .ok()
                 .as_ref()
-                != Some(&tool.sha256)
+                != Some(&actual.sha256)
     {
         return Err("E_TOOL_BINDING: path/version/digest/environment observation mismatch".into());
     }
@@ -699,7 +696,7 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
         .get(&op.method.tool)
         .ok_or("E_TOOL_BINDING: missing tool")?;
     let p = &r.process;
-    let mut argv = vec![tool.path.to_str().ok_or("tool path")?.into()];
+    let mut argv = vec![tool.version.executable.to_str().ok_or("tool path")?.into()];
     argv.extend(op.method.argv.clone());
     if r.plan != plan.identity
         || r.operation != op.method.operation
@@ -707,8 +704,8 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
         || r.digest != r.identity()?
         || p.argv != argv
         || p.cwd != plan.root
-        || p.executable != tool.path
-        || p.sha256 != tool.sha256
+        || p.executable != tool.version.executable
+        || p.sha256 != tool.version.sha256
         || p.environment != plan.environment
         || p.environment_digest != wire::digest(&plan.environment)?
         || p.stdin_sha256 != chrono_harness::sha256(&[])
@@ -915,11 +912,12 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
             .unwrap()
             .iter()
             .any(|i| {
-                req.candidate.root.join(i["location"].as_str().unwrap()) == tool.path
-                    && i["sha256"] == tool.sha256
+                req.candidate.root.join(i["location"].as_str().unwrap()) == tool.version.executable
+                    && i["sha256"] == tool.version.sha256
             })
             || tool
-                .path
+                .version
+                .executable
                 .strip_prefix(&req.candidate.root)
                 .ok()
                 .and_then(|p| p.to_str())
@@ -931,7 +929,10 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
                         .any(|f| f["path"] == p)
                 });
         if !registered {
-            return Err(format!("E_INPUT_UNDECLARED: tool {}", tool.path.display()));
+            return Err(format!(
+                "E_INPUT_UNDECLARED: tool {}",
+                tool.version.executable.display()
+            ));
         }
     }
     Ok(BTreeMap::from([

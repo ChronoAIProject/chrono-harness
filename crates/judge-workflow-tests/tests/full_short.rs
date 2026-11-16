@@ -381,7 +381,10 @@ fn local_collection_observation(root: &Path, report: &Value) {
         let produced = chrono_harness::json(&stdout).unwrap();
         assert_eq!(produced, if index == 0 { endpoint } else { result }.clone());
         assert_eq!(receipt["process"]["exit_code"], 0);
-        assert_eq!(receipt["process"]["sha256"], receipt["tool"]["sha256"]);
+        assert_eq!(
+            receipt["process"]["sha256"],
+            receipt["tool"]["version"]["sha256"]
+        );
         if index == 1 {
             assert_eq!(receipt["request"], preparation["request"]);
             assert_eq!(receipt["action"]["tool"], "chrono-ci");
@@ -671,7 +674,7 @@ fn real_short_full_local_units_collection_and_delivery() {
         chrono_harness::json(&fs::read(lane.join(receipt["path"].as_str().unwrap())).unwrap())
             .unwrap();
     assert_eq!(
-        receipt["tool"]["path"],
+        receipt["tool"]["version"]["executable"],
         json!(
             fs::canonicalize(&lane)
                 .unwrap()
@@ -679,7 +682,7 @@ fn real_short_full_local_units_collection_and_delivery() {
         )
     );
     assert_eq!(
-        receipt["tool"]["sha256"],
+        receipt["tool"]["version"]["sha256"],
         sha256(&fs::read(lane.join(".chrono-harness/bin/chrono-worktree")).unwrap())
     );
     assert_eq!(

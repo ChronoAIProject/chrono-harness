@@ -271,7 +271,7 @@ fn execute_operation(plan: &Execution, index: usize, plan_original: &Value) -> O
             .get(&op.method.tool)
             .ok_or("E_TOOL_BINDING: missing plan tool")?;
         let spec = CommandSpec {
-            program: tool.path.to_str().ok_or("tool UTF-8")?.into(),
+            program: tool.version.executable.to_str().ok_or("tool UTF-8")?.into(),
             args: op.method.argv.clone(),
             env: plan.environment.clone(),
             timeout_seconds: op.timeout_seconds,
@@ -282,7 +282,7 @@ fn execute_operation(plan: &Execution, index: usize, plan_original: &Value) -> O
             &plan.root,
             &spec,
             &[],
-            &tool.sha256,
+            &tool.version.sha256,
             &state.as_ref().unwrap().evidence(),
         )?;
         Receipt::new(plan, op, process)
@@ -1362,16 +1362,17 @@ fn validate_declared_tools(
         )?;
         let declared_path = Path::new(program);
         if (declared_path.is_absolute() || program.contains('/'))
-            && plan.root.join(declared_path) != tool.path
+            && plan.root.join(declared_path) != tool.version.executable
         {
             return Err("E_COLLECTION_INPUT: original declared tool path".into());
         }
         let input = r.config()["environment"]["inputs"].as_array().unwrap().iter().any(|i| {
-            plan.root.join(i["location"].as_str().unwrap()) == tool.path && i["sha256"] == tool.sha256
-                && effective["endpoints"]["candidate"]["files"][i["id"].as_str().unwrap()]["sha256"] == tool.sha256
+            plan.root.join(i["location"].as_str().unwrap()) == tool.version.executable && i["sha256"] == tool.version.sha256
+                && effective["endpoints"]["candidate"]["files"][i["id"].as_str().unwrap()]["sha256"] == tool.version.sha256
         });
         let registered = tool
-            .path
+            .version
+            .executable
             .strip_prefix(&plan.root)
             .ok()
             .and_then(|p| p.to_str())
@@ -1384,14 +1385,16 @@ fn validate_declared_tools(
             });
         if !input && registered {
             let relative = tool
-                .path
+                .version
+                .executable
                 .strip_prefix(&plan.root)
                 .map_err(|e| e.to_string())?;
             let current = chrono_harness::no_symlink_parents(
                 current_root,
                 relative.to_str().ok_or("registered tool path")?,
             )?;
-            if chrono_harness::sha256(&fs::read(current).map_err(|e| e.to_string())?) != tool.sha256
+            if chrono_harness::sha256(&fs::read(current).map_err(|e| e.to_string())?)
+                != tool.version.sha256
             {
                 return Err("E_COLLECTION_INPUT: candidate tool bytes differ".into());
             }
@@ -1415,11 +1418,12 @@ fn unit_tools(report: &Value) -> Result<Value, String> {
     let mut tools = serde_json::Map::new();
     for (id, t) in &plan.tools {
         let path = t
-            .path
+            .version
+            .executable
             .strip_prefix(&plan.root)
             .map(|p| format!("host:{}", p.display()))
-            .unwrap_or_else(|_| format!("external:{}", t.path.display()));
-        tools.insert(id.clone(),json!({"program":t.program,"path":path,"sha256":t.sha256,"version_argv":&t.version.argv[1..],"version_stdout_sha256":t.version.stdout_sha256,"version_stderr_sha256":t.version.stderr_sha256}));
+            .unwrap_or_else(|_| format!("external:{}", t.version.executable.display()));
+        tools.insert(id.clone(),json!({"program":t.program,"path":path,"sha256":t.version.sha256,"version_argv":&t.version.argv[1..],"version_stdout_sha256":t.version.stdout_sha256,"version_stderr_sha256":t.version.stderr_sha256}));
     }
     Ok(Value::Object(tools))
 }

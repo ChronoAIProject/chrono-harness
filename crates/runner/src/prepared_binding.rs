@@ -167,7 +167,7 @@ pub fn validate_binding(
             || tool.version.environment != effective_env
             || tool.version.environment_digest != binding["environment"]["effective_digest"]
             || tool.program != declared["program"].as_str().ok_or("producer program")?
-            || file_identity(&tool.path)?.0 != tool.sha256
+            || file_identity(&tool.version.executable)?.0 != tool.version.sha256
             || tool.version.failure.is_some()
             || tool.version.exit_code != 0
             || declared["expected_version"]
@@ -195,8 +195,8 @@ pub fn validate_binding(
                     binding["environment"]["effective"].clone(),
                 )
                 .map_err(|e| e.to_string())?
-            || process.sha256 != r["tool"]["sha256"]
-            || process.executable.to_str() != r["tool"]["path"].as_str()
+            || process.sha256 != tool.version.sha256
+            || process.executable != tool.version.executable
         {
             return Err("short producer receipt mismatch".into());
         }

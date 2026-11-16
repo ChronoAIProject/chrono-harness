@@ -567,13 +567,18 @@ fn invoke(
     }
     let input = serde_json::to_vec(req).map_err(|e| e.to_string())?;
     let spec = CommandSpec {
-        program: tool.path.to_str().ok_or("producer path UTF-8")?.into(),
+        program: tool
+            .version
+            .executable
+            .to_str()
+            .ok_or("producer path UTF-8")?
+            .into(),
         args: a.argv.clone(),
         env: env.clone(),
         timeout_seconds: timeout,
         output_limit_bytes: limit,
     };
-    let process = match run_process_observed(root, &spec, &input, &tool.sha256) {
+    let process = match run_process_observed(root, &spec, &input, &tool.version.sha256) {
         Ok(process) => process_identities(process),
         Err(error) => {
             return Err(prelaunch_error(

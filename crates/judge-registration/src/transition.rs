@@ -553,9 +553,21 @@ fn interpret_mode(
             serde_json::from_value(c["process"].clone()).map_err(|e| e.to_string())?;
         observation::process_success(&tool.version)?;
         observation::process_success(&receipt)?;
-        let mut version_argv = vec![tool.path.to_str().ok_or("migration tool path")?.to_owned()];
+        let mut version_argv = vec![
+            tool.version
+                .executable
+                .to_str()
+                .ok_or("migration tool path")?
+                .to_owned(),
+        ];
         version_argv.extend(argv.clone());
-        let mut invocation = vec![tool.path.to_str().ok_or("migration tool path")?.to_owned()];
+        let mut invocation = vec![
+            tool.version
+                .executable
+                .to_str()
+                .ok_or("migration tool path")?
+                .to_owned(),
+        ];
         invocation.extend(method.argv.clone());
         let declared_input = new.config()["environment"]["inputs"]
             .as_array()
@@ -563,11 +575,12 @@ fn interpret_mode(
             .iter()
             .any(|i| {
                 Path::new(i["location"].as_str().unwrap()).is_absolute()
-                    && i["location"].as_str() == tool.path.to_str()
-                    && i["sha256"] == tool.sha256
+                    && i["location"].as_str() == tool.version.executable.to_str()
+                    && i["sha256"] == tool.version.sha256
             });
         let candidate_file = tool
-            .path
+            .version
+            .executable
             .strip_prefix(&receipt.cwd)
             .ok()
             .and_then(|p| p.to_str())
@@ -579,7 +592,7 @@ fn interpret_mode(
                     .any(|f| f["path"] == p)
                     && reader
                         .blob(root, candidate_oid, p)
-                        .is_ok_and(|b| sha256(&b) == tool.sha256)
+                        .is_ok_and(|b| sha256(&b) == tool.version.sha256)
             });
         if c["input"] != input
             || c["input_digest"] != wire::digest(&input)?
@@ -588,16 +601,13 @@ fn interpret_mode(
             || c["script_sha256"] != sha256(&script_bytes)
             || c["tool_id"] != method.tool
             || tool.program != t["program"].as_str().ok_or("migration program")?
-            || tool.path.file_name().and_then(|s| s.to_str()) != Some(&tool.basename)
-            || tool.version.executable != tool.path
-            || tool.version.sha256 != tool.sha256
             || tool.version.argv != version_argv
             || tool.version.cwd != receipt.cwd
             || tool.version.environment != *env
             || tool.version.stdin_sha256 != sha256(&[])
             || t["expected_version"].as_str() != Some(tool.version.stdout.trim_end())
-            || receipt.executable != tool.path
-            || receipt.sha256 != tool.sha256
+            || receipt.executable != tool.version.executable
+            || receipt.sha256 != tool.version.sha256
             || receipt.argv != invocation
             || receipt.environment != *env
             || receipt.stdin_sha256 != wire::digest(&input)?
@@ -633,13 +643,14 @@ fn interpret_mode(
             return Err("E_MIGRATION: decoder differs from fixed candidate".into());
         }
         let spec = CommandSpec {
-            program: tool.path.to_str().unwrap().into(),
+            program: tool.version.executable.to_str().unwrap().into(),
             args: method.argv.clone(),
             env: env.clone(),
             timeout_seconds: 30,
             output_limit_bytes: 16 * 1024 * 1024,
         };
-        let receipt = run_process_observed(root, &spec, &wire::canonical(&input)?, &tool.sha256)?;
+        let receipt =
+            run_process_observed(root, &spec, &wire::canonical(&input)?, &tool.version.sha256)?;
         if receipt.exit_code != 0 || receipt.failure.is_some() {
             return Err(format!(
                 "E_MIGRATION: exit {}: {}",

@@ -440,12 +440,10 @@ pub(super) fn collect(
             }
             let declaration = definitions[0];
             process(&tool.version)?;
-            let mut argv = vec![tool.path.to_string_lossy().into_owned()];
+            let mut argv = vec![tool.version.executable.to_string_lossy().into_owned()];
             argv.extend(strings(&declaration["version_argv"])?);
             if tool.program != declaration["program"].as_str().ok_or("tool program")?
-                || tool.version.sha256 != tool.sha256
-                || tool.version.executable != tool.path
-                || !tool.path.is_absolute()
+                || !tool.version.executable.is_absolute()
                 || tool.version.argv != argv
                 || tool.version.cwd != plan.root
                 || tool.version.environment != plan.environment

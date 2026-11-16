@@ -900,7 +900,7 @@ fn prelaunch_digest_failure_does_not_stop_sibling() {
         &[("test:a", vec!["a"]), ("test:z", vec!["z"])],
     );
     let mut bad = p.tools["fixture"].clone();
-    bad.sha256 = "0".repeat(64);
+    bad.version.sha256 = "0".repeat(64);
     p.tools.insert("bad".into(), bad);
     p.operations[0].method.tool = "bad".into();
     let p = scheduled(
@@ -944,10 +944,10 @@ fn spawn_failure_preserves_cause_and_continues_independent_operation() {
         &[("test:a", vec!["a"]), ("test:z", vec!["z"])],
     );
     let path = d.path().join("not-executable");
-    std::fs::copy(&p.tools["fixture"].path, &path).unwrap();
+    std::fs::copy(&p.tools["fixture"].version.executable, &path).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
     let mut bad = p.tools["fixture"].clone();
-    bad.path = path;
+    bad.version.executable = path;
     p.tools.insert("bad".into(), bad);
     p.operations[0].method.tool = "bad".into();
     let p = scheduled(

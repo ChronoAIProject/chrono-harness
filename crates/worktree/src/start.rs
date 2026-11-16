@@ -158,7 +158,8 @@ impl Runner {
         let spec = CommandSpec {
             program: self
                 .tool
-                .path
+                .version
+                .executable
                 .to_str()
                 .ok_or("Git path is not UTF-8")?
                 .into(),
@@ -172,10 +173,10 @@ impl Runner {
                 root,
                 &spec,
                 input,
-                &self.tool.sha256,
+                &self.tool.version.sha256,
                 limit,
             ),
-            None => run_process_observed(root, &spec, input, &self.tool.sha256),
+            None => run_process_observed(root, &spec, input, &self.tool.version.sha256),
         };
         match result {
             Ok(process) => {
@@ -825,7 +826,7 @@ pub(crate) fn with_report_for_consumer<T>(
             .git
             .sha256
             .as_ref()
-            .is_some_and(|s| s != &tool.sha256)
+            .is_some_and(|s| s != &tool.version.sha256)
         {
             Some("Git executable digest mismatch".into())
         } else if config

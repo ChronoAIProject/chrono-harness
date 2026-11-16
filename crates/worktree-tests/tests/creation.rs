@@ -824,8 +824,14 @@ fn assert_bound_registry_process(report: &Value, row: &Value) {
         row["process"]["environment"],
         report["environment"]["effective"]
     );
-    assert_eq!(row["process"]["executable"], report["tool"]["path"]);
-    assert_eq!(row["process"]["sha256"], report["tool"]["sha256"]);
+    assert_eq!(
+        row["process"]["executable"],
+        report["tool"]["version"]["executable"]
+    );
+    assert_eq!(
+        row["process"]["sha256"],
+        report["tool"]["version"]["sha256"]
+    );
 }
 
 #[test]
@@ -1125,8 +1131,14 @@ fn selected_endpoint_errors_preserve_fixed_evidence_without_creating_checkout() 
                         ])
                 })
                 .unwrap();
-            assert_eq!(row["process"]["executable"], report["tool"]["path"]);
-            assert_eq!(row["process"]["sha256"], report["tool"]["sha256"]);
+            assert_eq!(
+                row["process"]["executable"],
+                report["tool"]["version"]["executable"]
+            );
+            assert_eq!(
+                row["process"]["sha256"],
+                report["tool"]["version"]["sha256"]
+            );
             assert_eq!(
                 row["process"]["environment"],
                 report["environment"]["effective"]
@@ -1516,10 +1528,13 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
     let target = h.parent.join("adopted");
     let (code, report, error) = h.invoke("integration", "adopted", &target);
     assert_eq!(code, 0, "{report} {error}");
-    assert_eq!(report["tool"]["path"], policy["git"]["program"]);
+    assert_eq!(
+        report["tool"]["version"]["executable"],
+        policy["git"]["program"]
+    );
     let program = Path::new(policy["git"]["program"].as_str().unwrap());
     assert_eq!(
-        report["tool"]["sha256"],
+        report["tool"]["version"]["sha256"],
         sha256(&fs::read(program).unwrap())
     );
     let version = Command::new(program).arg("--version").output().unwrap();

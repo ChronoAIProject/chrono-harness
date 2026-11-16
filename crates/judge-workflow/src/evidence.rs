@@ -139,15 +139,18 @@ fn tools(plan: &Execution) -> Result<Value, String> {
     let mut out = BTreeMap::new();
     for (id, t) in &plan.tools {
         process(&t.version)?;
-        if t.version.sha256 != t.sha256
-            || t.version.executable != t.path
-            || t.version.cwd != plan.root
+        if t.version.cwd != plan.root
             || t.version.environment != plan.environment
-            || t.version.argv.first() != t.path.to_str().map(|s| s.to_string()).as_ref()
+            || t.version.argv.first()
+                != t.version
+                    .executable
+                    .to_str()
+                    .map(|s| s.to_string())
+                    .as_ref()
         {
             return Err("E_WORKFLOW_EVIDENCE: tool observation mismatch".into());
         }
-        out.insert(id,json!({"program":t.program,"path":relative(&plan.root,&t.path),"sha256":t.sha256,"version_argv":&t.version.argv[1..],"version_stdout_sha256":t.version.stdout_sha256,"version_stderr_sha256":t.version.stderr_sha256}));
+        out.insert(id,json!({"program":t.program,"path":relative(&plan.root,&t.version.executable),"sha256":t.version.sha256,"version_argv":&t.version.argv[1..],"version_stdout_sha256":t.version.stdout_sha256,"version_stderr_sha256":t.version.stderr_sha256}));
     }
     Ok(json!(out))
 }
