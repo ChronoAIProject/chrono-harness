@@ -1222,6 +1222,20 @@ pub fn matches_expected(actual: &str, expected: Option<&str>) -> (valid: bool)
 
 pub enum GitTargetField { Digest, Path }
 
+impl GitTargetField {
+    pub fn key(&self) -> (out: &'static str)
+        ensures match self {
+            Self::Digest => out@ == "sha256"@,
+            Self::Path => out@ == "path"@,
+        },
+    {
+        match self {
+            Self::Digest => "sha256",
+            Self::Path => "path",
+        }
+    }
+}
+
 /// 只观察原数组长度与指定槽位的完整字符串，不在接口内选择目标。
 pub trait GitTargetRows {
     spec fn count(&self) -> nat;

@@ -755,6 +755,20 @@ fn binding_version_arguments_reject_only_the_empty_decoded_array() {
 
 pub struct TargetRows<'a>(pub &'a [(Option<&'a str>, Option<&'a str>)]);
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_target_field_keys_keep_the_exact_json_member_names() {
+    let digest = policy::GitTargetField::Digest.key();
+    let path = policy::GitTargetField::Path.key();
+    expect_true(policy::matches_expected(digest, Some("sha256")));
+    expect_true(policy::matches_expected(path, Some("path")));
+    proof {
+        reveal_strlit("sha256");
+        reveal_strlit("path");
+        assert("sha256"@.len() != "path"@.len());
+    }
+    expect_true(!policy::matches_expected(digest, Some(path)));
+}
+
 impl policy::GitTargetRows for TargetRows<'_> {
     open spec fn count(&self) -> nat { self.0@.len() }
 

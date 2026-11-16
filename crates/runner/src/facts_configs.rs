@@ -336,13 +336,7 @@ impl crate::verified_git_binding::GitTargetRows for JsonTargetRows<'_> {
         index: usize,
         field: &crate::verified_git_binding::GitTargetField,
     ) -> Option<&str> {
-        use crate::verified_git_binding::GitTargetField;
-
-        let key = match field {
-            GitTargetField::Digest => "sha256",
-            GitTargetField::Path => "path",
-        };
-        self.0[index][key].as_str()
+        self.0[index][field.key()].as_str()
     }
 }
 

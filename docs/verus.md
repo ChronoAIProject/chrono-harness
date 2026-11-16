@@ -1,5 +1,18 @@
 # Verus 实施范围
 
+## Git 目标查询的 JSON 字段选择
+
+`GitTargetField::key` 直接拥有摘要／路径到 `sha256`／`path` 的完整字段名选择，
+实际 `facts_configs::JsonTargetRows::text` 使用同一结果读取原 JSON 行。独立 Verus
+预期同时作为 Rust 测试，逐项核两个名称及其不同，不增加字符串复制、库存遍历或
+查询次数。沿现有 git-binding 两项严格整 crate 根与未过滤 runner 测试验收。
+
+外部接口仍为固定 Serde JSON 的行索引、对象字段索引及 `Value::as_str`；实际行和
+完整 JSON 到观察的机械对应、捕获库存的借用成员查询及其他适配逻辑仍有自身证明
+义务。这里不声明整个适配器、#1058 的工具迁移或全仓覆盖已完成。FILEMAP 补齐
+该实际调用文件到已有证明根和消费测试的关系；没有新增工具、入口或预算，完整
+构建、验证、CI 和运行成本未测。
+
 ## 夹具退役的共同政策与逐项观察
 
 `worktree::automatic::producer` 的声明查找、临时生产者准入、逐项遍历和单结果取值
