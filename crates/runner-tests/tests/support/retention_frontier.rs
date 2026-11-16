@@ -121,7 +121,12 @@ fn leaf_entry_preserves_rooted_wide_intermediate_with_256_descriptors() {
         .chain([&intermediate, &root])
         .map(|(id, path)| {
             let record = retention_state::object_path(h.path(), id);
-            (record.clone(), fs::read(&record).unwrap(), path.clone())
+            (
+                record.clone(),
+                fs::read(&record).unwrap(),
+                path.clone(),
+                fs::read(h.path().join(path)).unwrap(),
+            )
         })
         .collect();
     let mut limit = libc::rlimit {
@@ -144,9 +149,15 @@ fn leaf_entry_preserves_rooted_wide_intermediate_with_256_descriptors() {
         );
         assert_eq!(round["removed_logical_bytes"], 0, "{round}");
         assert!(round["disposed"].as_array().unwrap().is_empty(), "{round}");
-        for (record, before, path) in &declarations {
-            assert_eq!(&fs::read(record).unwrap(), before);
-            assert!(h.path().join(path).is_file());
+        for (record, before, path, original) in &declarations {
+            let before: Value = serde_json::from_slice(before).unwrap();
+            let mut after: Value = serde_json::from_slice(&fs::read(record).unwrap()).unwrap();
+            // The ordinary maintenance cursor advances even when every output
+            // stays rooted. All other declaration fields and original bytes
+            // must remain exact, including every explicit dependency edge.
+            after["cursor"] = before["cursor"].clone();
+            assert_eq!(after, before);
+            assert_eq!(&fs::read(h.path().join(path)).unwrap(), original);
         }
         inventory(h.path())
             .reference("current-report", &[])
