@@ -14,6 +14,26 @@ retention 的宿主必须在写入前登记新原件，明确快照到 blob、�
 中断、已有未知文件和内容漂移分别保留原状态，不用新发布接管历史未知字节。
 这些预期不代替全仓维护公平性、部署或连续真实定时回收验收。
 
+`capture`、`capture_selected`、`pair` 和 `compose` 的 Rust 返回值为 `Produced`。
+它借用式读取原有 JSON，并持有本次实际输入和输出的读取保护。复制或序列化 JSON
+不复制保护；跨进程使用前调用 `handoff(ID)`，收取现役
+`chrono-retention-consumer/v1` 声明，再由真实使用方沿
+[原件消费者入口](artifact-retention.md)释放。组合导出以来源回执为保管根，回执依赖
+组合结果和保留的来源原字节，组合结果依赖共享 blob。普通返回值结束使用不会创建
+永久消费者角色。暂存文件也在写入前登记，成功后按原期限回收，中断保持未知结果。
+
+已采用 `full-original` 的 CLI 导出必须提供 `--report-consumer ID`。stdout 返回
+`{"schema":"chrono-input-export/v1","result":原JSON,"report_consumer":消费者声明}`，
+`--output` 和 `--receipt` 仍保存各自原格式。接收方保存声明及实际释放回执，通过
+现有 `release-consumer` 请求释放；尚未释放的真实消费者继续保留闭包。缺少保管方时
+在读取业务输入和写入输出前拒绝。未采用宿主没有清理保证，不能请求虚构的保管声明。
+既有未知文件只核对字节并复用，不静默接管；未知原件不能作为新消费者交接的根。
+
+**产品接口与宿主登记同时修改。** Rust 调用方须保留 `Produced` 至使用结束；采用
+保留政策的 CLI 调用方须消费上述返回对象并负责释放。新增的流式发布复用 runner
+已有写入、摘要、使用凭据和有限维护，不增加清理服务或扩大保留期限。FILEMAP 登记
+保管模块和既有输入专属测试。构建、全 DELTA 验证和存储总成本仍以实际原件为准。
+
 `chrono-inputs` 只采集固定配置 `environment.inputs` 中的文件 ID，以及 `environment.inherit` 中的变量名。可选 `capture --unit ID` 通过 registration／input 共用的前置范围投影，为已登记完整单元采集输入，包括共享操作和检查程序自身的消费者。
 
 它不发现依赖、不修改预期摘要、不增加测试，也不宣称输入齐全。它是独立 Rust 生产／测试配对，读取固定提交需要 Git。config v3 使用明确的[Git 事实绑定](git-facts.md)，v1／v2 保留原读取器。本仓 Cargo／SDK 输入登记仍不齐全，安装传输工具不会全面启用完整检查。

@@ -869,6 +869,7 @@ pub struct Manifest {
 #[cfg(not(verus_keep_ghost))]
 fn bounded(root: &Path, path: &str) -> Result<Vec<u8>, String> {
     let _input = retained_artifacts::retention::read_guard(root, path)?;
+    let _input = retained_artifacts::retention::read_guard(root, path)?;
     let p = no_symlink_parents(root, path)?;
     admit_json_original(fs::metadata(&p).map_err(|e| e.to_string())?.len())?;
     fs::read(p).map_err(|e| e.to_string())
@@ -907,6 +908,7 @@ fn import_blob(root: &Path, f: &Value, source: &Source) -> Result<Value, String>
         };
         let p = chrono_harness::prepared::original_path(&original, source.transport.as_ref())?;
         let _input = retained_artifacts::retention::read_guard(root, &p)?;
+        let _input = retained_artifacts::retention::read_guard(root, &p)?;
         let observed = store(root, &no_symlink_parents(root, &p)?)?;
         admit_imported_blob(
             observed["sha256"].as_str(),
@@ -916,12 +918,10 @@ fn import_blob(root: &Path, f: &Value, source: &Source) -> Result<Value, String>
         )?;
         return Ok(observed);
     };
-    let dir = state(root, BLOB_DIRECTORY)?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let mut tmp = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
-    let observed = retained_artifacts::copy_to(root, a, path, source.transport.as_ref(), &mut tmp)?;
-    admit_imported_blob(Some(&observed.0), Some(observed.1), digest, length)?;
-    publish_blob(root, tmp, observed.0, observed.1)
+    let (stage, actual, copied) = custody::StagedBlob::write(root, length, |output|
+        retained_artifacts::copy_to(root, a, path, source.transport.as_ref(), output))?;
+    admit_imported_blob(Some(&actual), Some(copied), digest, length)?;
+    publish_blob(root, &stage.path, actual, copied)
 }
 #[cfg(not(verus_keep_ghost))]
 fn manifest(root: &Path, path: &str) -> Result<(Vec<u8>, Manifest), String> {
@@ -955,12 +955,9 @@ fn import_source(
             v.get("candidate").is_some(),
         )?;
     }
-    let retained = chrono_harness::prepared::retain_original(
-        root,
-        ".chrono-harness/state/inputs/originals/",
-        "pair",
-        &bytes,
-    )?;
+    let retained_path = format!(".chrono-harness/state/inputs/originals/pair-{}.json", sha256(&bytes));
+    publish_bytes(root, &retained_path, &bytes)?;
+    let retained = Original { path: retained_path, sha256: sha256(&bytes) };
     let original = value!({"source":source.pair,"retained":retained,"transport":source.transport});
     let mut pair = value!({});
     for (name, commit, r) in [("base", base, old), ("candidate", candidate, new)] {
@@ -1043,7 +1040,8 @@ pub fn compose(
     manifest_path: &str,
     output: &str,
     receipt: &str,
-) -> Result<Value, String> {
+) -> Result<Produced, String> {
+    let read_scope = retained_artifacts::retention::read_scope(root)?;
     let _inputs = retained_artifacts::retention::read_scope(root)?;
     state(root, output)?;
     state(root, receipt)?;
@@ -1154,7 +1152,16 @@ pub fn compose(
         }
     }
     publish(root, output, &pair)?;
+    let mut blobs = custody::blobs(&pair["base"]);
+    blobs.extend(custody::blobs(&pair["candidate"]));
+    blobs.sort();
+    blobs.dedup();
+    custody::dependencies(root, output, &blobs)?;
     let provenance = value!({"schema":"chrono-input-composition-result/v1","manifest":{"path":manifest_path,"sha256":sha256(&raw)},"base":base,"candidate":candidate,"config_path":config,"output":{"path":output,"sha256":sha256(&wire::canonical(&pair)?)},"originals":originals,"completeness_proven":false});
     publish(root, receipt, &provenance)?;
-    Ok(pair)
+    let mut dependencies = vec![output.to_owned()];
+    dependencies.extend(provenance["originals"].as_array().unwrap().iter()
+        .filter_map(|original| original["retained"]["path"].as_str().map(str::to_owned)));
+    custody::dependencies(root, receipt, &dependencies)?;
+    Produced::new(root, receipt, pair, read_scope)
 }
