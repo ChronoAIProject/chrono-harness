@@ -23,6 +23,41 @@ mod retention_frontier;
 
 verus! {
 
+fn expect_retirement_deferral(metadata_room: bool, nodes: usize, node_limit: usize,
+    elapsed_millis: u128, max_millis: u64, deferred: bool)
+    requires deferred == (!metadata_room || nodes >= node_limit
+        || elapsed_millis >= max_millis as u128),
+{
+    let reason = policy::retirement_deferral(metadata_room, nodes, node_limit,
+        elapsed_millis, max_millis);
+    match reason {
+        Some(text) => {
+            expect_true(deferred);
+            let same = identifiers::equal_text(text,
+                "retirement round budget exhausted; original not attempted");
+            expect_true(same);
+        },
+        None => expect_true(!deferred),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retirement_admission_keeps_each_original_budget_boundary_and_full_reason() {
+    expect_retirement_deferral(true, 0, 1, 0, 1, false);
+    expect_retirement_deferral(true, 31, 32, 24, 25, false);
+    expect_retirement_deferral(false, 0, 1, 0, 1, true);
+    expect_retirement_deferral(true, 32, 32, 0, 25, true);
+    expect_retirement_deferral(true, 33, 32, 0, 25, true);
+    expect_retirement_deferral(true, 0, 32, 25, 25, true);
+    expect_retirement_deferral(true, 0, 32, 26, 25, true);
+    expect_retirement_deferral(true, 0, 0, 0, 25, true);
+    expect_retirement_deferral(true, 0, 32, 0, 0, true);
+    expect_retirement_deferral(true, usize::MAX - 1, usize::MAX,
+        u64::MAX as u128 - 1, u64::MAX, false);
+    expect_retirement_deferral(true, usize::MAX, usize::MAX,
+        u128::MAX, u64::MAX, true);
+}
+
 fn skipped_disposal_checkpoint_preserves_state(tree: bool, remaining: usize)
     requires !tree || remaining == 0,
 {

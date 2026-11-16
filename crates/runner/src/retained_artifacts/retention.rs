@@ -2674,14 +2674,15 @@ impl Inventory {
         order.sort_by_key(|(_, priority)| *priority);
         let prepared_micros = began.elapsed().as_micros() as u64;
         for (id, _) in order {
-            if !self.metadata_room()
-                || nodes
-                    >= self
-                        .round_node_limit
-                        .get()
-                        .unwrap_or(self.policy.max_nodes_per_round)
-                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
-            {
+            if let Some(reason) = crate::verified_release::retirement_deferral(
+                self.metadata_room(),
+                nodes,
+                self.round_node_limit
+                    .get()
+                    .unwrap_or(self.policy.max_nodes_per_round),
+                began.elapsed().as_millis(),
+                self.policy.max_millis_per_round,
+            ) {
                 tracing::debug!(
                     event_id = "retention.round.retirement-deferred",
                     output_id = %id,
@@ -2692,6 +2693,7 @@ impl Inventory {
                     max_millis_per_round = self.policy.max_millis_per_round,
                     "retirement was not admitted within the owning round budget"
                 );
+                protected.push(json!({"id":id,"reason":reason}));
                 break;
             }
             let i = l
