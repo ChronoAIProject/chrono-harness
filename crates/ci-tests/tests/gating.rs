@@ -1,16 +1,26 @@
 //! Behavioral scheduling fixtures use actual Git objects and the fixed native command.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
 
+#[cfg(not(verus_keep_ghost))]
 const PROVIDER: &str = ".chrono-harness/ci/units.json";
 
+#[cfg(not(verus_keep_ghost))]
 fn native_job_detail(status: &str, conclusion: Value) -> Value {
     json!({"id":91,"run_id":101,"run_attempt":2,"head_sha":"a".repeat(40),
         "name":"chrono / alpha","status":status,"conclusion":conclusion})
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn stale_running_job_list_uses_one_bound_terminal_detail() {
     for status in ["queued", "in_progress", "waiting", "pending", "requested"] {
         let listed = native_job_detail(status, Value::Null);
@@ -28,6 +38,7 @@ fn stale_running_job_list_uses_one_bound_terminal_detail() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn terminal_job_lists_keep_their_current_success_or_failure() {
     for conclusion in ["success", "failure", "cancelled", "skipped"] {
         let listed = native_job_detail("completed", json!(conclusion));
@@ -61,6 +72,7 @@ fn terminal_job_lists_keep_their_current_success_or_failure() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn nonterminal_or_failed_detail_never_becomes_a_pass() {
     for (status, conclusion) in [
         ("in_progress", Value::Null),
@@ -83,6 +95,7 @@ fn nonterminal_or_failed_detail_never_becomes_a_pass() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn job_detail_must_keep_the_selected_identity_and_original_error() {
     for field in ["id", "run_id", "run_attempt", "head_sha", "name"] {
         let mut detail = native_job_detail("completed", json!("success"));
@@ -107,10 +120,12 @@ fn job_detail_must_keep_the_selected_identity_and_original_error() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn gating() -> Value {
     json!({"schema":"chrono-job-gating/v1","detector":{"runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["host-tools-only"],"sparse_checkout":[".chrono-harness/", ".github/workflows/collection.yml"]}})
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn migrate_provider(root: &Path, next: &Value) {
     let previous = ".chrono-harness/state/previous-units.json";
     fs::create_dir_all(root.join(previous).parent().unwrap()).unwrap();
@@ -120,6 +135,7 @@ fn migrate_provider(root: &Path, next: &Value) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn parent_generation_uses_only_current_projection_ownership() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -146,6 +162,7 @@ fn parent_generation_uses_only_current_projection_ownership() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn parent_projection_preserves_unit_settings() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -187,6 +204,7 @@ fn parent_projection_preserves_unit_settings() {
     assert!(!h.root.join(".github/workflows/beta.yml").exists());
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn install_parent_provider(root: &Path) {
     let program = root.join(".chrono-harness/bin/parent-gh");
     assert_eq!(
@@ -212,21 +230,25 @@ pub(crate) fn install_parent_provider(root: &Path) {
     assert!(!root.join(".chrono-harness/state/parent-calls").exists());
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct GatedHost {
     pub(crate) host: ShortHost,
     pub(crate) payload: Value,
 }
+#[cfg(not(verus_keep_ghost))]
 impl std::ops::Deref for GatedHost {
     type Target = ShortHost;
     fn deref(&self) -> &Self::Target {
         &self.host
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl std::ops::DerefMut for GatedHost {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.host
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl GatedHost {
     pub(crate) fn new() -> Self {
         let mut h = ShortHost::new();
@@ -437,6 +459,7 @@ impl GatedHost {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn needs(h: &GatedHost, d: &Value) -> Value {
     let mut outputs = json!({"detection":serde_json::to_string(d).unwrap()});
     let mut value = json!({"detect":{"result":"success"}});
@@ -467,6 +490,7 @@ pub(crate) fn needs(h: &GatedHost, d: &Value) -> Value {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn detector_selects_isolated_unrelated_and_empty_git_delta_without_business_execution() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -489,6 +513,7 @@ fn detector_selects_isolated_unrelated_and_empty_git_delta_without_business_exec
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_delta() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -516,13 +541,10 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
         for _ in 0..2 {
             let out = h.command(&["check", "--collect"], &d, &n).output().unwrap();
             if !out.status.success() {
-                // Keep the actual nested producer receipts, including child exit,
-                // stdout and stderr, before the fixture's temporary host is dropped.
-                let evidence = tempfile::Builder::new()
-                    .prefix("chrono-gating-failure-")
-                    .tempdir()
-                    .unwrap()
-                    .keep();
+                // The retained host already owns the nested producer receipts.
+                // Keep this process's original output in the same finite window.
+                let evidence = h.host.root.join(".chrono-harness/state/collection-failure");
+                fs::create_dir_all(&evidence).unwrap();
                 fs::write(evidence.join("stdout"), &out.stdout).unwrap();
                 fs::write(evidence.join("stderr"), &out.stderr).unwrap();
                 json_file(
@@ -530,10 +552,6 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
                     "process.json",
                     &json!({"exit_code":out.status.code(),
                     "status":out.status.to_string(),"detection":d,"needs":n}),
-                );
-                copy_artifacts(
-                    &h.host.root.join(".chrono-harness/state"),
-                    &evidence.join("state"),
                 );
                 panic!(
                     "collection failed: status={} stdout={} stderr={}; original process evidence retained at {}",
@@ -573,7 +591,7 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
             let selected = !d["required_units"].as_array().unwrap().is_empty();
             assert_eq!(
                 requests("repos/owner/host/actions/runs/101"),
-                if selected { 2 } else { 1 }
+                parent_lookup_count(selected)
             );
             assert_eq!(
                 requests("repos/owner/host/actions/runs/101/jobs?filter=all&per_page=100"),
@@ -616,6 +634,7 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn shared_parent_observation_checks_every_artifact_and_final_attempt_before_publication() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -699,6 +718,7 @@ fn shared_parent_observation_checks_every_artifact_and_final_attempt_before_publ
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn parent_collection_transports_report_references_and_rejects_damaged_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -798,6 +818,7 @@ fn parent_collection_transports_report_references_and_rejects_damaged_originals(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn parent_collection_requires_transported_streams_without_local_fallback_or_business_reruns() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -927,6 +948,7 @@ fn parent_collection_requires_transported_streams_without_local_fallback_or_busi
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn aggregate_rejects_detection_failure_and_every_unsuccessful_selected_unit() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -957,6 +979,7 @@ fn aggregate_rejects_detection_failure_and_every_unsuccessful_selected_unit() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn parent_collection_rejects_missing_artifact_source_run_attempt_and_original_context_mismatch() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -997,6 +1020,7 @@ fn parent_collection_rejects_missing_artifact_source_run_attempt_and_original_co
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn detector_uses_both_endpoint_edges_assignments_and_deleted_or_renamed_paths() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1086,6 +1110,7 @@ fn detector_uses_both_endpoint_edges_assignments_and_deleted_or_renamed_paths() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn large_complete_git_delta_retains_every_path_and_obligation() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1125,6 +1150,7 @@ fn large_complete_git_delta_retains_every_path_and_obligation() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn push_spans_multiple_commits_and_pr_uses_fixed_merge_base_despite_stale_event_base() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1168,6 +1194,7 @@ fn push_spans_multiple_commits_and_pr_uses_fixed_merge_base_despite_stale_event_
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn configured_integration_baseline_is_frozen_once_for_all_dependent_jobs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1211,6 +1238,7 @@ fn configured_integration_baseline_is_frozen_once_for_all_dependent_jobs() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sources() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1287,6 +1315,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn detector_rejects_missing_endpoint_deletion_parented_initial_and_missing_registry() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1319,6 +1348,7 @@ fn detector_rejects_missing_endpoint_deletion_parented_initial_and_missing_regis
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn full_v2_detection_uses_declaration_owners_before_any_context_or_sdk_snapshots() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1384,6 +1414,7 @@ fn full_v2_detection_uses_declaration_owners_before_any_context_or_sdk_snapshots
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn scoped_and_full_detection_refuse_decoder_history_before_interpreter_acquisition() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1471,6 +1502,7 @@ fn scoped_and_full_detection_refuse_decoder_history_before_interpreter_acquisiti
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn fresh_short_host_init_selects_parent_topology_and_retains_host_settings() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1499,6 +1531,7 @@ fn fresh_short_host_init_selects_parent_topology_and_retains_host_settings() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_edits() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1586,6 +1619,7 @@ fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_e
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn copied_conditional_example_executes_fixed_unit_and_collection_commands_without_rust_source() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1742,6 +1776,7 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn independent_job_retry_keeps_exact_original_prerequisite_attempts_in_one_parent_run() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1828,6 +1863,7 @@ fn independent_job_retry_keeps_exact_original_prerequisite_attempts_in_one_paren
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn parent_collection_recovers_download_without_reexecuting_units_or_relaxing_identity() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1897,6 +1933,7 @@ fn parent_collection_recovers_download_without_reexecuting_units_or_relaxing_ide
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn carried_api_attempts_and_aggregate_only_reruns_use_original_artifact_outputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1961,6 +1998,7 @@ fn carried_api_attempts_and_aggregate_only_reruns_use_original_artifact_outputs(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registered_dotted_and_underscore_unit_ids_have_distinct_valid_jobs_and_actual_short_checks() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2021,6 +2059,7 @@ fn registered_dotted_and_underscore_unit_ids_have_distinct_valid_jobs_and_actual
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn current_product_host_registration_and_generated_parent_select_the_real_source_delta() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2298,6 +2337,7 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2396,4 +2436,13 @@ fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
             );
         }
     }
+}
+
+verus! {
+/// Collection without selected units must not acquire a second parent observation.
+pub(super) fn parent_lookup_count(selected: bool) -> (count: usize)
+    ensures selected ==> count == 2, !selected ==> count == 1,
+{
+    if selected { 2 } else { 1 }
+}
 }

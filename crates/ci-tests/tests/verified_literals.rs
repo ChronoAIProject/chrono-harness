@@ -1,6 +1,12 @@
 //! CI 字面文本判断的独立成功、失败与边界预期。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
+#[path = "gating.rs"]
+mod gating_expectations;
+#[cfg(verus_keep_ghost)]
+#[path = "initial_short.rs"]
+mod initial_expectations;
+#[cfg(verus_keep_ghost)]
 #[path = "../../ci/src/verified_literals.rs"]
 mod policy;
 #[cfg(verus_keep_ghost)]
@@ -16,6 +22,16 @@ use vstd::prelude::*;
 use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+#[cfg(verus_keep_ghost)]
+fn initial_inventory_rejects_unregistered_files_and_collection_avoids_extra_acquisition() {
+    let registered = initial_expectations::initial_inventory_exit(false);
+    let unregistered = initial_expectations::initial_inventory_exit(true);
+    let empty = gating_expectations::parent_lookup_count(false);
+    let selected = gating_expectations::parent_lookup_count(true);
+    assert(registered == 0 && unregistered == 1);
+    assert(empty == 1 && selected == 2);
+}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn native_job_terminal_outcomes_never_select_another_detail() {
