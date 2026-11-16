@@ -157,7 +157,7 @@ fn producer_visits_stop_at_the_actual_false_or_original_error() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn empty_producer_visit_does_not_observe_any_store() {
     let rows: Vec<u8> = Vec::new();
-    let visit = |state: u8, _: usize, _: &u8| -> (out: (u8, Result<bool, u8>))
+    let visit = |state: u8, _index: usize, _row: &u8| -> (out: (u8, Result<bool, u8>))
         ensures out == (255u8, Err::<bool, u8>(state)),
     { (255, Err(state)) };
     let (state, result) = policy::visit_producer_stores(17u8, &rows, &visit);
