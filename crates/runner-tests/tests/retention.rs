@@ -120,6 +120,197 @@ fn inventory(root: &Path) -> Inventory {
     Inventory::adopted(root).unwrap().unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
+fn deadline_host() -> tempfile::TempDir {
+    let h = host(256, 16);
+    let path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    policy["max_lifetime_seconds"] = json!(60);
+    policy["keep_seconds"] = json!(3600);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    h
+}
+
+#[test]
+fn creation_deadline_survives_diagnostics_completion_and_consumer_handoffs() {
+    if !isolated_capability_test(
+        "creation_deadline_survives_diagnostics_completion_and_consumer_handoffs",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let path = ".chrono-harness/state/fixtures/deadline";
+    let publication = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(path),
+        false,
+        json!({"completion":"pending"}),
+    )
+    .unwrap()
+    .unwrap();
+    fs::write(h.path().join(path), b"valuable original").unwrap();
+    let initial = ledger(h.path())["outputs"][0].clone();
+    let lifetime = initial["lifetime"].clone();
+    let born = lifetime["created_at"].as_u64().unwrap();
+    let deadline = lifetime["deadline"].as_u64().unwrap();
+    assert_eq!(deadline - born, 60);
+    assert_eq!(initial["expires"], deadline);
+    let inv = inventory(h.path());
+    inv.retain_diagnostic_path(path).unwrap();
+    publication
+        .complete_sealed(json!({"exit_code":17}))
+        .unwrap();
+    inv.reference_paths("actual-reader", &[path.into()])
+        .unwrap();
+    inv.retain_diagnostic_path(path).unwrap();
+    let after = ledger(h.path())["outputs"][0].clone();
+    assert_eq!(after["lifetime"], lifetime);
+    assert_eq!(after["expires"], deadline);
+    assert_eq!(after["outcome"]["exit_code"], 17);
+}
+
+#[test]
+fn expired_original_rejects_new_readers_and_edges_but_allows_exact_release() {
+    if !isolated_capability_test(
+        "expired_original_rejects_new_readers_and_edges_but_allows_exact_release",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let path = ".chrono-harness/state/fixtures/expired";
+    fs::write(h.path().join(path), b"original awaiting transfer").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!({}))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete_sealed(json!({"exit_code":0})).unwrap();
+    let inv = inventory(h.path());
+    inv.reference("existing-owner", std::slice::from_ref(&id))
+        .unwrap();
+    let mut output = ledger(h.path())["outputs"][0].clone();
+    output["lifetime"] = json!({"created_at":1,"deadline":2});
+    output["expires"] = json!(2);
+    retention_state::replace_output(h.path(), &output);
+    let retained = inv
+        .maintain_originals_at(std::slice::from_ref(&id), 3)
+        .unwrap();
+    assert!(
+        h.path().join(path).exists(),
+        "expiry must not invent a release"
+    );
+    assert!(
+        retained["protected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["id"] == id && entry["deadline_missed"] == true),
+        "{retained}"
+    );
+    assert!(inv.consume(&id).err().unwrap().contains("deadline"));
+    assert!(retained_artifacts::retention::read_guard(h.path(), path).is_err());
+    assert!(
+        inv.reference("new-reader", std::slice::from_ref(&id))
+            .unwrap_err()
+            .contains("deadline")
+    );
+    assert!(
+        inv.reference_paths("new-path-reader", &[path.into()])
+            .unwrap_err()
+            .contains("deadline")
+    );
+    assert!(
+        inv.retain_diagnostic_path(path)
+            .unwrap_err()
+            .contains("deadline")
+    );
+    let report_path = ".chrono-harness/state/fixtures/report";
+    fs::write(h.path().join(report_path), b"new report").unwrap();
+    let report = inventory(h.path())
+        .begin("fixture", report_path, json!({}))
+        .unwrap();
+    inv.reference("existing-owner", &[id.clone(), report.id().into()])
+        .unwrap();
+    inv.reference("existing-owner", std::slice::from_ref(&id))
+        .unwrap();
+    assert!(
+        inv.dependencies(report.id(), std::slice::from_ref(&id))
+            .unwrap_err()
+            .contains("deadline")
+    );
+    assert!(
+        inv.dependencies_paths(report_path, &[path.into()])
+            .unwrap_err()
+            .contains("deadline")
+    );
+    drop(report);
+    // Expiry reports a breach; it does not forge a consumer release or ignore
+    // a live capability. The actual owner still performs its exact release.
+    inv.reference("existing-owner", &[]).unwrap();
+    let round = inv
+        .maintain_originals_at(std::slice::from_ref(&id), 3)
+        .unwrap();
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
+    assert!(!h.path().join(path).exists(), "{round}");
+}
+
+#[test]
+fn explicit_lifetime_adoption_uses_physical_birth_and_never_renews_it() {
+    if !isolated_capability_test(
+        "explicit_lifetime_adoption_uses_physical_birth_and_never_renews_it",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/old-original";
+    fs::write(h.path().join(path), b"preserved old output").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!({}))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete_sealed(json!({"exit_code":0})).unwrap();
+    let policy_path = h.path().join(POLICY_PATH);
+    let previous = fs::read(&policy_path).unwrap();
+    let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+    policy["max_lifetime_seconds"] = json!(60);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let inv = inventory(h.path());
+    assert!(
+        inv.consume(&id).is_err(),
+        "ordinary entry must not invent a historical birth"
+    );
+    inv.migrate_policy(&previous, Some(std::slice::from_ref(&id)))
+        .unwrap();
+    let migrated = ledger(h.path())["outputs"][0].clone();
+    let physical_birth = fs::metadata(h.path().join(path))
+        .unwrap()
+        .created()
+        .unwrap()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    assert_eq!(migrated["lifetime"]["created_at"], physical_birth);
+    assert_eq!(migrated["lifetime"]["deadline"], physical_birth + 60);
+    assert_eq!(migrated["outcome"]["exit_code"], 0);
+    let previous = fs::read(&policy_path).unwrap();
+    policy["max_lifetime_seconds"] = json!(120);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    inventory(h.path())
+        .migrate_policy(&previous, Some(std::slice::from_ref(&id)))
+        .unwrap();
+    assert_eq!(
+        ledger(h.path())["outputs"][0]["lifetime"],
+        migrated["lifetime"]
+    );
+    assert_eq!(
+        fs::read(h.path().join(path)).unwrap(),
+        b"preserved old output"
+    );
+}
+
 #[test]
 fn exhausted_retirement_budget_reports_the_unattempted_original() {
     if !isolated_capability_test("exhausted_retirement_budget_reports_the_unattempted_original") {

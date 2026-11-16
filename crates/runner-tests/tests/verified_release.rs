@@ -27,6 +27,22 @@ mod retention_frontier;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn creation_window_and_expiry_clamp_keep_exact_time_boundaries() {
+    expect_true(!accounting::within_creation_window(10, 20, 9));
+    expect_true(accounting::within_creation_window(10, 20, 10));
+    expect_true(accounting::within_creation_window(10, 20, 19));
+    expect_true(!accounting::within_creation_window(10, 20, 20));
+    expect_true(!accounting::within_creation_window(10, 20, u64::MAX));
+    expect_true(!accounting::within_creation_window(0, 0, 0));
+    expect_true(!accounting::within_creation_window(u64::MAX, u64::MAX, u64::MAX));
+    expect_true(accounting::bounded_expiry(0, 20) == 0);
+    expect_true(accounting::bounded_expiry(19, 20) == 19);
+    expect_true(accounting::bounded_expiry(20, 20) == 20);
+    expect_true(accounting::bounded_expiry(u64::MAX, 20) == 20);
+    expect_true(accounting::bounded_expiry(u64::MAX, u64::MAX) == u64::MAX);
+}
+
 fn expect_retirement_deferral(metadata_room: bool, nodes: usize, node_limit: usize,
     elapsed_millis: u128, max_millis: u64, deferred: bool)
     requires deferred == (!metadata_room || nodes >= node_limit
