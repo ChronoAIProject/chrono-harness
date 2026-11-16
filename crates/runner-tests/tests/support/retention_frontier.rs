@@ -106,9 +106,7 @@ fn leaf_entry_preserves_rooted_wide_intermediate_with_256_descriptors() {
             .begin("fixture", &path, json!(null))
             .unwrap();
         let id = publication.id().to_owned();
-        inventory(h.path())
-            .dependencies(&id, dependencies)
-            .unwrap();
+        inventory(h.path()).dependencies(&id, dependencies).unwrap();
         publication.complete_sealed(json!({"exit": 0})).unwrap();
         (id, path)
     };
@@ -130,34 +128,51 @@ fn leaf_entry_preserves_rooted_wide_intermediate_with_256_descriptors() {
         rlim_cur: 0,
         rlim_max: 0,
     };
-    assert_eq!(unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) }, 0);
+    assert_eq!(
+        unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) },
+        0
+    );
     limit.rlim_cur = limit.rlim_cur.min(256);
     assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
     let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let round = inventory(h.path())
             .maintain_originals(&[originals[0].0.clone()])
             .unwrap();
-        assert!(round["accounting_errors"].as_array().unwrap().is_empty(), "{round}");
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
         assert_eq!(round["removed_logical_bytes"], 0, "{round}");
         assert!(round["disposed"].as_array().unwrap().is_empty(), "{round}");
         for (record, before, path) in &declarations {
             assert_eq!(&fs::read(record).unwrap(), before);
             assert!(h.path().join(path).is_file());
         }
-        inventory(h.path()).reference("current-report", &[]).unwrap();
+        inventory(h.path())
+            .reference("current-report", &[])
+            .unwrap();
         for (id, path) in [&root, &intermediate] {
             for _ in 0..135 + 16 {
                 let record: Value = serde_json::from_slice(
                     &fs::read(retention_state::object_path(h.path(), id)).unwrap(),
-                ).unwrap();
+                )
+                .unwrap();
                 if record["output"].is_null() {
                     break;
                 }
-                let round = inventory(h.path()).maintain_originals(&[id.clone()]).unwrap();
-                assert!(round["accounting_errors"].as_array().unwrap().is_empty(), "{round}");
+                let round = inventory(h.path())
+                    .maintain_originals(&[id.clone()])
+                    .unwrap();
+                assert!(
+                    round["accounting_errors"].as_array().unwrap().is_empty(),
+                    "{round}"
+                );
                 assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
                 for (_, original_path) in &originals {
-                    assert_eq!(fs::read(h.path().join(original_path)).unwrap(), b"required original");
+                    assert_eq!(
+                        fs::read(h.path().join(original_path)).unwrap(),
+                        b"required original"
+                    );
                 }
             }
             assert!(!h.path().join(path).exists(), "report not retired: {id}");
