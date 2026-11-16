@@ -1,5 +1,6 @@
 {
   "schema": "chrono-output-retention/v2",
+  "max_lifetime_seconds": 86400,
   "producers": {
     "worktree-fixture": [
       ".chrono-harness/state/worktree-test-failures/",
