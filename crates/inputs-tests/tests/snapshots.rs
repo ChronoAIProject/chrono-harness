@@ -1537,6 +1537,171 @@ fn pairs_explicit_snapshots_without_recapturing_the_old_environment_or_file() {
     assert_eq!(code, 0, "{err}");
     assert_eq!(p, value!({"base":a,"candidate":b}));
 }
+
+#[cfg(not(verus_keep_ghost))]
+fn enroll_snapshot_sources(
+    root: &Path,
+    snapshot: &Value,
+) -> (
+    chrono_harness::retained_artifacts::retention::Inventory,
+    Vec<String>,
+) {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    fs::write(
+        root.join(".chrono-harness/retention.json"),
+        serde_json::to_vec(&value!({
+            "schema":"chrono-output-retention/v2",
+            "producers":{"fixture":[".chrono-harness/state/"]},
+            "keep_seconds":0,"metadata_keep_seconds":0,
+            "max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,
+            "max_bytes_per_round":1048576,"max_millis_per_round":1000
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let owner = Inventory::adopted(root).unwrap().unwrap();
+    let mut ids = Vec::new();
+    for path in [
+        ".chrono-harness/state/one.json",
+        snapshot["files"]["data"]["blob"].as_str().unwrap(),
+    ] {
+        let publication = Inventory::adopted(root)
+            .unwrap()
+            .unwrap()
+            .begin("fixture", path, value!({"kind":"explicit-test-adoption"}))
+            .unwrap();
+        ids.push(publication.id().to_owned());
+        publication.complete(value!({"exit_code":0})).unwrap();
+    }
+    (owner, ids)
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn pairing_keeps_enrolled_sources_until_the_callers_handoff() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::read_scope;
+    let (mut source, _input, _, oid) = fixture();
+    source.disable_cleanup(true);
+    eprintln!(
+        "Original snapshot handoff fixture: {}",
+        source.path().display()
+    );
+    let snapshot_path = ".chrono-harness/state/one.json";
+    let (code, snapshot, error) = invoke(
+        source.path(),
+        &[
+            "capture",
+            "--config",
+            CONFIG,
+            "--commit",
+            &oid,
+            "--output",
+            snapshot_path,
+        ],
+    );
+    assert_eq!(code, 0, "{error}");
+    let (owner, ids) = enroll_snapshot_sources(source.path(), &snapshot);
+    let original = fs::read(source.path().join(snapshot_path)).unwrap();
+    let blob = snapshot["files"]["data"]["blob"].as_str().unwrap();
+    let bytes = fs::read(source.path().join(blob)).unwrap();
+    let destination = tempfile::tempdir().unwrap();
+    let caller = read_scope(source.path()).unwrap();
+    let paired = chrono_inputs::pair(
+        destination.path(),
+        source.path(),
+        snapshot_path,
+        source.path(),
+        snapshot_path,
+        ".chrono-harness/state/pair.json",
+    )
+    .unwrap();
+    assert_eq!(paired, value!({"base":snapshot,"candidate":snapshot}));
+    let active = owner.maintain_originals_at(&ids, u64::MAX).unwrap();
+    assert_eq!(
+        fs::read(source.path().join(snapshot_path)).unwrap_or_else(|e| panic!("{e}; {active}")),
+        original,
+        "{active}"
+    );
+    assert_eq!(
+        fs::read(source.path().join(blob)).unwrap_or_else(|e| panic!("{e}; {active}")),
+        bytes,
+        "{active}"
+    );
+    assert_eq!(fs::read(destination.path().join(blob)).unwrap(), bytes);
+    drop(caller);
+    let retired = owner.maintain_originals_at(&ids, u64::MAX).unwrap();
+    assert!(!source.path().join(snapshot_path).exists(), "{retired}");
+    assert!(!source.path().join(blob).exists(), "{retired}");
+    source.disable_cleanup(false);
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn registration_keeps_an_enrolled_blob_until_the_callers_handoff() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::{retained_artifacts::retention::read_scope, wire};
+    use chrono_judge_registration::{Registrations, inputs};
+    let (mut source, _input, values, oid) = fixture();
+    source.disable_cleanup(true);
+    eprintln!("Original input reader fixture: {}", source.path().display());
+    let (code, snapshot, error) = invoke(
+        source.path(),
+        &[
+            "capture",
+            "--config",
+            CONFIG,
+            "--commit",
+            &oid,
+            "--output",
+            ".chrono-harness/state/one.json",
+        ],
+    );
+    assert_eq!(code, 0, "{error}");
+    let root = fs::canonicalize(source.path()).unwrap();
+    let request: wire::Request = serde_json::from_value(value!({
+        "protocol":"chrono-judge/v1","request_id":"","judge_id":"registration","mode":"evaluate",
+        "base":{"commit":oid,"tree":"c".repeat(40),"root":root},
+        "candidate":{"commit":oid,"tree":"d".repeat(40),"root":root},
+        "delta":[],"registries":{"base":root,"candidate":root,"digest":"e".repeat(64)},
+        "context":{"path":root.join("context.json"),"sha256":"f".repeat(64)},
+        "impact":null,"prior_results":[],"config_path":CONFIG,
+        "checkout":{"head":oid,"tracked":[],"untracked":[],"index_flags":[]},
+        "runner":{"path":"runner","sha256":"e".repeat(64),"version":"0.1.0"},
+        "observations":{"retained":{"base":snapshot,"candidate":snapshot},
+            "environment":{"inherited":snapshot["environment"],
+                "effective":inputs::environment(&values[CONFIG], &snapshot["environment"]).unwrap()}}
+    })).unwrap();
+    let registrations = Registrations::load(&values, CONFIG).unwrap();
+    let (owner, ids) = enroll_snapshot_sources(&root, &snapshot);
+    let blob = snapshot["files"]["data"]["blob"].as_str().unwrap();
+    let bytes = fs::read(root.join(blob)).unwrap();
+    let caller = read_scope(&root).unwrap();
+    let effective = inputs::validate(&request, &registrations, &registrations).unwrap();
+    assert_eq!(
+        effective["endpoints"]["candidate"]["files"]["data"]["sha256"],
+        sha256(&bytes)
+    );
+    let active = owner.maintain_originals_at(&ids, u64::MAX).unwrap();
+    assert_eq!(
+        fs::read(root.join(blob)).unwrap_or_else(|e| panic!("{e}; {active}")),
+        bytes,
+        "{active}"
+    );
+    // The already decoded snapshot was not opened by this consumer.
+    assert!(
+        !root.join(".chrono-harness/state/one.json").exists(),
+        "{active}"
+    );
+    drop(caller);
+    let retired = owner.maintain_originals_at(&ids[1..], u64::MAX).unwrap();
+    assert!(!root.join(blob).exists(), "{retired}");
+    source.disable_cleanup(false);
+}
 #[cfg(not(verus_keep_ghost))]
 #[test]
 fn wrong_checkout_dirty_config_missing_input_and_unsafe_output_never_publish_snapshot() {
