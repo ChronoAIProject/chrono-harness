@@ -212,6 +212,12 @@ projects schema v2 要求每个 project／script 显式登记非空 `language`�
 
 审计或迁移按以下顺序处理既有 host JSON：确认实际生产者和消费者；保留最小可移植合同；把本机／CI 观察移到 `state` 或在线 artifact；更新 FILEMAP、projects、routes 和测试边；再通过现役入口验证并删除已无消费者的文件。只删大文件而留下悬空引用不构成清理，也不能把 CI 绿色状态当作仓库政策的替代来源。
 
+### 2.4 项目目标、宪法与分层规则
+
+本仓目标和规则修改的上位约束由[项目宪法与成本治理](docs/project-constitution.md)负责，唯一编辑源是 `.chrono-harness/instructions/project-constitution.zh-CN.md`。它按用户结果、合同兑现和交付成本排列目标，并建立目标法、宪法、基本法、程序法、实施条例五层规则。层级按实际语义判定；运行事实是证据，不能通过修法改写。规则修改须在原授权内承担取证、阅读、迁移、验证和维护成本，预算与收益口径预先固定，失败不清账；未知只支持有界的最小实验，不能支持无依据的扩张。修法义务也约束宪法和修法规则自身。
+
+这是本宿主供维护者与 AI 使用的当前政策，不改变下游宿主的默认指令或产品 schema，复用指令生成、FILEMAP、canonical check 和现有交付入口。现有 `judge-cost` 仍只报告登记成本与未知坐标，不强制预算、收益或规则层级；生成和限定范围检查均不能证明完整经济治理已执行。
+
 ## 3. 登记格式与字段合同
 
 Config 接受明确的 `schema_version: 1 | 2 | 3 | 4`；projects 接受 1／2，judges 使用 1，当前 FILEMAP／workflow 使用 2。Config v2／v3／v4 要求每个外部输入声明存在或缺失，v1 保留仅摘要的原含义。每份登记都有 `status: "proposed" | "active"`。候选读取器只按明确的解释约定读取固定历史 v1 数据。

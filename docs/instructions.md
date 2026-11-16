@@ -47,7 +47,9 @@ CLI 复用标准诊断库，按明确 `--host-root`（省略时为当前目录�
 
 已有宿主采用新默认时，以所选产品源码版本的 `assets/instructions/catalog.json` 和 `default-manifest.json` 为比较输入。在宿主自己的 catalog 中合入所需规则正文和 `workflow` 布局，再在 manifest 根输出选择 roots／layout。保留自定义 atoms、locale、file 源、其他输出、上下文和块外内容，不整份覆盖 catalog／manifest。已有不解析内容的 file 方法仍由原文件负责方编辑，不用 init 替换。
 
-然后走宿主登记的 `instructions.generate` 入口，核对真实根、AGENTS 字面链接和全部选中 Markdown／skill 使用方；重复生成确认无需写入。本仓使用自己的源和 manifest 选定的输出，产品默认仍只生成根。此路径只更新可读方法，不激活宿主判官，不证明 AI 遵守，也不建立 full／native 验收。
+然后走宿主登记的 `instructions.generate` 入口，核对真实根、AGENTS 字面链接和全部选中 Markdown／skill 使用方；重复生成确认无需写入。本仓的当前输出由 manifest 负责，产品默认仍只生成根。此路径只更新可读方法，不激活宿主判官，不证明 AI 遵守，也不建立 full／native 验收。
+
+本仓另采用[项目宪法与成本治理](project-constitution.md)。完整条文只在 `.chrono-harness/instructions/project-constitution.zh-CN.md` 维护，file atom `policy.project-constitution-text` 生成这份阅读副本；根和完整方法指南只选简短的 `policy.project-constitution`，修改规则时再读全文。FILEMAP 登记源、输出和原生成器的关系，不给产品默认增加本仓政策，也不新增措辞测试、判官或执行路径。新增阅读、生成和维护负担计入规则修改成本；没有实测总收益时不声称节省。
 
 当前 `method.host-tools`、`owner.migration`、`action.autonomy`、`action.blocked` 和 `cost.measure` 等规则保留以下要求：以当前规范为准，不再为历史版本、格式、接口或路径保留执行分支、适配器和测试；变更时迁移当前使用方与登记。固定基线事实、仍有用途的源码和失败原件保留为数据与证据，不让旧合同成为运行时权威。局部失败只阻断明确依赖的工作，其他已授权工作继续；不申请额外权限，移除无必要使用方的特殊权限功能，不建替代激活层。普通必要流程保留已有权限，CI 缓存的普通内容验证、恢复、构建和保存仍由缓存负责方维护。
 
