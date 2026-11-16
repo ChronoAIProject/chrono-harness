@@ -53,7 +53,7 @@
 | --- | --- | --- |
 | 全部 40 个项目的 Cargo target、`.rlib`／`.rmeta`／dep-info、增量缓存 | 安装、链接、测试启动；可按 lock 和登记工具重建 | 按各 action 的真实 target-dir 对应 cleanup 根；大部分 finish-dispose。main、活／未知使用、政策未迁移或源码保全失败继续保护；不是任意创建年龄删除 |
 | 登记的 Verus `verify.*.rlib` 与 `.d` | 验证 action 需要实际编译；`.d` 被 `verified_sources::bind_compiler_sources` 消费以核固定源码，结果再交给 CI；不能把证明编译与仅执行 SMT 混同 | 固定文件名不随每次调用新增，但直接输出到 state，未发现独立时间退休交接。是否需要在结果封存后保留 rlib 原文件仍为 unknown；未据此删掉编译／源码绑定合同 |
-| runner-tests、instructions-tests、judge-ci-tests、ci-tests、judge-registration-tests、judge-filemap-tests、judge-routes-tests、judge-projects-tests、judge-cost-tests、judge-mixed-tests、judge-workflow-tests、inputs-tests、distribution-tests、worktree-tests、diagnostics-tests、cache-tests、host-bootstrap-native-tests、pr-tests、host-release-native-tests、identifiers-tests | 每个项目消费自己的测试二进制、样本、替身、捕获和断言；别名 CLI 仍消费真实生产逻辑。失败现场用于调试当前失败，成功现场通常不需保留 | 已登记的 worktree／ci／projects／workflow-tools producer 采用目录级滚动，成功 0 秒，失败／中断 86400 秒，已删除元数据 3600 秒。其余 `TempDir` 正常 Drop 不证明 SIGKILL 后回收；显式 `.keep()` 另有缺口 |
+| runner-tests、instructions-tests、judge-ci-tests、ci-tests、judge-registration-tests、judge-filemap-tests、judge-routes-tests、judge-projects-tests、judge-cost-tests、judge-mixed-tests、judge-workflow-tests、inputs-tests、distribution-tests、worktree-tests、diagnostics-tests、cache-tests、host-bootstrap-native-tests、pr-tests、host-release-native-tests、identifiers-tests | 每个项目消费自己的测试二进制、样本、替身、捕获和断言；别名 CLI 仍消费真实生产逻辑。失败现场用于调试当前失败，成功现场通常不需保留 | 宿主登记的 worktree／ci／projects／workflow-tools producer 采用目录级滚动，成功 0 秒，失败／中断 86400 秒，已删除元数据 3600 秒。隔离测试协调者采用的实际政策把这四类 producer 的已删除元数据期限改为 0 秒，失败／中断期限不变。其余 `TempDir` 正常 Drop 不证明 SIGKILL 后回收；显式 `.keep()` 另有缺口 |
 | `host-bootstrap-launcher`、`host-bootstrap-launcher-tests` | 薄 shell 转交生命周期／Rust bootstrap；shell 测试消费自己创建的替身和调用捕获 | 测试成功 trap 删除，失败保留 `mktemp` 目录；当前 cleanup 的 producer 没有 `operations` 映射为该 action 包住全部 TMPDIR，不能援引文档里的运行级滚动代替实际配置 |
 | `.chrono-harness/release/native.sh`、`consume.sh` | 前者转交已安装 Rust；后者从 transport 解包执行物给真实 release job | frontend／cache 生命周期归原 Rust 及配方；shell 不另建保管权威 |
 | 分发生成的 launcher／installer | 用户执行固定版本安装，消费 manifest、lock、安装器和二进制 | 当前版本和安装是产品；临时目录正常 trap 清理，强制中断仍需宿主保管，不能把 trap 叫时间滚动 |
@@ -63,14 +63,16 @@
 | 公开 GitHub Release／tag／发行资产及下游安装 | 下载者、四个示例宿主、正式版晋升和固定版本恢复；需求见[发布合同](release-ci.md)与[示例](examples.md) | 代码／文档有当前需求和具名采用入口；本次未验证所有下游的实际安装与释放，不按“本宿主没读”判废。没有本仓时间滚动退役公开版本的合同 |
 | 固定报告、当前安装指针、OS plist／socket、租约／owner 文件 | 当前位置查询、当前执行物／启动、互斥与恢复；删除它们可能使仍在使用的工具失效 | 固定数量与内容到期是不同性质。卸载、换代和释放后才可退休；不得泛化为按目录年龄删 state／bin |
 
+隔离测试还存在一层独立保管链：[`isolated_capability.rs`](../crates/runner-tests/tests/support/isolated_capability.rs) 先分配外层临时目录，复制 Git／Cargo 替身，再把其 `custody/` 交给子测试。[`fixture_coordinator.rs`](../crates/worktree-tests/tests/support/fixture_coordinator.rs) 只在该子目录采用上述四类 producer，并覆盖已删除元数据的期限。外层实际持有目录租约、等待最初启动的子测试进程结束，再调用退休观察；只有子测试成功且观察确认退休，才删除整个外层目录。复制的替身由该子测试实际执行，失败原件由调试和回归验收消费；子测试失败或退休未确认时，外层 `.keep()` 保留原件。内层登记没有把整个外层目录交给定期维护者，打印路径及“按已登记政策处理”的提示也不构成持久交接。因此，迁移某个内层分配不能单独关闭外层失败／中断后的回收缺口。
+
 ## 可复核的缺口和反例
 
 | 编号 | 事实／反例 | 为什么现有能力不能证明最终回收 | 修复与验收负责方 |
 | --- | --- | --- | --- |
 | O1 | `inputs::publish` 在调用方新路径发布快照；`publish_blob` 在 `state/inputs/blobs/SHA256` 新建不同内容的 blob；两者没有 retention publication | 产生者可连续生成互不相同的文件。retention 枚举自己的 objects／roles，不扫描 state 取得未知文件删除权；顶层 evidence-retain 保留它们 | inputs 与 runner：复用现有 publication，登记快照→blob 及最终报告依赖；成功／失败／中断交接，历史精确接管；先核 full／compose 使用链，再验证末项使用结束后原件和元数据实际退休 |
-| O2 | `ci-tests/tests/initial_short.rs::Host::drop` 在 panic 时 `.keep()`；`ci-tests/tests/gating.rs` 失败时新建 `chrono-gating-failure-*` 并 `.keep()` | 没有 RAII 删除，也没有这些精确分配的滚动声明。正常使用的 TMPDIR 或 OS 一般清理不能补出产品合同 | ci-tests：迁移到既有 TemporaryHost／rolling producer；保存原失败到有限诊断窗口，验证 panic／强制中断／活使用保护及到期后整个目录与元数据回收 |
+| O2 | 基线的 `ci-tests/tests/initial_short.rs::Host::drop` 在 panic 时 `.keep()`；`ci-tests/tests/gating.rs` 失败时新建 `chrono-gating-failure-*` 并 `.keep()`；`runner-tests/tests/support/isolated_capability.rs` 在子测试失败或退休未确认时也 `.keep()` 外层目录 | 这些分配没有完整的定期保管交接；内层 producer 的滚动声明不覆盖外层目录。正常使用的 TMPDIR、OS 一般清理或打印交接提示不能补出产品合同 | ci-tests 与隔离测试负责方：复用既有 TemporaryHost／rolling producer，分别覆盖内外层实际分配；保存原失败到有限诊断窗口，验证 panic／强制中断／活使用保护及到期后整个目录与元数据回收 |
 | O3 | host-bootstrap 的 `proved_build::build_attempt` 创建 `proved-build-repair:<目录>`，正文声明“调试／验收后释放”，不提供最终释放时间 | 期限和真实消费者保护并存；永久不结清消费者是合法执行，TTL 不会越过它 | bootstrap 调用方：绑定真实失败／修复活动的终点及恢复责任；结束消费后正式 release-consumer，不能在调试义务未完时由维护者猜释放 |
-| O4 | diagnostics 仅在新记录会超容量时轮转，`open` 只处理过量槽位 | 写入停止后，任意旧日志可无限保留。它仍是最多 50 MiB 的有界家族，不能把“非时间轮转”说成该家族无界增长 | diagnostics／宿主：若要求全部临时输出时间到期，需在现有所有者接入有限年龄；必须保留与不可变 stderr 原件的分离，不让日志轮换破坏报告 |
+| O4 | diagnostics 仅在新记录会超容量时轮转，`open` 只处理过量槽位 | 写入停止后，任意旧日志可无限保留。按当前政策写入的正常家族最多 50 MiB；这不包含外部或旧政策留下的超大文件，`open` 不会自动把它们缩至当前上限。不能把“非时间轮转”说成正常家族无界增长 | diagnostics／宿主：若要求全部临时输出时间到期，需在现有所有者接入有限年龄；必须保留与不可变 stderr 原件的分离，不让日志轮换破坏报告 |
 | O5 | `ci::write_file` 使用 `.chrono-ci-PID.tmp`，错误返回尝试 remove；分发、inputs、bootstrap 使用 RAII 临时文件；shell 使用 trap | SIGKILL／断电不执行清理代码；PID 文件名、年龄或空闲不足以取得历史未知临时文件的删除权 | 各写入者：让实际新分配进入现有目录级生命周期或对应恢复事务；注册发生在写入前，不能另建扫描任意 `/tmp` 的删除器 |
 | O6 | 当前 `bin/` retain、`state/` evidence-retain；OPEN PR、current-report、native-delivery、领域恢复根可持续存在 | 有效保留根能永远阻止其依赖删除。缓存 TTL 不能证明安装／证据／整个检出最终退休 | 实际安装、报告、PR、上传和恢复负责方：分别核真实终点与换代交接。unknown 继续保护；不能为了全绿把引用删掉 |
 | O7 | 显式维护每地址有 25 ms、256 节点、64 MiB 的预算；损坏、忙、预算耗尽会继续保护 | 定时存在不证明单对象每隔有限轮一定推进；对象大小／图准备和 IO 可能让每次都停在有效动作之前 | runner retention／worktree：给实际状态机定义可下降的进度量，并证明每个持续合格对象公平取得有效步骤；行为验收覆盖大于预算的清单、引用环、并发新增、独立损坏和重启 |
