@@ -20,6 +20,7 @@
     }
   },
   "files": [
+    {"path":"docs/output-retention-audit.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
     {"path":"crates/worktree-tests/tests/fixtures/maintenance-repeat-actions.json","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}],"verification":{"role":"data","roots":[]}},
     {"path":"docs/unified-maintenance.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
     {"path":"crates/worktree/src/automatic/service.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}],"verification":{"role":"program","roots":[{"path":"crates/worktree/src/verified_lifecycle.rs","operation":"verify.worktree-lifecycle"},{"path":"crates/worktree-tests/tests/verified_lifecycle.rs","operation":"verify.worktree-lifecycle-tests"}]}},
