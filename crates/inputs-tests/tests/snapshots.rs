@@ -1284,6 +1284,27 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
+fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let (host, _input, _values, commit) = fixture();
+    fs::write(host.path().join(POLICY_PATH), serde_json::to_vec(&value!({
+        "schema":"chrono-output-retention/v2",
+        "producers":{"full-original":[".chrono-harness/state/"]},
+        "keep_seconds":0,"metadata_keep_seconds":0
+    })).unwrap()).unwrap();
+    let path = ".chrono-harness/state/retained-snapshot.json";
+    let snapshot = chrono_inputs::capture(host.path(), CONFIG, &commit, path).unwrap();
+    let owner = Inventory::adopted(host.path()).unwrap().unwrap();
+    assert!(owner.enrolled(path).unwrap(), "published snapshot is outside the maintenance inventory");
+    let blob = snapshot["files"]["data"]["blob"].as_str().unwrap();
+    assert_eq!(snapshot["files"]["data"], snapshot["files"]["same-bytes"]);
+    assert!(owner.enrolled(blob).unwrap(), "shared blob is outside the maintenance inventory");
+}
+#[cfg(not(verus_keep_ghost))]
+#[test]
 fn capture_rejects_retired_endpoint_options_before_accessing_host_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
