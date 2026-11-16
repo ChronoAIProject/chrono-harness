@@ -1309,26 +1309,40 @@ fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
         owner.enrolled(path).unwrap(),
         "published snapshot is outside the maintenance inventory"
     );
-    let blob = snapshot["files"]["data"]["blob"].as_str().unwrap().to_owned();
+    let blob = snapshot["files"]["data"]["blob"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     assert_eq!(snapshot["files"]["data"], snapshot["files"]["same-bytes"]);
     assert!(
         owner.enrolled(&blob).unwrap(),
         "shared blob is outside the maintenance inventory"
     );
     let round = owner.maintain_at(u64::MAX).unwrap();
-    assert!(host.path().join(path).is_file(), "live Rust result lost its snapshot: {round}");
-    assert!(host.path().join(&blob).is_file(), "live Rust result lost its blob: {round}");
+    assert!(
+        host.path().join(path).is_file(),
+        "live Rust result lost its snapshot: {round}"
+    );
+    assert!(
+        host.path().join(&blob).is_file(),
+        "live Rust result lost its blob: {round}"
+    );
     let first = snapshot.handoff("input-retention-first").unwrap();
     drop(snapshot);
     let second_path = ".chrono-harness/state/second-retained-snapshot.json";
-    let second_snapshot = chrono_inputs::capture(host.path(), CONFIG, &commit, second_path).unwrap();
+    let second_snapshot =
+        chrono_inputs::capture(host.path(), CONFIG, &commit, second_path).unwrap();
     assert_eq!(second_snapshot["files"]["data"]["blob"], blob);
     let second = second_snapshot.handoff("input-retention-second").unwrap();
     drop(second_snapshot);
     let records = owner.producer_status("full-original", None).unwrap();
     assert_eq!(records["scope_complete"], true, "{records}");
-    let ids: Vec<_> = records["records"].as_array().unwrap().iter()
-        .map(|record| record["id"].as_str().unwrap().to_owned()).collect();
+    let ids: Vec<_> = records["records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|record| record["id"].as_str().unwrap().to_owned())
+        .collect();
     owner.maintain_at(u64::MAX).unwrap();
     assert!(host.path().join(path).is_file());
     assert!(host.path().join(second_path).is_file());
@@ -1339,27 +1353,45 @@ fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
         let declaration_bytes = serde_json::to_vec(declaration).unwrap();
         let receipt = value!({"consumer":declaration.consumer,
             "declaration_sha256":sha256(&declaration_bytes),"state":"released"});
-        owner.release_consumer(&declaration.consumer, &declaration.originals,
-            &sha256(&declaration_bytes), &sha256(&serde_json::to_vec(&receipt).unwrap())).unwrap();
+        owner
+            .release_consumer(
+                &declaration.consumer,
+                &declaration.originals,
+                &sha256(&declaration_bytes),
+                &sha256(&serde_json::to_vec(&receipt).unwrap()),
+            )
+            .unwrap();
     };
     release(&first);
-    for _ in 0..8 { owner.maintain_at(u64::MAX).unwrap(); }
+    for _ in 0..8 {
+        owner.maintain_at(u64::MAX).unwrap();
+    }
     assert!(!host.path().join(path).exists());
     assert!(host.path().join(second_path).is_file());
     assert!(host.path().join(&blob).is_file());
     release(&second);
-    for _ in 0..8 { owner.maintain_at(u64::MAX).unwrap(); }
+    for _ in 0..8 {
+        owner.maintain_at(u64::MAX).unwrap();
+    }
     assert!(!host.path().join(second_path).exists());
     assert!(!host.path().join(&blob).exists());
     for id in ids {
-        assert!(!host.path().join(".chrono-harness/state/output-retention-v1/objects").join(id).exists(),
-            "released input metadata did not retire");
+        assert!(
+            !host
+                .path()
+                .join(".chrono-harness/state/output-retention-v1/objects")
+                .join(id)
+                .exists(),
+            "released input metadata did not retire"
+        );
     }
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
 fn adopted_input_cli_requires_and_returns_its_real_caller_handoff() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let (host, _input, _values, commit) = fixture();
     fs::write(host.path().join(POLICY_PATH), serde_json::to_vec(&value!({
@@ -1368,29 +1400,51 @@ fn adopted_input_cli_requires_and_returns_its_real_caller_handoff() {
         "max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":25
     })).unwrap()).unwrap();
     let path = ".chrono-harness/state/cli-retained-snapshot.json";
-    let args = ["capture","--config",CONFIG,"--commit",&commit,"--output",path];
+    let args = [
+        "capture", "--config", CONFIG, "--commit", &commit, "--output", path,
+    ];
     let (exit, _, error) = invoke(host.path(), &args);
-    assert_eq!(exit,2); assert!(error.contains("requires --report-consumer"), "{error}");
+    assert_eq!(exit, 2);
+    assert!(error.contains("requires --report-consumer"), "{error}");
     assert!(!host.path().join(path).exists());
-    assert!(!host.path().join(".chrono-harness/state/inputs/blobs").exists());
-    let mut accepted = args.to_vec(); accepted.extend(["--report-consumer","input-cli-caller"]);
+    assert!(
+        !host
+            .path()
+            .join(".chrono-harness/state/inputs/blobs")
+            .exists()
+    );
+    let mut accepted = args.to_vec();
+    accepted.extend(["--report-consumer", "input-cli-caller"]);
     let (exit, response, error) = invoke(host.path(), &accepted);
-    assert_eq!(exit,0,"{error}");
-    assert_eq!(response["schema"],"chrono-input-export/v1");
-    assert_eq!(response["report_consumer"]["consumer"],"input-cli-caller");
-    assert_eq!(json(&fs::read(host.path().join(path)).unwrap()).unwrap(), response["result"]);
+    assert_eq!(exit, 0, "{error}");
+    assert_eq!(response["schema"], "chrono-input-export/v1");
+    assert_eq!(response["report_consumer"]["consumer"], "input-cli-caller");
+    assert_eq!(
+        json(&fs::read(host.path().join(path)).unwrap()).unwrap(),
+        response["result"]
+    );
     let owner = Inventory::adopted(host.path()).unwrap().unwrap();
     owner.maintain_at(u64::MAX).unwrap();
     assert!(host.path().join(path).is_file());
-    let blob = response["result"]["files"]["data"]["blob"].as_str().unwrap();
+    let blob = response["result"]["files"]["data"]["blob"]
+        .as_str()
+        .unwrap();
     assert!(host.path().join(blob).is_file());
     let declaration: chrono_harness::retained_artifacts::retention::Consumer =
         serde_json::from_value(response["report_consumer"].clone()).unwrap();
     let declaration_bytes = serde_json::to_vec(&declaration).unwrap();
     let receipt = value!({"consumer":declaration.consumer,"declaration_sha256":sha256(&declaration_bytes),"state":"released"});
-    owner.release_consumer(&declaration.consumer, &declaration.originals,
-        &sha256(&declaration_bytes), &sha256(&serde_json::to_vec(&receipt).unwrap())).unwrap();
-    for _ in 0..8 { owner.maintain_at(u64::MAX).unwrap(); }
+    owner
+        .release_consumer(
+            &declaration.consumer,
+            &declaration.originals,
+            &sha256(&declaration_bytes),
+            &sha256(&serde_json::to_vec(&receipt).unwrap()),
+        )
+        .unwrap();
+    for _ in 0..8 {
+        owner.maintain_at(u64::MAX).unwrap();
+    }
     assert!(!host.path().join(path).exists());
     assert!(!host.path().join(blob).exists());
 }

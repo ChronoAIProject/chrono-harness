@@ -196,8 +196,6 @@ pub mod composition;
 #[cfg(not(verus_keep_ghost))]
 mod custody;
 #[cfg(not(verus_keep_ghost))]
-pub use custody::Produced;
-#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{copy_hashed, facts, file_identity, json, no_symlink_parents, wire};
 #[cfg(not(verus_keep_ghost))]
 pub use chrono_judge_registration::inputs::{
@@ -210,6 +208,8 @@ use chrono_judge_registration::{
 };
 #[cfg(not(verus_keep_ghost))]
 pub use composition::{Manifest as CompositionManifest, Source as CompositionSource, compose};
+#[cfg(not(verus_keep_ghost))]
+pub use custody::Produced;
 #[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
 #[cfg(not(verus_keep_ghost))]
@@ -237,8 +237,13 @@ fn publish(root: &Path, path: &str, v: &Value) -> Result<(), String> {
 fn publish_bytes(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
     use chrono_harness::retained_artifacts::retention;
     let target = state(root, path)?;
-    if retention::publish_owned_original(root, "full-original", path, bytes,
-        value!({"kind":"input-original","sha256":chrono_harness::sha256(bytes),"length":bytes.len()}))? {
+    if retention::publish_owned_original(
+        root,
+        "full-original",
+        path,
+        bytes,
+        value!({"kind":"input-original","sha256":chrono_harness::sha256(bytes),"length":bytes.len()}),
+    )? {
         return Ok(());
     }
     if target.exists() {
@@ -256,8 +261,12 @@ fn publish_bytes(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
 }
 #[cfg(not(verus_keep_ghost))]
 fn store(root: &Path, input: &Path) -> Result<Value, String> {
-    let _input = input.strip_prefix(root).ok().and_then(|path| path.to_str())
-        .map(|path| chrono_harness::retained_artifacts::retention::read_guard(root, path)).transpose()?;
+    let _input = input
+        .strip_prefix(root)
+        .ok()
+        .and_then(|path| path.to_str())
+        .map(|path| chrono_harness::retained_artifacts::retention::read_guard(root, path))
+        .transpose()?;
     if !fs::metadata(input)
         .map_err(|e| format!("E_INPUT_READ: {}: {e}", input.display()))?
         .is_file()
@@ -270,23 +279,26 @@ fn store(root: &Path, input: &Path) -> Result<Value, String> {
         return Err("E_INPUT_READ: not a regular file".into());
     }
     let length = file.metadata().map_err(|e| e.to_string())?.len();
-    let (stage, sha256, length) = custody::StagedBlob::write(root, length, |output| copy_hashed(file, output))?;
+    let (stage, sha256, length) =
+        custody::StagedBlob::write(root, length, |output| copy_hashed(file, output))?;
     publish_blob(root, &stage.path, sha256, length)
 }
 // The caller hashes all bytes written to its private temporary file before publication.
 #[cfg(not(verus_keep_ghost))]
-fn publish_blob(
-    root: &Path,
-    staged: &Path,
-    sha256: String,
-    length: u64,
-) -> Result<Value, String> {
+fn publish_blob(root: &Path, staged: &Path, sha256: String, length: u64) -> Result<Value, String> {
     let path = format!("{BLOB_DIRECTORY}/{sha256}");
     let target = state(root, &path)?;
     if chrono_harness::retained_artifacts::retention::publish_owned_file(
-        root, "full-original", &path, staged, &sha256, length,
+        root,
+        "full-original",
+        &path,
+        staged,
+        &sha256,
+        length,
         value!({"kind":"input-blob","sha256":sha256,"length":length}),
-    ).map_err(|e| format!("E_INPUT_BLOB: {e}"))? {
+    )
+    .map_err(|e| format!("E_INPUT_BLOB: {e}"))?
+    {
         return Ok(value!({"blob":path,"sha256":sha256,"length":length}));
     }
     if target.exists() {
@@ -453,7 +465,7 @@ pub fn pair(
 pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
     let command = match parse_input_command(args)? {
         InputAction::Version => return Ok(format!("chrono-inputs {}\n", env!("CARGO_PKG_VERSION"))),
-        InputAction::Help => return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID]\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P\nExplicit input transport only; snapshots are not governance verdicts.\n".into()),
+        InputAction::Help => return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID] [--report-consumer ID]\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H] [--report-consumer ID]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P [--report-consumer ID]\nAdopted input exports require --report-consumer and return chrono-input-export/v1; the caller releases the returned consumer after use.\nExplicit input transport only; snapshots are not governance verdicts.\n".into()),
         InputAction::Command(command) => command,
     };
     let required = |key: &str| {
@@ -469,13 +481,18 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
         _ => output,
     };
     let owner = chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?;
-    if owner.as_ref().is_some_and(|owner| owner.accepts("full-original", output)
-        || owner.accepts("full-original", primary)) && consumer.is_none() {
+    if owner.as_ref().is_some_and(|owner| {
+        owner.accepts("full-original", output) || owner.accepts("full-original", primary)
+    }) && consumer.is_none()
+    {
         return Err("E_INPUT_RETENTION: adopted input export requires --report-consumer ID".into());
     }
     if let Some(consumer) = consumer {
-        if consumer.trim().is_empty() || !owner.as_ref().is_some_and(|owner|
-            owner.accepts("full-original", primary)) {
+        if consumer.trim().is_empty()
+            || !owner
+                .as_ref()
+                .is_some_and(|owner| owner.accepts("full-original", primary))
+        {
             return Err("E_INPUT_RETENTION: caller handoff requires a nonempty consumer and adopted primary output".into());
         }
     }

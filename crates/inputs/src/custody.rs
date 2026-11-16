@@ -21,7 +21,7 @@ impl std::ops::Deref for Produced {
 }
 impl std::fmt::Debug for Produced {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.fmt(f)
+        std::fmt::Debug::fmt(&self.value, f)
     }
 }
 impl PartialEq for Produced {
@@ -41,11 +41,16 @@ impl PartialEq<Produced> for Value {
 }
 impl serde::Serialize for Produced {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.value.serialize(serializer)
+        serde::Serialize::serialize(&self.value, serializer)
     }
 }
 impl Produced {
-    pub(crate) fn new(root: &Path, primary: &str, value: Value, scope: ReadScope) -> Result<Self, String> {
+    pub(crate) fn new(
+        root: &Path,
+        primary: &str,
+        value: Value,
+        scope: ReadScope,
+    ) -> Result<Self, String> {
         Ok(Self {
             value,
             root: fs::canonicalize(root).map_err(|e| e.to_string())?,
@@ -61,14 +66,21 @@ impl Produced {
         let owner = Inventory::adopted(&self.root)?
             .ok_or("E_INPUT_RETENTION: caller handoff requires adopted retention")?;
         let status = owner.producer_status("full-original", Some(&self.primary))?;
-        let records = status["records"].as_array().ok_or("input producer status")?;
+        let records = status["records"]
+            .as_array()
+            .ok_or("input producer status")?;
         let [record] = records.as_slice() else {
-            return Err("E_INPUT_RETENTION: existing unknown output requires its original custodian".into());
+            return Err(
+                "E_INPUT_RETENTION: existing unknown output requires its original custodian".into(),
+            );
         };
         let original = OriginalIdentity {
             id: record["id"].as_str().ok_or("input output id")?.into(),
             path: self.primary.clone(),
-            identity: record["identity"].as_str().ok_or("input output identity")?.into(),
+            identity: record["identity"]
+                .as_str()
+                .ok_or("input output identity")?
+                .into(),
         };
         // Compose returns the pair but its primary original is the provenance
         // receipt. Qualify the actual original bytes under the live capability.
@@ -112,7 +124,9 @@ pub(crate) struct BoundedFile {
 impl Write for BoundedFile {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         if bytes.len() as u64 > self.remaining {
-            return Err(std::io::Error::other("E_INPUT_BLOB: source exceeds declared length"));
+            return Err(std::io::Error::other(
+                "E_INPUT_BLOB: source exceeds declared length",
+            ));
         }
         let written = self.file.write(bytes)?;
         self.remaining -= written as u64;
@@ -147,22 +161,38 @@ impl StagedBlob {
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let path = retention::unique_path(&directory, "input-stage", ".bytes")?;
         let publication = retention::create_adopted_with_limit(
-            root, "full-original", &path, false,
-            value!({"kind":"input-staging","outcome":"not-established"}), Some(length.max(1)),
+            root,
+            "full-original",
+            &path,
+            false,
+            value!({"kind":"input-staging","outcome":"not-established"}),
+            Some(length.max(1)),
         )?;
-        let mut stage = Self { path, managed: publication.is_some(), publication };
+        let mut stage = Self {
+            path,
+            managed: publication.is_some(),
+            publication,
+        };
         let mut output = BoundedFile {
-            file: fs::OpenOptions::new().write(true).open(&stage.path).map_err(|e| e.to_string())?,
+            file: fs::OpenOptions::new()
+                .write(true)
+                .open(&stage.path)
+                .map_err(|e| e.to_string())?,
             remaining: length,
         };
         let (digest, copied) = write(&mut output)
             .map_err(|e| format!("{e}; input staging original: {}", stage.path.display()))?;
         if copied != length || output.remaining != 0 {
-            return Err(format!("E_INPUT_BLOB: source length changed; input staging original: {}", stage.path.display()));
+            return Err(format!(
+                "E_INPUT_BLOB: source length changed; input staging original: {}",
+                stage.path.display()
+            ));
         }
         output.file.sync_all().map_err(|e| e.to_string())?;
         if let Some(publication) = stage.publication.take() {
-            publication.complete_sealed(value!({"kind":"input-staging","sha256":digest,"length":copied}))?;
+            publication.complete_sealed(
+                value!({"kind":"input-staging","sha256":digest,"length":copied}),
+            )?;
         }
         Ok((stage, digest, copied))
     }

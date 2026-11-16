@@ -4211,8 +4211,16 @@ pub fn publish_pending_file(
     length: u64,
     outcome: Value,
 ) -> Result<bool, String> {
-    publish_original_file(root, producer, path, input, digest, length, outcome,
-        Some(("publication-recheck", false)))
+    publish_original_file(
+        root,
+        producer,
+        path,
+        input,
+        digest,
+        length,
+        outcome,
+        Some(("publication-recheck", false)),
+    )
 }
 
 /// Streaming publication whose actual caller keeps the returned input scope.
