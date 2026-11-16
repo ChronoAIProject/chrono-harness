@@ -1,0 +1,32 @@
+{
+  "schema": "chrono-bootstrap/v1",
+  "projects": ".chrono-harness/projects.json",
+  "rust_toolchain": "1.99.1",
+  "tools": {},
+  "operations": [
+    "investigate.verus-source.regression"
+  ],
+  "install": [],
+  "participation": {
+    "coordinator_root": "git-main-worktree",
+    "program": ".chrono-harness/bin/chrono-worktree",
+    "git": "/usr/bin/git",
+    "config": ".chrono-harness/worktree.json"
+  },
+  "entrypoint": {
+    "tool": "bash",
+    "script": ".chrono-harness/ci/bootstrap-native.sh"
+  },
+  "require_tool_bindings": true,
+  "tool_bindings_registry": ".chrono-harness/ci/verus-source-toolchains.json",
+  "report_path": ".chrono-harness/state/verus-source-regression.json",
+  "rust_incremental": true,
+  "environment": {
+    "RUSTC_BOOTSTRAP": "1",
+    "VERUS_EXTRA_ARGS": "--num-threads 2 --extern serde=../../runner-dependencies/debug/deps/libserde-da85fb7ff7ebe563.rlib -L dependency=../../runner-dependencies/debug/deps"
+  },
+  "host_environment": {
+    "CARGO_HOME": ".chrono-harness/cache/bootstrap-owner-tooling/cargo",
+    "TMPDIR": ".chrono-harness/cache/bootstrap-owner-tooling/tmp"
+  }
+}

@@ -54,11 +54,6 @@ mod source_boundaries_3;
 mod source_boundaries_4;
 
 #[cfg(verus_keep_ghost)]
-#[path = "../../ci-tests/tests/behavior.rs"]
-#[rustfmt::skip]
-mod source_boundaries_5;
-
-#[cfg(verus_keep_ghost)]
 #[path = "fixture_body.rs"]
 #[rustfmt::skip]
 mod fixture_body_boundaries;
@@ -70,13 +65,42 @@ mod inventory_failure_owner;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn producer_namespace_members_require_complete_literal_identity() {
+    proof {
+        reveal_strlit("objects.json"); reveal_strlit("producer-records");
+        reveal_strlit("rolling-metadata"); reveal_strlit("rolling-disposals");
+        reveal_strlit(""); reveal_strlit("unfinished-birth"); reveal_strlit("objects.json\0");
+        assert("unfinished-birth"@[0] != "producer-records"@[0]);
+        assert("unfinished-birth"@[0] != "rolling-metadata"@[0]);
+        assert(""@.len() != "objects.json"@.len());
+        assert(""@.len() != "producer-records"@.len());
+        assert(""@.len() != "rolling-metadata"@.len());
+        assert(""@.len() != "rolling-disposals"@.len());
+        assert("objects.json\0"@.len() != "objects.json"@.len());
+        assert("objects.json\0"@.len() != "producer-records"@.len());
+        assert("objects.json\0"@.len() != "rolling-metadata"@.len());
+        assert("objects.json\0"@.len() != "rolling-disposals"@.len());
+    }
+    use policy::ProducerNamespaceMember::*;
+    expect(match policy::producer_namespace_member("objects.json") { Owner => true, _ => false });
+    expect(match policy::producer_namespace_member("producer-records") { Records => true, _ => false });
+    expect(match policy::producer_namespace_member("rolling-metadata") { Metadata => true, _ => false });
+    expect(match policy::producer_namespace_member("rolling-disposals") { Disposals => true, _ => false });
+    expect(match policy::producer_namespace_member("") { Unknown => true, _ => false });
+    expect(match policy::producer_namespace_member("unfinished-birth") { Unknown => true, _ => false });
+    expect(match policy::producer_namespace_member("objects.json\0") { Unknown => true, _ => false });
+}
+
 
 fn report_scope_case(operation: &str, publication: Option<u8>,
     result: Result<(u8, u8), (u32, u64)>, expected: u8)
     requires expected <= 3,
         expected == 0 ==> operation@ == "maintain"@ && publication.is_none(),
-        expected == 1 ==> operation@ == "maintain"@ && publication.is_some(),
-        expected == 2 ==> operation@ != "maintain"@ && publication.is_some(),
+        expected == 1 ==> (operation@ == "maintain"@ || operation@ == "use"@
+            || operation@ == "check"@ || operation@ == "bootstrap"@) && publication.is_some(),
+        expected == 2 ==> operation@ != "maintain"@ && operation@ != "use"@
+            && operation@ != "check"@ && operation@ != "bootstrap"@ && publication.is_some(),
         expected == 3 ==> operation@ != "maintain"@ && publication.is_none(),
 {
     let outputs = |state: (u8, u8, u8), publication: u8|
@@ -132,14 +156,26 @@ fn unpublished_maintenance_calls_no_input_or_output_scope_even_on_callback_error
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn ordinary_published_activity_retains_only_its_publication_inputs() {
+fn managed_published_activity_keeps_outputs_under_the_original_domain_custody() {
+    report_scope_case("use", Some(0), Ok((17, 39)), 1);
+    report_scope_case("check", Some(127), Err((u32::MAX, u64::MAX)), 1);
+    report_scope_case("bootstrap", Some(255), Ok((255, 0)), 1);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn other_published_activity_retains_its_actual_inputs() {
     proof {
-        reveal_strlit("use"); reveal_strlit("bootstrap"); reveal_strlit("maintain");
-        assert("use"@.len() != "maintain"@.len());
-        assert("bootstrap"@.len() != "maintain"@.len());
+        reveal_strlit("finish"); reveal_strlit("migrate"); reveal_strlit("use\0");
+        reveal_strlit("maintain"); reveal_strlit("use");
+        reveal_strlit("check"); reveal_strlit("bootstrap");
+        assert("finish"@.len() == 6); assert("migrate"@.len() == 7);
+        assert("use\0"@.len() == 4); assert("maintain"@.len() == 8);
+        assert("use"@.len() == 3); assert("check"@.len() == 5);
+        assert("bootstrap"@.len() == 9);
     }
-    report_scope_case("use", Some(0), Ok((17, 39)), 2);
-    report_scope_case("bootstrap", Some(255), Err((u32::MAX, u64::MAX)), 2);
+    report_scope_case("finish", Some(0), Ok((17, 39)), 2);
+    report_scope_case("migrate", Some(255), Err((u32::MAX, u64::MAX)), 2);
+    report_scope_case("use\0", Some(127), Err((0, 0)), 2);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -230,6 +266,23 @@ fn qualified_expiry_releases_reusable_outputs_without_finishing_work() {
     expect(policy::reusable_release(false, true, u64::MAX, None));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_reference_recovery_queries_only_permitted_advances() {
+    match policy::retained_reference_ancestor_required(true, false) {
+        Ok(query) => expect(!query),
+        Err(_) => expect(false),
+    }
+    match policy::retained_reference_ancestor_required(true, true) {
+        Ok(query) => expect(!query),
+        Err(_) => expect(false),
+    }
+    match policy::retained_reference_ancestor_required(false, true) {
+        Ok(query) => expect(query),
+        Err(_) => expect(false),
+    }
+    expect(policy::retained_reference_ancestor_required(false, false).is_err());
+}
+
 pub(crate) fn expect_stage(actual: policy::CleanupStage, expected: policy::CleanupStage)
     requires actual == expected,
 {
@@ -241,6 +294,110 @@ pub(crate) fn expect_stage(actual: policy::CleanupStage, expected: policy::Clean
         _ => false,
     };
     expect(equal);
+}
+
+fn expect_cleanup_outcome(out: policy::CleanupOutcome, cache: bool, cleaned: bool,
+    stage: policy::CleanupStage)
+    requires out.cache == cache, out.cleaned == cleaned, out.stage == stage,
+{
+    expect(out.cache == cache);
+    expect(out.cleaned == cleaned);
+    expect_stage(out.stage, stage);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn terminal_cache_results_preserve_completion_and_actual_removal_priority() {
+    use policy::CleanupStage::*;
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("active"); reveal_strlit("terminal"); reveal_strlit("cleaned");
+        reveal_strlit("failed"); reveal_strlit("verified-absent"); reveal_strlit("already-absent");
+        reveal_strlit("preserved"); reveal_strlit("");
+        reveal_strlit("reusable-source-preserved");
+        reveal_strlit("no-disposable-output-retained-checkout");
+        reveal_strlit("expired-checkout-verified-absent-source-branches-retained");
+        assert("active"@.len() != "terminal"@.len());
+        assert("failed"@.len() != "cleaned"@.len());
+        assert("preserved"@.len() != "verified-absent"@.len());
+        assert("preserved"@.len() != "already-absent"@.len());
+        assert("reusable-source-preserved"@.len()
+            != "expired-checkout-verified-absent-source-branches-retained"@.len());
+    }
+    let terminal = policy::observed_cleanup_result(false, "terminal",
+        Some("reusable-source-preserved"), Some("cleaned"), Some("preserved"));
+    expect_cleanup_outcome(terminal, true, true, Retained);
+    let no_effect = policy::observed_cleanup_result(false, "active",
+        Some("no-disposable-output-retained-checkout"), Some("cleaned"), Some("preserved"));
+    expect_cleanup_outcome(no_effect, true, true, CachesReleased);
+    let no_effect_terminal = policy::observed_cleanup_result(false, "terminal",
+        Some("no-disposable-output-retained-checkout"), Some("cleaned"), Some("preserved"));
+    expect_cleanup_outcome(no_effect_terminal, true, true, Retained);
+    let pending = policy::observed_cleanup_result(true, "active",
+        Some("reusable-source-preserved"), Some("cleaned"), Some("verified-absent"));
+    expect_cleanup_outcome(pending, true, true, CachesReleased);
+    let removed = policy::observed_cleanup_result(true, "terminal",
+        Some("reusable-source-preserved"), Some("cleaned"), Some("verified-absent"));
+    expect_cleanup_outcome(removed, true, true, Disposed);
+    let already_absent = policy::observed_cleanup_result(false, "terminal",
+        Some("reusable-source-preserved"), Some("cleaned"), Some("already-absent"));
+    expect_cleanup_outcome(already_absent, true, true, Disposed);
+    let failed = policy::observed_cleanup_result(true, "terminal",
+        Some("reusable-source-preserved"), Some("failed"), Some("verified-absent"));
+    expect_cleanup_outcome(failed, true, false, Failed);
+    let expired = policy::observed_cleanup_result(true, "active",
+        Some("expired-checkout-verified-absent-source-branches-retained"), Some("cleaned"),
+        Some("verified-absent"));
+    expect_cleanup_outcome(expired, false, true, Disposed);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cleanup_observations_keep_missing_unknown_and_complete_text_distinct() {
+    use policy::CleanupStage::*;
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit(""); reveal_strlit("terminal"); reveal_strlit("cleaned");
+        reveal_strlit("verified-absent"); reveal_strlit("already-absent");
+        reveal_strlit("reusable-source-preserved");
+        reveal_strlit("no-disposable-output-retained-checkout");
+        reveal_strlit("expired-checkout-verified-absent-source-branches-retained");
+        reveal_strlit("unknown λ\0\n"); reveal_strlit("terminal\0");
+        reveal_strlit("cleaned\0"); reveal_strlit("verified-absent\n");
+        reveal_strlit("reusable-source-preserved\0");
+        reveal_strlit("expired-checkout-verified-absent-source-branches-retained\n");
+        assert(""@.len() != "reusable-source-preserved"@.len());
+        assert(""@.len() != "expired-checkout-verified-absent-source-branches-retained"@.len());
+        assert(""@.len() != "cleaned"@.len());
+        assert(""@.len() != "verified-absent"@.len());
+        assert(""@.len() != "already-absent"@.len());
+        assert("unknown λ\0\n"@.len() != "terminal"@.len());
+        assert("terminal\0"@.len() != "terminal"@.len());
+        assert("cleaned\0"@.len() != "cleaned"@.len());
+        assert("verified-absent\n"@.len() != "verified-absent"@.len());
+        assert("verified-absent\n"@.len() != "already-absent"@.len());
+        assert("reusable-source-preserved\0"@.len() != "reusable-source-preserved"@.len());
+        assert("expired-checkout-verified-absent-source-branches-retained\n"@.len()
+            != "expired-checkout-verified-absent-source-branches-retained"@.len());
+    }
+    let missing = policy::observed_cleanup_result(false, "terminal", None, None, None);
+    expect_cleanup_outcome(missing, false, false, Failed);
+    let pending = policy::observed_cleanup_result(true, "unknown λ\0\n", None,
+        Some("cleaned"), None);
+    expect_cleanup_outcome(pending, true, true, CachesReleased);
+    let terminal = policy::observed_cleanup_result(true, "terminal", None,
+        Some("cleaned"), None);
+    expect_cleanup_outcome(terminal, true, true, Retained);
+    let empty = policy::observed_cleanup_result(false, "", Some(""), Some("cleaned"), Some(""));
+    expect_cleanup_outcome(empty, false, true, Retained);
+    let age_suffix = policy::observed_cleanup_result(false, "terminal",
+        Some("reusable-source-preserved\0"), Some("cleaned"), Some("verified-absent\n"));
+    expect_cleanup_outcome(age_suffix, false, true, Retained);
+    let expired_suffix = policy::observed_cleanup_result(true, "terminal\0",
+        Some("expired-checkout-verified-absent-source-branches-retained\n"),
+        Some("cleaned"), Some("verified-absent"));
+    expect_cleanup_outcome(expired_suffix, true, true, CachesReleased);
+    let status_suffix = policy::observed_cleanup_result(true, "terminal", None,
+        Some("cleaned\0"), Some("already-absent"));
+    expect_cleanup_outcome(status_suffix, true, false, Failed);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
     path::Path,
 };
 
@@ -95,12 +94,16 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
     Ok(())
 }
 
-pub(crate) fn validate_registry(root: &Path, c: &Config, registry: &Value) -> Result<(), String> {
+pub(crate) fn validate_registry(
+    root: &Path,
+    c: &Config,
+    registry: &Value,
+    read: &mut impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<(), String> {
     let registry_path = registry["artifact_registry"]
         .as_str()
         .ok_or("download cache needs artifact registry")?;
-    let artifacts: Value =
-        decode(&fs::read(no_symlink_parents(root, registry_path)?).map_err(|e| e.to_string())?)?;
+    let artifacts: Value = decode(&read(registry_path)?)?;
     let artifacts = artifacts["artifacts"]
         .as_array()
         .ok_or("download cache artifact registry needs artifacts")?;
@@ -127,10 +130,8 @@ pub(crate) fn validate_registry(root: &Path, c: &Config, registry: &Value) -> Re
             no_symlink_parents(root, path.trim_end_matches('/'))?;
         }
         for input in entry.compatibility_files.iter().chain(&entry.source_files) {
-            let path = no_symlink_parents(root, input)?;
             // hashFiles is a provider interface; every explicit input must be present.
-            fs::read(path)
-                .map_err(|error| format!("download cache {id} input {input}: {error}"))?;
+            read(input).map_err(|error| format!("download cache {id} input {input}: {error}"))?;
         }
     }
     Ok(())

@@ -27,6 +27,8 @@ mod protocol;
 #[cfg(verus_keep_ghost)]
 #[path = "retention.rs"]
 mod retention;
+#[path = "../../worktree-tests/tests/support/consumer.rs"]
+mod worktree_consumer;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -34,6 +36,14 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_child_requires_success_and_joined_work() {
+    expect(worktree_consumer::maintenance_child_complete(Some(0), true));
+    expect(!worktree_consumer::maintenance_child_complete(Some(1), true));
+    expect(!worktree_consumer::maintenance_child_complete(None, true));
+    expect(!worktree_consumer::maintenance_child_complete(Some(0), false));
+}
+
 #[cfg(verus_keep_ghost)]
 fn bounded_fixture_recovery_preserves_the_original_eight_round_limit() {
     expect(retention::fixture_recovery_has_room(0));

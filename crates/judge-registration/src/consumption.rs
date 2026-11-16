@@ -1,6 +1,6 @@
 //! Opted-in internal consumption references. These checks establish consistency,
 //! not the engineering judgment that a need or an output is useful.
-use crate::{execution, schema};
+use super::{execution, schema};
 use chrono_harness::{facts::Reader, json, relative_path};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -363,7 +363,7 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
         }
         let prerequisites = argv(&config["prerequisites"])?;
         let verification = command(&p.verifier)?;
-        if !crate::verified_consumption::matches_preparation(
+        if !super::verified_consumption::matches_preparation(
             &verify.iter().map(String::as_str).collect(),
             nonempty(&tool["program"])?,
             nonempty(&config["entrypoint"]["script"])?,

@@ -5,17 +5,66 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 
 #[cfg(verus_keep_ghost)]
-#[path = "maintenance_signal.rs"]
+#[path = "maintenance_signal/verified_send.rs"]
 pub mod maintenance_signal;
-
-#[cfg(verus_keep_ghost)]
-#[path = "artifact_disposal.rs"]
-#[rustfmt::skip]
-pub mod artifact_disposal;
 
 verus! {
 
+/// Socket observation does not authorize a strict footprint or any effect.
+pub fn observable_socket(observe_sockets: bool, is_socket: bool) -> (allowed: bool)
+    ensures allowed == (observe_sockets && is_socket),
+{ observe_sockets && is_socket }
+
 pub const MAX_OUTPUT_BYTES: usize = 67_108_864;
+
+// One low bit distinguishes child and launcher events; twelve bits identify
+// the existing 4096 launch slots. The remaining bits belong to the generation.
+pub const LAUNCH_CAPACITY: usize = 4096;
+pub const MAX_LAUNCH_GENERATION: usize = (usize::MAX - 8191) / 8192;
+
+pub fn next_launch_generation(current: usize) -> (next: Option<usize>)
+    ensures
+        next.is_some() <==> 0 < current && current <= MAX_LAUNCH_GENERATION,
+        next.is_some() ==> next.unwrap() == current + 1,
+{
+    if current == 0 || current > MAX_LAUNCH_GENERATION {
+        None
+    } else {
+        Some(current + 1)
+    }
+}
+
+/// The even cookie leaves its following odd value for the launcher event.
+pub fn launch_cookie(index: usize, generation: usize) -> (cookie: Option<usize>)
+    ensures
+        cookie.is_some() <==> index < LAUNCH_CAPACITY
+            && 0 < generation && generation <= MAX_LAUNCH_GENERATION,
+        cookie.is_some() ==> {
+            &&& cookie.unwrap() as int == generation as int * 8192 + index as int * 2
+            &&& cookie.unwrap() < usize::MAX
+            &&& (cookie.unwrap() as int) % 2 == 0
+            &&& ((cookie.unwrap() as int) / 2) % (LAUNCH_CAPACITY as int) == index as int
+            &&& (cookie.unwrap() as int) / (LAUNCH_CAPACITY as int * 2) == generation as int
+            &&& ((cookie.unwrap() as int + 1) / 2) % (LAUNCH_CAPACITY as int) == index as int
+            &&& (cookie.unwrap() as int + 1) / (LAUNCH_CAPACITY as int * 2) == generation as int
+        },
+{
+    if index >= LAUNCH_CAPACITY || generation == 0 || generation > MAX_LAUNCH_GENERATION {
+        return None;
+    }
+    let cookie = generation * 8192 + index * 2;
+    proof {
+        assert(cookie < usize::MAX);
+        assert((cookie as int) % 2 == 0);
+        assert((cookie as int) / 2 == generation as int * 4096 + index as int);
+        assert(((cookie as int) / 2) % 4096 == index as int);
+        assert((cookie as int) / 8192 == generation as int);
+        assert((cookie as int + 1) / 2 == generation as int * 4096 + index as int);
+        assert(((cookie as int + 1) / 2) % 4096 == index as int);
+        assert((cookie as int + 1) / 8192 == generation as int);
+    }
+    Some(cookie)
+}
 
 pub open spec fn output_limit(bytes: usize) -> bool {
     0 < bytes && bytes <= MAX_OUTPUT_BYTES

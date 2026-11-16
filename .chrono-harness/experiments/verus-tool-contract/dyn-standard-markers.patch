@@ -1,0 +1,66 @@
+--- a/source/rust_verify/src/rust_to_vir_base.rs
++++ b/source/rust_verify/src/rust_to_vir_base.rs
+@@ -1308,11 +1308,31 @@ pub(crate) fn mid_ty_to_vir_ghost<'tcx>(
+         }
+         TyKind::Dynamic(preds, _) => {
+             use rustc_middle::ty::ExistentialPredicate;
+-            if preds.len() != 1 {
+-                unsupported_err!(span, "dyn with more than one trait");
++            for pred in preds.iter() {
++                match pred.skip_binder() {
++                    ExistentialPredicate::Trait(_) => {}
++                    ExistentialPredicate::AutoTrait(def_id)
++                        if Some(def_id) == tcx.lang_items().unpin_trait()
++                            || Some(def_id) == tcx.lang_items().sync_trait()
++                            || Some(def_id)
++                                == tcx.get_diagnostic_item(rustc_span::sym::Send) =>
++                    {
++                        // Use the same conservative abstraction as check_generic_bound:
++                        // these markers add no VIR facts. Rust keeps the original dyn
++                        // predicates for type, borrow, and executable-code checking.
++                        // trait_conflicts also sees the same abstract principal type.
++                    }
++                    ExistentialPredicate::Projection(_) => {
++                        unsupported_err!(span, "dyn with more than one trait");
++                    }
++                    ExistentialPredicate::AutoTrait(_) => {
++                        unsupported_err!(span, "dyn with auto-traits");
++                    }
++                }
+             }
+-            match preds[0].skip_binder() {
+-                ExistentialPredicate::Trait(trait_ref) => {
++            match preds.principal() {
++                Some(trait_ref) => {
++                    let trait_ref = trait_ref.skip_binder();
+                     let trait_did = trait_ref.def_id;
+                     let args = trait_ref.args;
+                     let trait_path =
+@@ -1335,10 +1355,7 @@ pub(crate) fn mid_ty_to_vir_ghost<'tcx>(
+                     let typx = TypX::Dyn(trait_path, Arc::new(typ_args), impl_paths);
+                     (Arc::new(typx), false)
+                 }
+-                ExistentialPredicate::Projection(_) => {
+-                    unsupported_err!(span, "dyn with projections");
+-                }
+-                ExistentialPredicate::AutoTrait(_def_id) => {
++                None => {
+                     unsupported_err!(span, "dyn with auto-traits");
+                 }
+             }
+--- a/source/rust_verify_test/tests/traits_dyn.rs
++++ b/source/rust_verify_test/tests/traits_dyn.rs
+@@ -628,11 +628,11 @@
+ }
+ 
+ test_verify_one_file! {
+-    #[test] dyn_unsupported1 verus_code! {
++    #[test] dyn_with_standard_auto_trait verus_code! {
+         trait T {}
+         fn test(d: &(dyn T + Send)) {
+         }
+-    } => Err(err) => assert_vir_error_msg(err, "Verus does not currently support dyn with more than one trait")
++    } => Ok(())
+ }
+ 
+ test_verify_one_file! {

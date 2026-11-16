@@ -1,28 +1,206 @@
 //! 原件交接的请求边界、精确成员与局部释放；IO 仍归保留所有者。
-#[cfg(not(verus_keep_ghost))]
-pub use crate::retained_artifacts::retention::partition::metadata_only_retirement;
-#[cfg(verus_keep_ghost)]
-pub use accounting::partition::metadata_only_retirement;
-#[cfg(verus_keep_ghost)]
-#[path = "retention.rs"]
-pub mod accounting;
-#[cfg(verus_keep_ghost)]
-#[path = "retention_command.rs"]
-pub(crate) mod commands;
+use std::collections::BTreeSet;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 #[path = "../../../identifiers/src/lib.rs"]
-mod identifiers;
+pub(crate) mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
 
 verus! {
+pub open spec fn output_edge_matches(row: (&str, &[String]), source: Seq<char>,
+    target: Seq<char>) -> bool
+{
+    row.0@ == source && exists|i: int| 0 <= i < row.1@.len()
+        && (#[trigger] row.1@[i])@ == target
+}
+
+pub open spec fn output_reference_trace<'a, T, F>(outputs: &'a [T], observe: F,
+    source: Seq<char>, target: Seq<char>, found: bool,
+    trace: Seq<(&'a str, &'a [String])>) -> bool
+    where F: Fn(&'a T) -> (&'a str, &'a [String]),
+{
+    trace.len() <= outputs.len()
+        && (forall|i: int| 0 <= i < trace.len() ==>
+            #[trigger] observe.ensures((&outputs@[i],), trace[i]))
+        && if found {
+            trace.len() > 0 && output_edge_matches(trace.last(), source, target)
+                && forall|i: int| 0 <= i < trace.len() - 1 ==>
+                    !output_edge_matches(#[trigger] trace[i], source, target)
+        } else {
+            trace.len() == outputs.len() && forall|i: int| 0 <= i < trace.len() ==>
+                !output_edge_matches(#[trigger] trace[i], source, target)
+        }
+}
+
+/// 借用实际记录；只有同一来源的完整引用匹配才提前返回，不分配投影库存。
+pub fn objects_reference<'a, T, F>(outputs: &'a [T], source: &str, target: &str,
+    observe: F) -> (found: bool)
+    where F: Fn(&'a T) -> (&'a str, &'a [String]),
+    requires forall|row: &'a T| observe.requires((row,)),
+    ensures exists|trace: Seq<(&'a str, &'a [String])>| output_reference_trace(
+        outputs, observe, source@, target@, found, trace),
+{
+    let ghost mut trace: Seq<(&'a str, &'a [String])> = Seq::empty();
+    let mut index = 0;
+    while index < outputs.len()
+        invariant index <= outputs.len(), trace.len() == index,
+            forall|row: &'a T| observe.requires((row,)),
+            forall|i: int| 0 <= i < trace.len() ==>
+                #[trigger] observe.ensures((&outputs@[i],), trace[i]),
+            forall|i: int| 0 <= i < trace.len() ==>
+                !output_edge_matches(#[trigger] trace[i], source@, target@),
+        decreases outputs.len() - index,
+    {
+        let row = observe(&outputs[index]);
+        proof { trace = trace.push(row); }
+        if identifiers::equal_text(row.0, source) && contains(row.1, target) {
+            assert(output_edge_matches(row, source@, target@));
+            assert(output_reference_trace(outputs, observe, source@, target@, true, trace));
+            return true;
+        }
+        index += 1;
+    }
+    assert(output_reference_trace(outputs, observe, source@, target@, false, trace));
+    false
+}
+
+/// 选择父报告退役时，已观察的其他原件继续受保护。
+pub fn preserve_frontier_original(id: &str, retiring: &str) -> (retain: bool)
+    ensures retain == (id@ != retiring@),
+{
+    !identifiers::equal_text(id, retiring)
+}
+
+/// 只有退役条件已满足且每个剩余引用均已载入时，才尝试共同持有物理路径。
+pub fn metadata_path_ready(metadata_only: bool, references: &[String],
+    loaded: &BTreeSet<String>) -> (ready: bool)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures ready == (metadata_only && forall|i: int| 0 <= i < references@.len()
+        ==> loaded@.contains(#[trigger] references@[i])),
+{
+    if !metadata_only { return false; }
+    let mut index = 0;
+    while index < references.len()
+        invariant
+            vstd::laws_cmp::obeys_cmp::<String>(),
+            0 <= index <= references@.len(),
+            forall|i: int| 0 <= i < index
+                ==> loaded@.contains(#[trigger] references@[i]),
+        decreases references@.len() - index,
+    {
+        if !loaded.contains(&references[index]) { return false; }
+        index += 1;
+    }
+    true
+}
+
+/// Sealed recovery accounting alone never establishes domain completion.
+pub fn accounting_releases(completing: bool, sealed: bool) -> (released: bool)
+    ensures released == (completing && sealed),
+{
+    completing && sealed
+}
+
+/// Empty retiring reports may advance pending metadata without physical path
+/// exclusion. Retiring the final address still requires that exclusion.
+pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
+    entries_empty: bool, pending_references: bool) -> (metadata_only: bool)
+    ensures metadata_only == (retiring && disposing && sealed && entries_empty
+        && pending_references),
+{
+    retiring && disposing && sealed && entries_empty && pending_references
+}
+
+pub fn within_bound(length: u64, limit: u64) -> (fits: bool)
+    ensures fits == (length <= limit),
+{
+    length <= limit
+}
+
+/// 退役尚未准入时，只报告预算停止，不声称已尝试或完成处置。
+pub fn retirement_deferral(metadata_room: bool, nodes: usize, node_limit: usize,
+    elapsed_millis: u128, max_millis: u64) -> (reason: Option<&'static str>)
+    ensures
+        reason.is_none() == (metadata_room && nodes < node_limit
+            && elapsed_millis < max_millis as u128),
+        match reason {
+            Some(text) => text@ == "retirement round budget exhausted; original not attempted"@,
+            None => true,
+        },
+{
+    if !metadata_room || nodes >= node_limit || elapsed_millis >= max_millis as u128 {
+        Some("retirement round budget exhausted; original not attempted")
+    } else {
+        None
+    }
+}
+
+/// 中间树游标必须落盘；耗尽的游标交给现役终态／引用脱离保存。
+/// 选择和原结果转交归此函数，保存回调仍由保留声明的所有者执行。
+pub fn checkpoint_disposal<S, E, F>(state: S, tree: bool, remaining: usize, persist: &F)
+    -> (out: (S, Result<(), E>))
+    where F: Fn(S) -> (S, Result<(), E>),
+    requires persist.requires((state,)),
+    ensures if tree && remaining > 0 {
+        persist.ensures((state,), out)
+    } else {
+        out.0 == state && out.1 == Ok::<(), E>(())
+    },
+{
+    if tree && remaining > 0 {
+        let out = persist(state);
+        assert(persist.ensures((state,), out));
+        out
+    } else {
+        (state, Ok(()))
+    }
+}
+
+/// 根已缺失时仍按原持久阶段解释，不把省略的末项游标当作未执行删除。
+pub fn absent_disposal_fact(phase: &str) -> (fact: &'static str)
+    ensures fact@ == if phase@ == "disposing"@ {
+        "absent-after-partial-disposal"@
+    } else {
+        "already-absent-before-disposal"@
+    },
+{
+    if identifiers::equal_text(phase, "disposing") {
+        "absent-after-partial-disposal"
+    } else {
+        "already-absent-before-disposal"
+    }
+}
 
 pub open spec fn recovery_text(text: Option<&str>) -> Option<Seq<char>> {
     match text { Some(value) => Some(value@), None => None }
+}
+
+/// Addressed metadata already excludes reservation changes. Existing
+/// capabilities still require actual exclusion; migration never creates one.
+pub struct MigrationCustody<'a> {
+    pub admitted: bool,
+    pub acquire: bool,
+    pub expected: Option<&'a str>,
+}
+
+pub fn migration_custody<'a>(phase: &str, lease_id: &'a str, missing: bool)
+    -> (custody: MigrationCustody<'a>)
+    ensures custody.admitted == (phase@ == "reserving"@ || lease_id@.len() > 0),
+        custody.acquire == (lease_id@.len() > 0 || !missing),
+        recovery_text(custody.expected) == if lease_id@.len() == 0 {
+            None
+        } else { Some(lease_id@) },
+{
+    let attached = !lease_id.is_empty();
+    MigrationCustody {
+        admitted: attached || identifiers::equal_text(phase, "reserving"),
+        acquire: attached || !missing,
+        expected: if attached { Some(lease_id) } else { None },
+    }
 }
 
 fn same_recovery_text(left: Option<&str>, right: Option<&str>) -> (same: bool)
@@ -141,9 +319,9 @@ pub fn original_finalized(retired: usize, output: Option<(bool, &str)>) -> (fina
     }
 }
 
-pub fn defer_finalized_original(discover_under_lease: bool, finalized: bool) -> (defer: bool)
-    ensures defer == (discover_under_lease && finalized),
-{ discover_under_lease && finalized }
+pub fn defer_declared_original(discover_under_lease: bool, declared: bool) -> (defer: bool)
+    ensures defer == (discover_under_lease && declared),
+{ discover_under_lease && declared }
 
 pub fn preserve_discovered_original(member: bool, retained: bool, retiring_frontier: bool)
     -> (preserve: bool)
@@ -162,11 +340,11 @@ impl DeferredOriginal {
     { Self { pending: None } }
 
     pub fn defer(&mut self, id: String)
-        ensures self.pending_id() == Some(id),
+        ensures final(self).pending_id() == Some(id),
     { self.pending = Some(id); }
 
     pub fn take(&mut self) -> (id: Option<String>)
-        ensures id == old(self).pending_id(), self.pending_id().is_none(),
+        ensures id == old(self).pending_id(), final(self).pending_id().is_none(),
     {
         let mut id = None;
         core::mem::swap(&mut id, &mut self.pending);
@@ -181,29 +359,28 @@ pub enum FinalizedExpansion {
     Related,
 }
 
-/// 入向引用本身不是保留根。非初始根仍读取一层真实依赖，保留缺失依赖错误。
-pub fn finalized_expansion(rooted: bool, initial: Option<&str>, id: &str,
+/// 保留根不要求发布已完成；只有封存且无根的原件才可选择退役。
+pub fn original_expansion(rooted: bool, finalized: bool, initial: Option<&str>, id: &str,
     incoming: usize, roles: usize) -> (out: FinalizedExpansion)
     ensures match out {
         FinalizedExpansion::RetainOnly => rooted && recovery_text(initial) == Some(id@),
         FinalizedExpansion::RootFrontier => rooted && recovery_text(initial) != Some(id@),
-        FinalizedExpansion::RetireFrontier => !rooted && recovery_text(initial) == Some(id@)
-            && incoming == 0 && roles == 0,
-        FinalizedExpansion::Related => !rooted && (recovery_text(initial) != Some(id@)
-            || incoming != 0 || roles != 0),
+        FinalizedExpansion::RetireFrontier => !rooted && finalized && incoming == 0 && roles == 0,
+        FinalizedExpansion::Related => !rooted && (!finalized || incoming != 0 || roles != 0),
     },
 {
     let initial = same_recovery_text(initial, Some(id));
     if rooted {
         if initial { FinalizedExpansion::RetainOnly } else { FinalizedExpansion::RootFrontier }
-    } else if initial && incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
+    } else if finalized && incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
     else { FinalizedExpansion::Related }
 }
 
 /// 原件仍有登记时才排除其物理路径；已移除记录不进入内容维护。
-pub fn maintenance_path_required(present: bool, initial: bool, retained: bool) -> (required: bool)
-    ensures required == (present && (initial || !retained)),
-{ present && (initial || !retained) }
+pub fn maintenance_path_required(present: bool, initial: bool, retained: bool,
+    retiring_report: bool) -> (required: bool)
+    ensures required == (present && (!retained || (initial && !retiring_report))),
+{ present && (!retained || (initial && !retiring_report)) }
 
 pub fn terminal_eligible(released: bool, sealed: bool) -> (eligible: bool)
     ensures eligible == (released && sealed),

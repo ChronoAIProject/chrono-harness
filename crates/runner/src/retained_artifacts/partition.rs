@@ -2,38 +2,15 @@
 //! mutable inventory. Multi-record exclusion is limited to actual graph edges.
 //! These synchronous mutations have no descendant owner. Their local leases
 //! end on return even while an unrelated fork holds incidental fd copies.
-#![allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
-use verus_builtin_macros::verus;
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-/// Only pending metadata edges of an already empty retiring report can advance
-/// without physical path exclusion. Final address retirement still needs it.
-pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
-    entries_empty: bool, pending_references: bool) -> (metadata_only: bool)
-    ensures metadata_only == (retiring && disposing && sealed && entries_empty
-        && pending_references),
-{
-    retiring && disposing && sealed && entries_empty && pending_references
-}
-}
-
-#[cfg(not(verus_keep_ghost))]
 use super::*;
-#[cfg(not(verus_keep_ghost))]
 use crate::ownership::DirectoryLease;
-#[cfg(not(verus_keep_ghost))]
 use crate::verified_release as verified;
 
 // A sweep observes independently bounded rounds. These counts describe actual
 // observations, not a deduplicated inventory or a new source of deletion rights.
-#[cfg(not(verus_keep_ghost))]
 struct SweepReport {
     value: Value,
 }
-#[cfg(not(verus_keep_ghost))]
 impl SweepReport {
     fn new(policy: &Policy) -> Self {
         Self {
@@ -141,7 +118,6 @@ impl SweepReport {
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Object {
@@ -162,7 +138,6 @@ pub(super) struct Object {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct Role {
     observation: Option<ObservationOrder>,
     schema: String,
@@ -177,7 +152,6 @@ struct Role {
 /// One actual request, qualified by its enrolled producer output rather than a clock.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct ObservationToken {
     pub role: String,
     pub epoch: String,
@@ -185,7 +159,6 @@ pub struct ObservationToken {
     pub attempt: u64,
     pub original: OriginalIdentity,
 }
-#[cfg(not(verus_keep_ghost))]
 impl ObservationToken {
     pub fn binding(&self) -> verified::ObservationBinding<'_> {
         verified::ObservationBinding {
@@ -201,7 +174,6 @@ impl ObservationToken {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct ObservationOrder {
     epoch: String,
     issued: u64,
@@ -210,12 +182,10 @@ struct ObservationOrder {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct Address {
     path: String,
     output: Option<String>,
 }
-#[cfg(not(verus_keep_ghost))]
 pub(super) struct Gate {
     leases: Vec<DirectoryLease>,
     objects: RefCell<BTreeMap<String, Object>>,
@@ -223,11 +193,12 @@ pub(super) struct Gate {
     paths: BTreeMap<String, PathBuf>,
     exclusive_paths: BTreeSet<String>,
     maintenance: bool,
+    partial_membership: bool,
     retiring_report: Option<String>,
     retained_dependencies: BTreeSet<String>,
+    maintenance_targets: BTreeSet<String>,
     unvisited_relations: BTreeSet<String>,
 }
-#[cfg(not(verus_keep_ghost))]
 impl Gate {
     pub(super) fn excludes_path(&self, path: &str) -> bool {
         self.exclusive_paths.contains(path)
@@ -237,6 +208,9 @@ impl Gate {
     }
     pub(super) fn retained_dependencies(&self) -> &BTreeSet<String> {
         &self.retained_dependencies
+    }
+    pub(super) fn maintains_output(&self, id: &str) -> bool {
+        !self.retained_dependencies.contains(id) || self.maintenance_targets.contains(id)
     }
     fn measurements(&self, max_output_bytes: u64) -> BTreeMap<String, [u64; 8]> {
         self.objects
@@ -261,8 +235,156 @@ impl Gate {
         Ok(())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl Inventory {
+    /// Keep the consumer excluded, visiting only one member at a time. Install
+    /// every requested member before releasing obsolete ones; failures retain
+    /// conservative protection. No file descriptor set scales with membership.
+    pub(super) fn partition_reference_paths(
+        &self,
+        consumer: &str,
+        paths: &[String],
+        prune_only: bool,
+    ) -> Result<(), String> {
+        if consumer.is_empty() || consumer.len() > 256 {
+            return Err("retention consumer capacity/identity".into());
+        }
+        for path in paths {
+            crate::relative_path(path)?;
+        }
+        let directory = self.role_directory(consumer)?;
+        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        let lease = DirectoryLease::acquire_local(&directory, true, Some(Duration::from_secs(5)))?
+            .ok_or("retention consumer metadata is busy")?;
+        self.stable(&lease)?;
+        let current = self.read_role(consumer)?;
+        let fresh = current.is_none();
+        let mut role = current.unwrap_or(Role {
+            observation: None,
+            schema: "chrono-retained-role/v2".into(),
+            directory_identity: identity(&directory)?,
+            role: consumer.into(),
+            ids: vec![],
+            attached: BTreeSet::new(),
+            metadata_expires: now()?.saturating_add(self.policy.metadata_keep_seconds),
+            summaries: vec![],
+        });
+        // Empty and failed admissions still leave a typed, finitely retained
+        // declaration rather than an unknown directory in the consumer namespace.
+        if fresh {
+            self.write_metadata(&directory.join("record.json"), &role)?;
+        }
+        let mut requested = BTreeMap::new();
+        let mut next = BTreeSet::new();
+        // Resolve and validate the complete explicit input before changing any
+        // membership. Under the held role, path/object gates must never wait:
+        // ordinary publishers acquire paths before the same consumer role.
+        for path in paths {
+            let gate =
+                self.addressed_gate_scope(&[], &[path.clone()], &[], None, false, false, true)?;
+            let ledger = self.load(&gate)?;
+            let output = ledger.outputs.iter().find(|output| {
+                output.path == *path
+                    || (output.tree && path.starts_with(&format!("{}/", output.path)))
+            });
+            if output.is_some_and(|output| output.phase == "disposing") {
+                return Err("referenced original disposal has started".into());
+            }
+            let id = output.map(|output| output.id.clone());
+            next.extend(id.iter().cloned());
+            requested.insert(path.clone(), id);
+        }
+        if prune_only {
+            // The domain has already committed its smaller declaration. Only
+            // release obsolete protection; installing a new member still goes
+            // through the ordinary conservative admission below.
+            next.retain(|id| role.ids.contains(id) || role.attached.contains(id));
+            requested.clear();
+        }
+        let related: BTreeSet<_> = role
+            .ids
+            .iter()
+            .chain(role.attached.iter())
+            .chain(next.iter())
+            .collect();
+        if related.len() > self.policy.max_related_outputs {
+            return Err("related retention graph capacity; originals preserved".into());
+        }
+        if role.observation.is_some() {
+            if role.ids.iter().cloned().collect::<BTreeSet<_>>() != next {
+                return Err("observation membership requires its domain transition".into());
+            }
+            return self.stable(&lease);
+        }
+        for (path, expected) in requested {
+            let gate =
+                self.addressed_gate_scope(&[], &[path.clone()], &[], None, false, false, true)?;
+            let ledger = self.load(&gate)?;
+            let actual = ledger
+                .outputs
+                .iter()
+                .find(|output| {
+                    output.path == path
+                        || (output.tree && path.starts_with(&format!("{}/", output.path)))
+                })
+                .map(|output| output.id.clone());
+            if actual != expected {
+                return Err("referenced original address changed; originals preserved".into());
+            }
+            if let Some(id) = expected {
+                self.save_membership_component(gate, &lease, &mut role, Some(&id))?;
+            }
+        }
+        let obsolete: BTreeSet<_> = role
+            .ids
+            .iter()
+            .chain(role.attached.iter())
+            .filter(|id| !next.contains(*id))
+            .cloned()
+            .collect();
+        for id in obsolete {
+            let gate = self.addressed_gate_scope(&[id], &[], &[], None, false, false, true)?;
+            self.save_membership_component(gate, &lease, &mut role, None)?;
+        }
+        let ordered: Vec<_> = next.into_iter().collect();
+        self.stable(&lease)?;
+        if role.ids != ordered {
+            role.ids = ordered;
+            self.write_metadata(&directory.join("record.json"), &role)?;
+        }
+        self.stable(&lease)
+    }
+
+    fn save_membership_component(
+        &self,
+        mut gate: Gate,
+        lease: &DirectoryLease,
+        role: &mut Role,
+        keep: Option<&str>,
+    ) -> Result<(), String> {
+        self.stable(lease)?;
+        // Reuse the existing component projection and conservative inbound /
+        // root / obsolete-backreference publication order. Outward dependencies
+        // and all members outside this exclusion stay unchanged.
+        gate.partial_membership = true;
+        gate.roles
+            .borrow_mut()
+            .insert(role.role.clone(), role.clone());
+        let mut ledger = self.load(&gate)?;
+        if let Some(id) = keep {
+            self.reference_locked(&mut ledger, &role.role, &[id.into()])?;
+        } else {
+            ledger.roots.remove(&role.role);
+        }
+        self.save(&ledger, &gate)?;
+        *role = gate
+            .roles
+            .borrow()
+            .get(&role.role)
+            .ok_or("consumer component disappeared")?
+            .clone();
+        self.stable(lease)
+    }
+
     /// Reserve one request under only this object's existing consumer metadata.
     /// Membership protects the actual pending output, including unknown tasks.
     pub fn reserve_observation(
@@ -455,6 +577,25 @@ impl Inventory {
         self.stable(gate)?;
         fs::remove_dir(directory).map_err(|e| e.to_string())
     }
+
+    fn path_metadata_occupied(&self, directory: &Path, path: &str) -> Result<bool, String> {
+        let address: Address = self
+            .read_metadata(&no_symlink_parents(directory, "address.json")?)?
+            .ok_or("path metadata declaration missing")?;
+        if address.path != path {
+            return Err("path metadata identity differs".into());
+        }
+        Ok(address.output.is_some()
+            || fs::read_dir(directory)
+                .map_err(|e| e.to_string())?
+                .any(|entry| {
+                    entry.map_or(true, |entry| {
+                        entry.file_name() != "address.json"
+                            && entry.file_name() != "address.pending"
+                    })
+                }))
+    }
+
     fn prune_object(&self, id: &str, observed: u64, nodes: &mut usize) -> Result<(), String> {
         let directory = self.object_directory(id)?;
         let Some(gate) = DirectoryLease::acquire_local(&directory, true, None)? else {
@@ -485,26 +626,30 @@ impl Inventory {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => record.prune_path = next,
                 Err(e) => return Err(e.to_string()),
                 Ok(_) => {
+                    // A populated ancestor cannot be removed. Observe it under
+                    // a shared lease so sibling publishers can keep using it.
+                    // This only abandons pruning; it grants no removal right.
+                    let Some(observation) =
+                        DirectoryLease::acquire_local(&path_directory, false, None)?
+                    else {
+                        return Ok(());
+                    };
+                    let occupied = self.path_metadata_occupied(&path_directory, &path)?;
+                    self.stable(&observation)?;
+                    drop(observation);
+                    if occupied {
+                        record.prune_path = None;
+                        self.write_metadata(&directory.join("record.json"), &record)?;
+                        break;
+                    }
                     let Some(path_gate) =
                         DirectoryLease::acquire_local(&path_directory, true, None)?
                     else {
                         return Ok(());
                     };
-                    let address: Address = self
-                        .read_metadata(&no_symlink_parents(&path_directory, "address.json")?)?
-                        .ok_or("path metadata declaration missing")?;
-                    if address.path != path {
-                        return Err("path metadata identity differs".into());
-                    }
-                    let has_children = fs::read_dir(&path_directory)
-                        .map_err(|e| e.to_string())?
-                        .any(|entry| {
-                            entry.map_or(true, |entry| {
-                                entry.file_name() != "address.json"
-                                    && entry.file_name() != "address.pending"
-                            })
-                        });
-                    if address.output.is_some() || has_children {
+                    // The shared observation may already be stale. Recheck the
+                    // actual mapping and members under the original exclusion.
+                    if self.path_metadata_occupied(&path_directory, &path)? {
                         record.prune_path = None;
                     } else {
                         self.remove_metadata_directory(
@@ -599,10 +744,7 @@ impl Inventory {
     /// One streamed explicit pass. Each declared address gets one existing
     /// bounded round, without a global cursor, admission lock or retry loop.
     pub fn maintain_explicit(&self) -> Result<Value, String> {
-        self.maintain_explicit_at(now()?)
-    }
-    pub fn maintain_explicit_at(&self, observed: u64) -> Result<Value, String> {
-        self.maintain_explicit_reporting_at(observed, None)
+        self.maintain_explicit_reporting_at(now()?, None)
     }
     /// Stream every declared member and its unabridged original round to the
     /// actual maintain report. The compact sweep's sample ceiling is unchanged.
@@ -612,6 +754,144 @@ impl Inventory {
     ) -> Result<Value, String> {
         self.maintain_explicit_reporting_at(now()?, Some(&mut observer))
     }
+
+    // The explicit sweep already visits every declared object. Quota inputs
+    // must cover that same namespace, rather than repeating a truncated global
+    // scan for each producer. Only compact immutable fields survive each read;
+    // each read and expiry update uses the existing single-address budget.
+    fn explicit_terminal_quotas(
+        &self,
+        observed: u64,
+        observer: &mut Option<&mut dyn FnMut(&Value) -> Result<(), String>>,
+    ) -> Result<Value, String> {
+        let mut groups: BTreeMap<String, Vec<(String, String, u64, u64)>> = self
+            .policy
+            .terminal_limits
+            .keys()
+            .map(|producer| (producer.clone(), Vec::new()))
+            .collect();
+        if groups.is_empty() {
+            return Ok(json!({}));
+        }
+        let mut errors = Vec::new();
+        match fs::read_dir(self.directory.join("objects")) {
+            Err(error) => errors.push(json!({"error":error.to_string()})),
+            Ok(entries) => {
+                for entry in entries {
+                    let candidate = (|| {
+                        let entry = entry.map_err(|error| error.to_string())?;
+                        let id = entry
+                            .file_name()
+                            .into_string()
+                            .map_err(|_| "quota address is not UTF8")?;
+                        self.with_round_budget(|| {
+                            let gate = self.addressed_gate_scope(
+                                std::slice::from_ref(&id),
+                                &[],
+                                &[],
+                                None,
+                                false,
+                                false,
+                                true,
+                            )?;
+                            let ledger = self.load(&gate)?;
+                            self.stable(&gate)?;
+                            Ok(ledger
+                                .outputs
+                                .iter()
+                                .find(|output| output.id == id)
+                                .filter(|output| {
+                                    crate::verified_release::terminal_eligible(
+                                        output.phase == "released",
+                                        output.manifest.sealed,
+                                    )
+                                })
+                                .map(|output| {
+                                    (
+                                        output.producer.clone(),
+                                        (
+                                            output.id.clone(),
+                                            output.identity.clone(),
+                                            output.expires,
+                                            output.manifest.bytes,
+                                        ),
+                                    )
+                                }))
+                        })
+                    })();
+                    match candidate {
+                        Ok(Some((producer, candidate))) => {
+                            if let Some(group) = groups.get_mut(&producer) {
+                                group.push(candidate);
+                            }
+                        }
+                        Ok(None) => (),
+                        Err(error) => errors.push(json!({"error":error})),
+                    }
+                }
+            }
+        }
+        let mut quotas = serde_json::Map::new();
+        for (producer, mut candidates) in groups {
+            candidates.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| b.0.cmp(&a.0)));
+            let limits = &self.policy.terminal_limits[&producer];
+            let mut producer_errors = errors.clone();
+            let mut count = 0;
+            let mut bytes = 0;
+            let mut expired = Vec::new();
+            let mut expired_count = 0u64;
+            for (id, identity, expires, length) in candidates {
+                let keep = crate::verified_release::terminal_budget(
+                    count,
+                    bytes,
+                    length,
+                    limits.max_count,
+                    limits.max_bytes,
+                );
+                let decision = if !errors.is_empty() {
+                    "unknown-scope-preserved"
+                } else if keep {
+                    count += 1;
+                    bytes += length;
+                    "within-quota"
+                } else {
+                    match self
+                        .with_round_budget(|| self.expire_terminal_output(&id, &identity, observed))
+                    {
+                        Ok(true) => {
+                            expired_count += 1;
+                            if expired.len() < self.policy.max_nodes_per_round {
+                                expired.push(id.clone());
+                            }
+                            "expired"
+                        }
+                        Ok(false) => {
+                            producer_errors
+                                .push(json!({"id":id,"error":"quota member changed; preserve it"}));
+                            "changed-preserved"
+                        }
+                        Err(error) => {
+                            producer_errors.push(json!({"id":id,"error":error}));
+                            "failed-preserved"
+                        }
+                    }
+                };
+                if let Some(observer) = observer.as_deref_mut() {
+                    observer(&json!({"kind":"quota-member","producer":producer,"id":id,
+                        "identity":identity,"observed_expires":expires,"logical_bytes":length,
+                        "decision":decision,"disposal":"not-claimed"}))?;
+                }
+            }
+            quotas.insert(
+                producer,
+                json!({"scope_complete":producer_errors.is_empty(),
+                "errors":producer_errors,"expired":expired,"expired_count":expired_count,
+                "expired_list_complete":expired_count <= self.policy.max_nodes_per_round as u64}),
+            );
+        }
+        Ok(Value::Object(quotas))
+    }
+
     fn maintain_explicit_reporting_at(
         &self,
         observed: u64,
@@ -624,7 +904,7 @@ impl Inventory {
         // empty directory manufactured by an ordinary owner operation.
         let declarations = ["transaction-gates", "objects", "roles"]
             .map(|namespace| (namespace, fs::read_dir(self.directory.join(namespace))));
-        sweep.value["terminal_quotas"] = json!(self.terminal_quotas_at(observed));
+        sweep.value["terminal_quotas"] = self.explicit_terminal_quotas(observed, &mut observer)?;
         for (namespace, entries) in declarations {
             sweep.value["enumeration"][namespace] = json!({"entries":0,"exhausted":false});
             let entries = match entries {
@@ -785,8 +1065,10 @@ impl Inventory {
             paths: directories,
             exclusive_paths: paths.iter().cloned().collect(),
             maintenance: false,
+            partial_membership: false,
             retiring_report: None,
             retained_dependencies: BTreeSet::new(),
+            maintenance_targets: BTreeSet::new(),
             unvisited_relations: BTreeSet::new(),
         })
     }
@@ -864,6 +1146,7 @@ impl Inventory {
             }
         }
         let mut seen = BTreeSet::new();
+        let mut processed = BTreeSet::new();
         let mut unvisited_relations = BTreeSet::new();
         let mut measurements = BTreeMap::new();
         let addresses: Box<dyn Iterator<Item = Result<String, String>> + '_> = match originals {
@@ -882,7 +1165,7 @@ impl Inventory {
         };
         for id in addresses {
             let id = id?;
-            if seen.contains(&id) {
+            if processed.contains(&id) {
                 continue;
             }
             if nodes >= self.policy.max_nodes_per_round
@@ -919,6 +1202,13 @@ impl Inventory {
                     vec![]
                 };
                 seen.extend(owned.iter().cloned());
+                // 保留的叶原件只被观察，本轮尚未维护它自己的输出。
+                processed.extend(
+                    owned
+                        .iter()
+                        .filter(|id| !gate.retained_dependencies.contains(*id))
+                        .cloned(),
+                );
                 self.maintain_locked(observed, &gate).map(|round| {
                     let observations = gate.measurements(self.policy.max_output_bytes);
                     (
@@ -1339,6 +1629,7 @@ impl Inventory {
         let mut report_frontier = false;
         let mut retiring_report = None;
         let mut retained_dependencies = BTreeSet::new();
+        let mut maintenance_targets = BTreeSet::new();
         // Nonblocking maintenance can hold each declaration while discovering
         // its edges. A busy metadata or path lease refuses the activity, so this
         // order never waits behind an ordinary publisher holding path locks.
@@ -1346,7 +1637,7 @@ impl Inventory {
         // members. Other waiting activities recheck their discovered closure
         // under the same path/role/object exclusion order below.
         loop {
-            if selected.len() > self.policy.max_related_outputs {
+            if selected.union(&retained_dependencies).count() > self.policy.max_related_outputs {
                 return Err("related retention graph capacity; originals preserved".into());
             }
             let next_role = wanted_roles
@@ -1396,8 +1687,9 @@ impl Inventory {
                         .collect::<Vec<_>>(),
                 );
                 let output = record.output.as_ref().unwrap();
-                match verified::finalized_expansion(
+                match verified::original_expansion(
                     protected,
+                    finalized(record),
                     initial.as_deref(),
                     &id,
                     record.incoming.len(),
@@ -1405,19 +1697,53 @@ impl Inventory {
                 ) {
                     verified::FinalizedExpansion::RetainOnly => {
                         retained_dependencies.insert(id.clone());
+                        if !finalized(record) {
+                            maintenance_targets.insert(id.clone());
+                        }
                     }
                     verified::FinalizedExpansion::RootFrontier => {
-                        // A discovered root protects this component. Read its
-                        // direct originals, retaining the remaining frontier
-                        // without expanding their independent dependencies.
+                        // The source and its current roots stay excluded. Check
+                        // every direct original one at a time; the durable edge
+                        // cannot change while this source is held. Their full
+                        // width must not become simultaneous descriptors.
                         retained_dependencies.insert(id.clone());
-                        selected.extend(output.references.iter().cloned());
+                        let mut related: BTreeSet<_> =
+                            selected.union(&retained_dependencies).cloned().collect();
+                        related.extend(output.references.iter().cloned());
+                        if related.len() > self.policy.max_related_outputs {
+                            return Err(
+                                "related retention graph capacity; originals preserved".into()
+                            );
+                        }
+                        let policy_sha256 = sha256(&self.policy_bytes);
+                        for target in &output.references {
+                            if observed.contains_key(target) {
+                                continue;
+                            }
+                            let directory = self.object_directory(target)?;
+                            let _original = DirectoryLease::acquire_local(&directory, true, None)?
+                                .ok_or_else(|| {
+                                    format!("retention output metadata is busy: {target}")
+                                })?;
+                            let original = self.read_object(target, &directory)?;
+                            if original.policy_sha256 != policy_sha256 {
+                                return Err("retention policy migration required; original record preserved".into());
+                            }
+                        }
                         retained_dependencies.extend(output.references.iter().cloned());
                     }
                     verified::FinalizedExpansion::RetireFrontier => {
                         // Retire this consumer before releasing its originals.
                         // The source keeps all other edges durably.
                         retiring_report = Some(id.clone());
+                        // 从叶进入时，反向路径上的原件已先于父报告被读到。
+                        // 将它们与后续读到的原件一起保留，只退役选中的报告。
+                        for previous in observed.keys() {
+                            if verified::preserve_frontier_original(previous.as_str(), id.as_str())
+                            {
+                                retained_dependencies.insert(previous.clone());
+                            }
+                        }
                         selected.extend(output.references.first().cloned());
                         report_frontier = true;
                     }
@@ -1457,7 +1783,7 @@ impl Inventory {
                 observed.insert(id, record);
                 continue;
             }
-            if verified::defer_finalized_original(discover_under_lease, finalized(&record)) {
+            if verified::defer_declared_original(discover_under_lease, record.output.is_some()) {
                 wanted_roles.extend(record.roles.iter().cloned());
                 observed.insert(id.clone(), record);
                 deferred.defer(id);
@@ -1480,8 +1806,9 @@ impl Inventory {
                         r.output.is_some(),
                         initial.as_ref() == Some(&r.id),
                         retained_dependencies.contains(&r.id),
+                        retiring_report.is_some(),
                     ) && !r.output.as_ref().is_some_and(|output| {
-                        metadata_only_retirement(
+                        verified::metadata_only_retirement(
                             retiring_report.as_ref() == Some(&r.id),
                             output.phase == "disposing",
                             output.manifest.sealed,
@@ -1497,6 +1824,38 @@ impl Inventory {
             leases.extend(additional);
             path_dirs.extend(dirs);
             exclusive_paths.extend(target_paths);
+            // Only the final metadata component can retire the report path.
+            // Earlier components keep the original object/edge exclusion;
+            // repeatedly locking an unused physical path consumes their budget.
+            // When all remaining edges are loaded, retain the available path
+            // now so their detachment and final retirement share one component.
+            for record in observed.values().filter(|record| {
+                record.output.as_ref().is_some_and(|output| {
+                    verified::metadata_path_ready(
+                        verified::metadata_only_retirement(
+                            retiring_report.as_ref() == Some(&record.id),
+                            output.phase == "disposing",
+                            output.manifest.sealed,
+                            output.manifest.entries.is_empty(),
+                            !output.references.is_empty(),
+                        ),
+                        &output.references,
+                        &retained_dependencies,
+                    )
+                })
+            }) {
+                match self.path_gates(&[record.path.clone()], false, false, false) {
+                    Ok((additional, dirs)) => {
+                        leases.extend(additional);
+                        path_dirs.extend(dirs);
+                        exclusive_paths.insert(record.path.clone());
+                    }
+                    Err(error)
+                        if error.starts_with("retention path is busy: ")
+                            || error == "retention path birth is busy" => {}
+                    Err(error) => return Err(error),
+                }
+            }
         }
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
@@ -1633,8 +1992,10 @@ impl Inventory {
             paths: path_dirs,
             exclusive_paths,
             maintenance,
+            partial_membership: maintenance,
             retiring_report,
             retained_dependencies,
+            maintenance_targets,
             unvisited_relations,
         })
     }
@@ -1673,10 +2034,12 @@ impl Inventory {
                 continue;
             }
             for role in &record.roles {
+                let loaded;
                 let current = if let Some(current) = roles.get(role) {
-                    Some(current.clone())
+                    Some(current)
                 } else {
-                    self.read_role(role)?
+                    loaded = self.read_role(role)?;
+                    loaded.as_ref()
                 };
                 match current {
                     Some(current) if current.ids.contains(&record.id) => {
@@ -1702,7 +2065,7 @@ impl Inventory {
             let ids: Vec<_> = role
                 .ids
                 .iter()
-                .filter(|id| !gate.maintenance || objects.contains_key(*id))
+                .filter(|id| !gate.partial_membership || objects.contains_key(*id))
                 .cloned()
                 .collect();
             if ids.is_empty() {
@@ -1745,7 +2108,19 @@ impl Inventory {
         gate.stable()?;
         let mut objects = gate.objects.borrow_mut();
         let mut roles = gate.roles.borrow_mut();
-        let before = objects.clone();
+        // Only output presence and outbound references are read from the old state.
+        let before: BTreeMap<_, _> = objects
+            .iter()
+            .map(|(id, record)| {
+                (
+                    id.clone(),
+                    record
+                        .output
+                        .as_ref()
+                        .map(|output| output.references.clone()),
+                )
+            })
+            .collect();
         // partition_load reads the first addressed declaration's cursor. Keep
         // that single owner rather than synchronously rewriting every related
         // original whenever bounded disposal advances the component cursor.
@@ -1780,13 +2155,10 @@ impl Inventory {
                 observation
                     .as_ref()
                     .is_some_and(|(name, _)| *name == role.role),
-                ledger.roots.get(&role.role).cloned().unwrap_or_default()
-                    == role
-                        .ids
-                        .iter()
-                        .filter(|id| !gate.maintenance || objects.contains_key(*id))
-                        .cloned()
-                        .collect::<Vec<_>>(),
+                ledger.roots.get(&role.role).into_iter().flatten().eq(role
+                    .ids
+                    .iter()
+                    .filter(|id| !gate.maintenance || objects.contains_key(*id))),
             ) {
                 return Err("observation membership requires its domain transition".into());
             }
@@ -1794,7 +2166,7 @@ impl Inventory {
         // Publish the path's reservation before any output/source attachment.
         // An interrupted birth remains discoverable by the next same-path user.
         for output in &ledger.outputs {
-            if before.get(&output.id).is_some_and(|r| r.output.is_none()) {
+            if before.get(&output.id).is_some_and(Option::is_none) {
                 let directory = gate
                     .paths
                     .get(&output.path)
@@ -1822,11 +2194,11 @@ impl Inventory {
         // edge or consumer-root change. An interruption can retain extra work;
         // it cannot expose a still-referenced original to disposal.
         for output in &ledger.outputs {
-            let previous = before.get(&output.id).and_then(|r| r.output.as_ref());
+            let previous = before.get(&output.id).and_then(Option::as_ref);
             for target in output
                 .references
                 .iter()
-                .filter(|id| previous.is_none_or(|o| !o.references.contains(id)))
+                .filter(|id| previous.is_none_or(|references| !references.contains(id)))
             {
                 let record = objects
                     .get_mut(target)
@@ -1929,7 +2301,7 @@ impl Inventory {
 
         for role in roles.values_mut() {
             let mut next = ledger.roots.get(&role.role).cloned().unwrap_or_default();
-            if gate.maintenance {
+            if gate.partial_membership {
                 // The ledger contains only this reference component. Preserve
                 // every unvisited member and the original membership order.
                 let selected = next;
@@ -1976,7 +2348,9 @@ impl Inventory {
         for record in objects.values_mut() {
             record.incoming.retain(|source| {
                 !before.contains_key(source)
-                    || objects_reference(&ledger.outputs, source, &record.id)
+                    || verified::objects_reference(&ledger.outputs, source, &record.id, |output| {
+                        (output.id.as_str(), output.references.as_slice())
+                    })
             });
             for role in roles.values() {
                 if !role.ids.contains(&record.id) {
@@ -1990,7 +2364,7 @@ impl Inventory {
             )?;
         }
         for role in roles.values_mut() {
-            if gate.maintenance {
+            if gate.partial_membership {
                 // Unvisited attachments may be conservative protection from an
                 // interrupted transition. Only reconcile the excluded members.
                 role.attached.retain(|id| !objects.contains_key(id));
@@ -2007,7 +2381,6 @@ impl Inventory {
         Ok(())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 fn finalized(record: &Object) -> bool {
     verified::original_finalized(
         record.retired_leases.len(),
@@ -2016,10 +2389,4 @@ fn finalized(record: &Object) -> bool {
             .as_ref()
             .map(|output| (output.manifest.sealed, output.phase.as_str())),
     )
-}
-#[cfg(not(verus_keep_ghost))]
-fn objects_reference(outputs: &[OutputRecord], source: &str, target: &str) -> bool {
-    outputs
-        .iter()
-        .any(|o| o.id == source && o.references.iter().any(|r| r == target))
 }

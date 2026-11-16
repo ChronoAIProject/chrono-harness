@@ -9,6 +9,18 @@ use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
 
+/// UTF-8 编码保留字符序列拼接，供真实文本与字节边界证明共用。
+pub proof fn encode_concat(first: Seq<char>, second: Seq<char>)
+    ensures vstd::utf8::encode_utf8(first + second)
+        == vstd::utf8::encode_utf8(first) + vstd::utf8::encode_utf8(second),
+    decreases first.len(),
+{
+    if first.len() > 0 {
+        assert((first + second).drop_first() =~= first.drop_first() + second);
+        encode_concat(first.drop_first(), second);
+    }
+}
+
 /// 第一个分隔字节，或输入末尾；分隔符之后的字节不参与选择。
 pub open spec fn first_ascii_separator(raw: Seq<u8>, separator: u8, end: int) -> bool {
     0 <= end <= raw.len() && (end == raw.len() || raw[end] == separator)

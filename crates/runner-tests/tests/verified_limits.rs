@@ -58,4 +58,38 @@ fn transport_output_uses_the_same_inclusive_byte_boundary() {
     expect_limit_true(!zero && minimum && maximum && !above_maximum && !largest);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn launch_events_preserve_the_complete_identity_at_both_encoding_boundaries() {
+    let first = policy::launch_cookie(0, 1);
+    let last_slot = policy::launch_cookie(4095, 1);
+    let last_identity = policy::launch_cookie(4095, policy::MAX_LAUNCH_GENERATION);
+    expect_limit_true(first == Some(8192));
+    expect_limit_true(last_slot == Some(16382));
+    expect_limit_true(last_identity == Some(usize::MAX - 1));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unallocated_and_unrepresentable_launch_identities_are_rejected() {
+    let empty_generation = policy::launch_cookie(0, 0);
+    let first_bad_slot = policy::launch_cookie(4096, 1);
+    let largest_slot = policy::launch_cookie(usize::MAX, 1);
+    let first_bad_generation = policy::launch_cookie(0, policy::MAX_LAUNCH_GENERATION + 1);
+    let largest_generation = policy::launch_cookie(0, usize::MAX);
+    expect_limit_true(empty_generation.is_none() && first_bad_slot.is_none());
+    expect_limit_true(largest_slot.is_none() && first_bad_generation.is_none());
+    expect_limit_true(largest_generation.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn generation_exhaustion_never_wraps_back_to_an_earlier_identity() {
+    let first = policy::next_launch_generation(1);
+    let last = policy::next_launch_generation(policy::MAX_LAUNCH_GENERATION);
+    let exhausted = policy::next_launch_generation(policy::MAX_LAUNCH_GENERATION + 1);
+    let empty = policy::next_launch_generation(0);
+    let largest = policy::next_launch_generation(usize::MAX);
+    expect_limit_true(first == Some(2));
+    expect_limit_true(last == Some(policy::MAX_LAUNCH_GENERATION + 1));
+    expect_limit_true(exhausted.is_none() && empty.is_none() && largest.is_none());
+}
+
 }

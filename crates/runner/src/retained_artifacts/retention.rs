@@ -6,22 +6,9 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
-verus! {
-/// Sealed recovery accounting alone never establishes domain completion.
-pub fn accounting_releases(completing: bool, sealed: bool) -> (released: bool)
-    ensures released == (completing && sealed),
-{
-    completing && sealed
-}
-}
-
-#[cfg(not(verus_keep_ghost))]
 use crate::{decode, no_symlink_parents, ownership::Lease, sha256};
-#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
-#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
-#[cfg(not(verus_keep_ghost))]
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
@@ -32,28 +19,18 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
 
 #[path = "manifest.rs"]
-#[cfg(not(verus_keep_ghost))]
 mod manifest;
-#[cfg(not(verus_keep_ghost))]
 use manifest::Manifest;
 #[path = "partition.rs"]
 pub(crate) mod partition;
-#[cfg(not(verus_keep_ghost))]
 use partition::Gate;
-#[cfg(not(verus_keep_ghost))]
 pub use partition::ObservationToken;
 
-#[cfg(not(verus_keep_ghost))]
 pub const POLICY_PATH: &str = ".chrono-harness/retention.json";
-#[cfg(not(verus_keep_ghost))]
 const STATE: &str = ".chrono-harness/state/output-retention-v1";
-#[cfg(not(verus_keep_ghost))]
 const MAX_STATE: u64 = 8 * 1024 * 1024;
-#[cfg(not(verus_keep_ghost))]
 const RETAINED_MEASUREMENT_FIELDS: [&str; 8] = [
     "remaining_outputs",
     "remaining_capability_retirements",
@@ -64,7 +41,6 @@ const RETAINED_MEASUREMENT_FIELDS: [&str; 8] = [
     "reserved_logical_bytes",
     "overflow_outputs",
 ];
-#[cfg(not(verus_keep_ghost))]
 fn retained_measurements(
     output: Option<&Output>,
     retired: usize,
@@ -102,7 +78,6 @@ fn retained_measurements(
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct Policy {
     pub schema: String,
     #[serde(default)]
@@ -129,7 +104,6 @@ pub struct Policy {
 /// producer. Roots, live capabilities and unknown outcomes still take priority.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct TerminalLimits {
     pub keep_seconds: u64,
     pub metadata_keep_seconds: u64,
@@ -167,7 +141,6 @@ fn default_manifest_nodes() -> (value: usize)
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct Node {
     path: String,
     identity: String,
@@ -176,14 +149,12 @@ struct Node {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct Creation {
     parent_identity: String,
     staged: String,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct Output {
     id: String,
     producer: String,
@@ -217,11 +188,9 @@ struct Output {
 
 // A round owns typed records for only the explicitly addressed graph.
 #[derive(Clone)]
-#[cfg(not(verus_keep_ghost))]
 struct OutputRecord {
     value: Arc<Output>,
 }
-#[cfg(not(verus_keep_ghost))]
 impl From<Output> for OutputRecord {
     fn from(value: Output) -> Self {
         Self {
@@ -229,37 +198,25 @@ impl From<Output> for OutputRecord {
         }
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl std::ops::Deref for OutputRecord {
     type Target = Output;
     fn deref(&self) -> &Output {
         &self.value
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl std::ops::DerefMut for OutputRecord {
     fn deref_mut(&mut self) -> &mut Output {
         Arc::make_mut(&mut self.value)
     }
 }
-#[cfg(not(verus_keep_ghost))]
-impl Serialize for OutputRecord {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        self.value.serialize(s)
-    }
-}
-#[derive(Clone, Serialize)]
-#[cfg(not(verus_keep_ghost))]
 struct Ledger {
     policy_sha256: String,
     outputs: Vec<OutputRecord>,
     roots: BTreeMap<String, Vec<String>>,
     summaries: Vec<Value>,
     cursor: usize,
-    #[serde(default)]
     retired_leases: Vec<Node>,
 }
-#[cfg(not(verus_keep_ghost))]
 impl Default for Ledger {
     fn default() -> Self {
         Self {
@@ -272,33 +229,27 @@ impl Default for Ledger {
         }
     }
 }
-#[cfg(not(verus_keep_ghost))]
 thread_local! {
     static READ_SCOPES: RefCell<Vec<Weak<ReadInputs>>> = const { RefCell::new(Vec::new()) };
 }
-#[cfg(not(verus_keep_ghost))]
 trait Exclusion {
     fn verify(&self) -> Result<(), String>;
 }
-#[cfg(not(verus_keep_ghost))]
 impl Exclusion for Lease {
     fn verify(&self) -> Result<(), String> {
         self.stable()
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl Exclusion for Gate {
     fn verify(&self) -> Result<(), String> {
         self.stable()
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl Exclusion for crate::ownership::DirectoryLease {
     fn verify(&self) -> Result<(), String> {
         self.stable()
     }
 }
-#[cfg(not(verus_keep_ghost))]
 struct ReadInputs {
     root: PathBuf,
     retain_inputs: bool,
@@ -309,9 +260,7 @@ struct ReadInputs {
 /// A caller keeps the originals it explicitly reads or produces until its
 /// output handoff. Enclosing callers receive the exact child output capability;
 /// the existing process engine forwards these capabilities to subprocesses.
-#[cfg(not(verus_keep_ghost))]
 pub struct ReadScope(Rc<ReadInputs>);
-#[cfg(not(verus_keep_ghost))]
 impl Drop for ReadScope {
     fn drop(&mut self) {
         let this = Rc::downgrade(&self.0);
@@ -322,24 +271,20 @@ impl Drop for ReadScope {
         });
     }
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn read_scope(root: &Path) -> Result<ReadScope, String> {
     caller_scope(root, true, None)
 }
 /// An orchestrator whose domain owners durably protect existing inputs keeps
 /// only child-produced originals through its report handoff. Child callers
 /// retain their own actual inputs under ordinary read scopes.
-#[cfg(not(verus_keep_ghost))]
 pub fn published_output_scope(output: &Publication) -> Result<ReadScope, String> {
     publication_scope(output, false)
 }
 /// A report owns its consumed originals through durable dependencies. Forward
 /// its single capability instead of one descriptor for every recovery input.
-#[cfg(not(verus_keep_ghost))]
 pub fn publication_read_scope(output: &Publication) -> Result<ReadScope, String> {
     publication_scope(output, true)
 }
-#[cfg(not(verus_keep_ghost))]
 fn publication_scope(output: &Publication, retain_inputs: bool) -> Result<ReadScope, String> {
     let scope = caller_scope(
         &output.inventory.root,
@@ -353,7 +298,6 @@ fn publication_scope(output: &Publication, retain_inputs: bool) -> Result<ReadSc
         .remember_input_for(&scope.0, &output.lease)?;
     Ok(scope)
 }
-#[cfg(not(verus_keep_ghost))]
 fn caller_scope(
     root: &Path,
     retain_inputs: bool,
@@ -369,13 +313,11 @@ fn caller_scope(
     READ_SCOPES.with(|scopes| scopes.borrow_mut().push(Rc::downgrade(&inputs)));
     Ok(ReadScope(inputs))
 }
-#[cfg(not(verus_keep_ghost))]
 fn strict_summaries<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<Value>, D::Error> {
     serde_json::from_value(crate::strict_json_value(d)?).map_err(serde::de::Error::custom)
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct Transaction {
     schema: String,
     key: String,
@@ -385,7 +327,6 @@ struct Transaction {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     paths: Vec<String>,
 }
-#[cfg(not(verus_keep_ghost))]
 pub struct Inventory {
     root: PathBuf,
     policy: Policy,
@@ -400,7 +341,6 @@ pub struct Inventory {
 /// Exact existing owner identity supplied by a declared original consumer.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct OriginalIdentity {
     pub id: String,
     pub path: String,
@@ -409,7 +349,6 @@ pub struct OriginalIdentity {
 /// Exact originals held for one actual caller until its durable output accepts them.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct Consumer {
     pub schema: String,
     pub consumer: String,
@@ -417,7 +356,6 @@ pub struct Consumer {
     pub originals: Vec<OriginalIdentity>,
 }
 /// Holding this capability protects producer descendants too. Closing it never fabricates completion.
-#[cfg(not(verus_keep_ghost))]
 pub struct Publication {
     inventory: Inventory,
     id: String,
@@ -430,17 +368,14 @@ pub struct Publication {
     written: Cell<u64>,
     written_nodes: Cell<usize>,
 }
-#[cfg(not(verus_keep_ghost))]
 fn now() -> Result<u64, String> {
     Ok(SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_secs())
 }
-#[cfg(not(verus_keep_ghost))]
 use crate::artifact_disposal::identity;
 
-#[cfg(not(verus_keep_ghost))]
 fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
     if raw.len() as u64 > MAX_STATE {
         return Err("retention metadata bound; preserve outputs".into());
@@ -450,7 +385,6 @@ fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
     replace_file(path, &path.with_extension("pending"), raw).map_err(|e| e.to_string())
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn replace_file(path: &Path, temporary: &Path, raw: &[u8]) -> std::io::Result<()> {
     match fs::symlink_metadata(temporary) {
         Ok(m) if !m.is_file() || m.file_type().is_symlink() => {
@@ -468,16 +402,28 @@ fn replace_file(path: &Path, temporary: &Path, raw: &[u8]) -> std::io::Result<()
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
     }
+    let began = Instant::now();
     let mut f = options.open(temporary)?;
     f.write_all(raw)?;
+    let written_micros = began.elapsed().as_micros() as u64;
     f.sync_all()?;
+    let synced_micros = began.elapsed().as_micros() as u64;
     fs::rename(temporary, path)?;
+    let replaced_micros = began.elapsed().as_micros() as u64;
+    tracing::debug!(
+        event_id = "retention.metadata.replace",
+        path = %path.display(),
+        bytes = raw.len(),
+        written_micros,
+        synced_micros,
+        replaced_micros,
+        "retention metadata replacement returned"
+    );
     Ok(())
 }
 
 /// The fixed report slot has one recoverable replacement file, protected by
 /// its own slot lease. A failed write never truncates the previous report.
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn replace_report(path: &Path, raw: &[u8]) -> std::io::Result<()> {
     let name = path
         .file_name()
@@ -494,7 +440,6 @@ pub(crate) fn replace_report(path: &Path, raw: &[u8]) -> std::io::Result<()> {
     .sync_all()
 }
 
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn sync_report(path: &Path) -> std::io::Result<()> {
     fs::File::open(path)?.sync_all()?;
     fs::File::open(
@@ -503,7 +448,6 @@ pub(crate) fn sync_report(path: &Path) -> std::io::Result<()> {
     )?
     .sync_all()
 }
-#[cfg(not(verus_keep_ghost))]
 impl Inventory {
     pub fn read_scope(&self) -> Result<ReadScope, String> {
         read_scope(&self.root)
@@ -977,21 +921,36 @@ impl Inventory {
                 seen.extend(l.outputs.iter().map(|output| output.id.clone()));
                 let mut owners = Vec::new();
                 for output in &l.outputs {
-                    if matches!(output.phase.as_str(), "reserving" | "creating") {
-                        return Err("recover reserved output before policy migration".into());
+                    let capability = self.directory.join(&output.lease);
+                    let missing = match fs::symlink_metadata(&capability) {
+                        Ok(_) => false,
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                        Err(error) => return Err(error.to_string()),
+                    };
+                    let custody = crate::verified_release::migration_custody(
+                        &output.phase,
+                        &output.lease_id,
+                        missing,
+                    );
+                    if !custody.admitted {
+                        return Err(
+                            "output capability identity is unknown; preserve original".into()
+                        );
+                    }
+                    if !custody.acquire {
+                        // Reservation preceded capability creation. Its original
+                        // metadata exclusion remains held by gate throughout.
+                        continue;
                     }
                     owners.push(
-                        Lease::acquire(
-                            &self.directory.join(&output.lease),
-                            Some(&output.lease_id),
-                            false,
-                            true,
-                            None,
-                        )?
-                        .ok_or("live output producer/consumer prevents retention migration")?,
+                        Lease::acquire(&capability, custody.expected, false, true, None)?
+                            .ok_or("live output producer/consumer prevents retention migration")?,
                     );
                 }
                 if publish {
+                    for owner in &owners {
+                        owner.stable()?;
+                    }
                     self.partition_rebind_policy(&gate)?;
                     preserved.extend(l.outputs.iter().map(|output| output.id.clone()));
                     roots.extend(l.roots.keys().cloned());
@@ -1526,39 +1485,13 @@ impl Inventory {
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
     pub fn reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
-        // This transition changes only the consumer's membership. Its members
-        // retain their outputs and dependency edges under the existing scoped
-        // exclusion, without loading those dependencies into this activity.
-        let gate =
-            self.addressed_gate_scope(&[], paths, &[consumer.into()], None, false, true, true)?;
-        let mut l = self.load(&gate)?;
-        let mut ids = BTreeSet::new();
-        for path in paths {
-            crate::relative_path(path)?;
-            if let Some(o) = l
-                .outputs
-                .iter()
-                .find(|o| o.path == *path || (o.tree && path.starts_with(&format!("{}/", o.path))))
-            {
-                if o.phase == "disposing" {
-                    return Err("referenced original disposal has started".into());
-                }
-                ids.insert(o.id.clone());
-            } // Unenrolled legacy originals retain their original semantics.
-        }
-        if consumer.is_empty()
-            || consumer.len() > 256
-            || ids.len() > self.policy.max_related_outputs
-            || (!l.roots.contains_key(consumer) && l.roots.len() >= self.policy.max_related_outputs)
-        {
-            return Err("retention consumer capacity/identity".into());
-        }
-        if ids.is_empty() {
-            l.roots.remove(consumer);
-        } else {
-            l.roots.insert(consumer.into(), ids.into_iter().collect());
-        }
-        self.save(&l, &gate)
+        self.partition_reference_paths(consumer, paths, false)
+    }
+    /// Release only memberships absent from the consumer's durable declaration.
+    /// The caller owns that declaration through this transition and has already
+    /// published its shrink. This never admits any newly requested member.
+    pub fn prune_reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
+        self.partition_reference_paths(consumer, paths, true)
     }
     fn extend_reference_path(&self, consumer: &str, path: &str) -> Result<(), String> {
         let gate =
@@ -1713,112 +1646,6 @@ impl Inventory {
             return Err("report dependency capacity; originals preserved".into());
         }
         output.references = next.iter().cloned().collect();
-        Ok(())
-    }
-    /// Hand off explicitly declared process originals to an already sealed, rooted
-    /// consumer output. The caller holds read guards and has verified actual bytes.
-    /// Exclude and validate every publisher declaration, then release their
-    /// interim roots together; the destination already owns every dependency.
-    pub fn settle_publication_inputs(
-        &self,
-        destination: &str,
-        paths: &[String],
-    ) -> Result<(), String> {
-        let addressed_paths = [paths, &[destination.into()]].concat();
-        let gate = self.addressed_gate(&[], paths, &[], None, false, true)?;
-        let ledger = self.load(&gate)?;
-        let originals = paths
-            .iter()
-            .map(|path| {
-                let input = ledger
-                    .outputs
-                    .iter()
-                    .find(|o| o.path == *path)
-                    .ok_or("publication handoff input is not enrolled")?;
-                Ok(OriginalIdentity {
-                    id: input.id.clone(),
-                    path: input.path.clone(),
-                    identity: input.identity.clone(),
-                })
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-        let roles = originals
-            .iter()
-            .map(|input| self.consumer_role(&format!("publication-recheck:{}", input.id)))
-            .collect::<Result<Vec<_>, _>>()?;
-        drop(gate);
-        // Ordinary path discovery projects roots onto its selected objects.
-        // Explicit roles bring every publisher's full declaration under exclusion.
-        let gate = self.addressed_gate(&[], &addressed_paths, &roles, None, false, true)?;
-        let mut ledger = self.load(&gate)?;
-        let output = ledger
-            .outputs
-            .iter()
-            .find(|o| o.path == destination)
-            .ok_or("publication handoff destination is not enrolled")?;
-        if output.phase != "released"
-            || !output.manifest.sealed
-            || identity(&no_symlink_parents(&self.root, destination)?)? != output.identity
-        {
-            return Err("publication handoff destination is not sealed and protected".into());
-        }
-        let mut transfers = Vec::new();
-        let mut leases = Vec::new();
-        for (original, role) in originals.iter().zip(&roles) {
-            let path = &original.path;
-            let input = ledger
-                .outputs
-                .iter()
-                .find(|o| o.path == *path)
-                .ok_or("publication handoff input is not enrolled")?;
-            if input.id != original.id
-                || input.identity != original.identity
-                || input.id == output.id
-                || !output.references.contains(&input.id)
-                || input.phase != "released"
-                || !input.manifest.sealed
-                || identity(&no_symlink_parents(&self.root, path)?)? != input.identity
-            {
-                return Err(
-                    "publication handoff input is not sealed, referenced or unchanged".into(),
-                );
-            }
-            if input.tree || input.manifest.entries.len() != 1 {
-                return Err("publication handoff requires a sealed process file".into());
-            }
-            Manifest::validate(&input.manifest.entries[0], &self.root)?;
-            if let Some(ids) = ledger.roots.get(role) {
-                if !crate::verified_release::same_members(ids, &[input.id.clone()]) {
-                    return Err("caller original handoff root differs".into());
-                }
-                leases.extend(self.original_leases(
-                    &ledger,
-                    std::slice::from_ref(original),
-                    false,
-                )?);
-                transfers.push(role.clone());
-            }
-        }
-        // A completed handoff remains a no-op after the domain root is released.
-        // An actual pending producer transfer still requires a protected target.
-        if !transfers.is_empty() && !ledger.roots.values().any(|ids| ids.contains(&output.id)) {
-            return Err("publication handoff destination is not sealed and protected".into());
-        }
-        for role in &transfers {
-            self.reference_locked(&mut ledger, role, &[])?;
-        }
-        if !transfers.is_empty() {
-            self.save(&ledger, &gate)?;
-        }
-        drop(gate);
-        for lease in &leases {
-            let input = ledger
-                .outputs
-                .iter()
-                .find(|o| o.lease_id == lease.id())
-                .ok_or("publication handoff input capability has no original")?;
-            self.remember_input(lease, &input.id)?;
-        }
         Ok(())
     }
     /// Consumer roles are explicit roots. Replacing/releasing a role releases its prior closure.
@@ -2359,12 +2186,9 @@ impl Inventory {
         }
         let round = self.maintain_at(observed)?;
         let quota = &round["terminal_quotas"][producer];
-        Ok(
-            json!({"schema":"chrono-retained-producer-maintenance/v1","producer":producer,
+        Ok(json!({"schema":"chrono-retained-producer-maintenance/v1",
             "quota_scope_complete":quota["scope_complete"],"quota_errors":quota["errors"],
-            "quota_expired":quota["expired"],"terminal_limits":self.policy.terminal_limits.get(producer),
-            "round":round,"completion":"not-established"}),
-        )
+            "quota_expired":quota["expired"],"round":round}))
     }
     fn terminal_quota(&self, producer: &str, observed: u64) -> Result<Value, String> {
         let (mut outputs, mut complete, mut errors) = self.producer_snapshot(producer)?;
@@ -2396,33 +2220,8 @@ impl Inventory {
                         count += 1;
                         bytes += output.manifest.bytes;
                     } else if expired.len() < self.policy.max_nodes_per_round {
-                        let updated = (|| {
-                            let gate = self.addressed_gate(
-                                std::slice::from_ref(&output.id),
-                                &[],
-                                &[],
-                                None,
-                                false,
-                                false,
-                            )?;
-                            let mut ledger = self.load(&gate)?;
-                            if let Some(current) =
-                                ledger.outputs.iter_mut().find(|o| o.id == output.id)
-                            {
-                                if current.phase == "released"
-                                    && current.manifest.sealed
-                                    && current.identity == output.identity
-                                {
-                                    if current.expires <= observed {
-                                        return Ok(true);
-                                    }
-                                    current.expires = current.expires.min(observed);
-                                    self.save(&ledger, &gate)?;
-                                    return Ok::<_, String>(true);
-                                }
-                            }
-                            Ok(false)
-                        })();
+                        let updated =
+                            self.expire_terminal_output(&output.id, &output.identity, observed);
                         match updated {
                             Ok(true) => expired.push(output.id.clone()),
                             Ok(false) => (),
@@ -2433,6 +2232,31 @@ impl Inventory {
             }
         }
         Ok(json!({"scope_complete":complete,"errors":errors,"expired":expired}))
+    }
+
+    fn expire_terminal_output(
+        &self,
+        id: &str,
+        expected_identity: &str,
+        observed: u64,
+    ) -> Result<bool, String> {
+        let gate =
+            self.addressed_gate_scope(&[id.to_owned()], &[], &[], None, false, false, true)?;
+        let mut ledger = self.load(&gate)?;
+        if let Some(current) = ledger.outputs.iter_mut().find(|output| output.id == id) {
+            if crate::verified_release::terminal_eligible(
+                current.phase == "released",
+                current.manifest.sealed,
+            ) && current.identity == expected_identity
+            {
+                if current.expires > observed {
+                    current.expires = observed;
+                    self.save(&ledger, &gate)?;
+                }
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Ordinary entries coalesce concurrent reclamation without waiting behind
@@ -2625,7 +2449,7 @@ impl Inventory {
         let mut accounting_errors = Vec::new();
         // Recover only explicit reservations; never discover unknown files by scanning.
         for index in 0..l.outputs.len() {
-            if gate.retained_dependencies().contains(&l.outputs[index].id) {
+            if !gate.maintains_output(&l.outputs[index].id) {
                 continue;
             }
             if metadata_steps
@@ -2712,7 +2536,7 @@ impl Inventory {
             .map(|n| (l.cursor + n) % l.outputs.len().max(1))
             .collect();
         for index in account_order {
-            if gate.retained_dependencies().contains(&l.outputs[index].id) {
+            if !gate.maintains_output(&l.outputs[index].id) {
                 continue;
             }
             if !self.metadata_room()
@@ -2850,14 +2674,26 @@ impl Inventory {
         order.sort_by_key(|(_, priority)| *priority);
         let prepared_micros = began.elapsed().as_micros() as u64;
         for (id, _) in order {
-            if !self.metadata_room()
-                || nodes
-                    >= self
-                        .round_node_limit
-                        .get()
-                        .unwrap_or(self.policy.max_nodes_per_round)
-                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
-            {
+            if let Some(reason) = crate::verified_release::retirement_deferral(
+                self.metadata_room(),
+                nodes,
+                self.round_node_limit
+                    .get()
+                    .unwrap_or(self.policy.max_nodes_per_round),
+                began.elapsed().as_millis(),
+                self.policy.max_millis_per_round,
+            ) {
+                tracing::debug!(
+                    event_id = "retention.round.retirement-deferred",
+                    output_id = %id,
+                    nodes,
+                    node_limit = self.round_node_limit.get().unwrap_or(self.policy.max_nodes_per_round),
+                    metadata_bytes_left = self.round_metadata.get(),
+                    elapsed_micros = began.elapsed().as_micros() as u64,
+                    max_millis_per_round = self.policy.max_millis_per_round,
+                    "retirement was not admitted within the owning round budget"
+                );
+                protected.push(json!({"id":id,"reason":reason}));
                 break;
             }
             let i = l
@@ -2865,13 +2701,16 @@ impl Inventory {
                 .iter()
                 .position(|o| o.id == id)
                 .ok_or("output disappeared")?;
-            l.cursor = (i + 1) % count.max(1);
             if rooted.contains(&id) {
                 protected.push(
                     json!({"id":id,"reason":protection_reasons.get(&id).map(String::as_str).unwrap_or("current consumer/reference closure")}),
                 );
                 continue;
             }
+            // Only a mutable retirement candidate advances the durable cursor.
+            // A protected frontier member must not rewrite the report after its
+            // source edge and reverse reference were already persisted.
+            l.cursor = (i + 1) % count.max(1);
             nodes += 1;
             let o = l.outputs[i].clone();
             let lease_path = self.directory.join(&o.lease);
@@ -2898,11 +2737,7 @@ impl Inventory {
                 let root = no_symlink_parents(&self.root, &o.path)?;
                 match fs::symlink_metadata(&root) {
                     Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                        disposal_fact = if o.phase == "disposing" {
-                            "absent-after-partial-disposal"
-                        } else {
-                            "already-absent-before-disposal"
-                        };
+                        disposal_fact = crate::verified_release::absent_disposal_fact(&o.phase);
                         return Ok(true);
                     }
                     Err(e) => return Err(e.to_string()),
@@ -3070,14 +2905,8 @@ impl Inventory {
                     .manifest
                     .bytes
                     .saturating_sub(l.outputs[i].removed_logical_bytes);
-                let entered_disposal = l.outputs[i].phase != "disposing";
+                let mut entered_disposal = l.outputs[i].phase != "disposing";
                 l.outputs[i].phase = "disposing".into();
-                // Resumed disposal already has a durable phase and manifest.
-                // Save its cursor with the next physical step or final save;
-                // tree entries still persist every step below.
-                if entered_disposal {
-                    self.save(&l, &gate)?;
-                }
                 while self.metadata_room()
                     && nodes
                         < self
@@ -3090,13 +2919,23 @@ impl Inventory {
                         return Ok(true);
                     };
                     nodes += 1;
+                    // 先在预算内接纳这一步，再持久保存意图并执行同一步。
+                    // 保存本身耗尽时间片时，不能让已接纳的动作永远只有意图。
+                    if entered_disposal {
+                        self.save(&l, &gate)?;
+                        entered_disposal = false;
+                    }
                     let path = crate::artifact_disposal::entry_path(&self.root, &entry.path)?;
                     match fs::symlink_metadata(&path) {
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                             l.outputs[i].manifest.entries.pop();
-                            if o.tree {
-                                self.save(&l, &gate)?;
-                            }
+                            crate::verified_release::checkpoint_disposal(
+                                (),
+                                o.tree,
+                                l.outputs[i].manifest.entries.len(),
+                                &|()| ((), self.save(&l, &gate)),
+                            )
+                            .1?;
                             continue;
                         }
                         Err(e) => return Err(e.to_string()),
@@ -3155,12 +2994,15 @@ impl Inventory {
                     l.outputs[i].reserved_bytes =
                         l.outputs[i].reserved_bytes.saturating_sub(entry.bytes);
                     l.outputs[i].manifest.entries.pop();
-                    // Missing regular entries are safely reconciled from the
-                    // durable disposing manifest on the next round. Tree and
-                    // partial-disposal cursors retain their per-step writes.
-                    if o.tree {
-                        self.save(&l, &gate)?;
-                    }
+                    // 已持久的 disposing 意图可恢复缺失项。部分树游标逐步保存；
+                    // 最后一项交给下面的终态／引用脱离保存，避免重复落盘空清单。
+                    crate::verified_release::checkpoint_disposal(
+                        (),
+                        o.tree,
+                        l.outputs[i].manifest.entries.len(),
+                        &|()| ((), self.save(&l, &gate)),
+                    )
+                    .1?;
                 }
                 Ok(l.outputs[i].manifest.entries.is_empty())
             })();
@@ -3244,21 +3086,7 @@ impl Inventory {
         let disposal_finished_micros = began.elapsed().as_micros() as u64;
         self.save(&l, &gate)?;
         let saved_micros = began.elapsed().as_micros() as u64;
-        let mut measurements = [0u64; 8];
-        for output in &l.outputs {
-            for (total, value) in measurements.iter_mut().zip(retained_measurements(
-                Some(output),
-                0,
-                self.policy.max_output_bytes,
-            )) {
-                *total += value;
-            }
-        }
-        measurements[1] = l.retired_leases.len() as u64;
-        let mut result = json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_related_outputs,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"});
-        for (key, value) in RETAINED_MEASUREMENT_FIELDS.iter().zip(measurements) {
-            result[*key] = json!(value);
-        }
+        let result = json!({"nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"protected":protected,"disposed":disposed});
         // Emit after bounded work: sink IO must not consume its disposal window.
         // Every checkpoint uses the same owning round's start, including gates.
         tracing::debug!(
@@ -3402,7 +3230,6 @@ impl Inventory {
         Ok(lease)
     }
 }
-#[cfg(not(verus_keep_ghost))]
 fn domain_recovery_rooted(ledger: &Ledger, output: &Output) -> bool {
     let role = output.outcome["recovery_role"].as_str();
     crate::verified_release::domain_recovery(
@@ -3416,7 +3243,6 @@ fn domain_recovery_rooted(ledger: &Ledger, output: &Output) -> bool {
     )
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl Publication {
     /// Attach the empty inode durably before publishing its exact destination.
     pub fn materialize(&self) -> Result<(), String> {
@@ -3834,7 +3660,7 @@ impl Publication {
             }
             let sealed = o.manifest.sealed;
             let measured = (o.manifest.bytes, o.manifest.entries.len());
-            if accounting_releases(completing, sealed) {
+            if crate::verified_release::accounting_releases(completing, sealed) {
                 o.reserved_bytes = measured.0;
                 o.phase = "released".into();
             }
@@ -3920,23 +3746,7 @@ impl Publication {
         }
     }
 }
-/// Ordinary adopted owners share this entry. Unknown legacy outputs remain protected.
-#[cfg(not(verus_keep_ghost))]
-pub fn maintain_adopted(root: &Path) -> Result<Option<Value>, String> {
-    Inventory::adopted(root)?.map(|i| i.maintain()).transpose()
-}
-
-/// Explicit cross-object maintenance visits each existing declaration once.
-/// Ordinary adopted operations keep the bounded entry above.
-#[cfg(not(verus_keep_ghost))]
-pub fn maintain_explicit_adopted(root: &Path) -> Result<Option<Value>, String> {
-    Inventory::adopted(root)?
-        .map(|i| i.maintain_explicit())
-        .transpose()
-}
-
 /// Enroll a real producer output in the adopted owner, recovering prior released work first.
-#[cfg(not(verus_keep_ghost))]
 pub fn begin_adopted(
     root: &Path,
     producer: &str,
@@ -3966,7 +3776,6 @@ pub fn begin_adopted(
 }
 /// Create only after admission and a recoverable owner intent. Unadopted hosts
 /// keep their existing output semantics, without enrolling unknown paths.
-#[cfg(not(verus_keep_ghost))]
 pub fn create_adopted(
     root: &Path,
     producer: &str,
@@ -3978,7 +3787,6 @@ pub fn create_adopted(
 }
 /// The producer declares a finite reservation within the host ceiling. Unknown
 /// external writers keep the default ceiling; this is not a physical quota.
-#[cfg(not(verus_keep_ghost))]
 pub fn create_adopted_with_limit(
     root: &Path,
     producer: &str,
@@ -3992,7 +3800,6 @@ pub fn create_adopted_with_limit(
 /// Bind an actual consumer in the existing durable publication, before any
 /// content write. The producer supplies the role prefix; the owner mints its
 /// independent output identity. No extra inventory transaction is required.
-#[cfg(not(verus_keep_ghost))]
 pub fn create_adopted_for_consumer(
     root: &Path,
     producer: &str,
@@ -4015,7 +3822,6 @@ pub fn create_adopted_for_consumer(
         Some(consumer_prefix),
     )
 }
-#[cfg(not(verus_keep_ghost))]
 fn create_with_consumer(
     root: &Path,
     producer: &str,
@@ -4068,7 +3874,6 @@ fn create_with_consumer(
     Ok(None)
 }
 /// Choose an address without creating it; creation belongs to the same publisher.
-#[cfg(not(verus_keep_ghost))]
 pub fn unique_path(directory: &Path, prefix: &str, suffix: &str) -> Result<PathBuf, String> {
     static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     if prefix.contains('/') || suffix.contains('/') {
@@ -4085,7 +3890,6 @@ pub fn unique_path(directory: &Path, prefix: &str, suffix: &str) -> Result<PathB
         SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     )))
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn copy_adopted(
     publication: Option<&Publication>,
     input: &Path,
@@ -4099,7 +3903,6 @@ pub fn copy_adopted(
             .map_err(|e| e.to_string())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn write_adopted(
     publication: Option<&Publication>,
     output: &Path,
@@ -4111,7 +3914,6 @@ pub fn write_adopted(
         fs::write(output, bytes).map_err(|e| e.to_string())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn directory_adopted(publication: Option<&Publication>, output: &Path) -> Result<(), String> {
     if let Some(publication) = publication {
         publication.create_directory(output)
@@ -4120,38 +3922,42 @@ pub fn directory_adopted(publication: Option<&Publication>, output: &Path) -> Re
     }
 }
 /// A registered reader protects an enrolled original. Unknown legacy evidence retains old semantics.
-#[cfg(not(verus_keep_ghost))]
 pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    let gate = inventory.member_gate(&[], &[path.into()])?;
-    let l = inventory.load(&gate)?;
-    let found = l
-        .outputs
-        .iter()
-        .find(|o| o.path == path || (o.tree && path.starts_with(&format!("{}/", o.path))));
-    let Some(o) = found else { return Ok(None) };
-    if o.phase == "disposing" {
-        return Err("original evidence unavailable: disposal has started".into());
+    inventory.read_guard(path)
+}
+impl Inventory {
+    /// The same addressed read protection also applies to a standalone producer.
+    pub fn read_guard(&self, path: &str) -> Result<Option<Lease>, String> {
+        let gate = self.member_gate(&[], &[path.into()])?;
+        let l = self.load(&gate)?;
+        let found = l
+            .outputs
+            .iter()
+            .find(|o| o.path == path || (o.tree && path.starts_with(&format!("{}/", o.path))));
+        let Some(o) = found else { return Ok(None) };
+        if o.phase == "disposing" {
+            return Err("original evidence unavailable: disposal has started".into());
+        }
+        let lease = Lease::acquire(
+            &self.directory.join(&o.lease),
+            Some(&o.lease_id),
+            false,
+            false,
+            None,
+        )?
+        .ok_or("original evidence disposal busy")?;
+        self.stable(&gate)?;
+        drop(gate);
+        self.remember_input(&lease, &o.id)?;
+        Ok(Some(lease))
     }
-    let lease = Lease::acquire(
-        &inventory.directory.join(&o.lease),
-        Some(&o.lease_id),
-        false,
-        false,
-        None,
-    )?
-    .ok_or("original evidence disposal busy")?;
-    inventory.stable(&gate)?;
-    drop(gate);
-    inventory.remember_input(&lease, &o.id)?;
-    Ok(Some(lease))
 }
 
 /// Publish a newly addressed original under its opted-in natural producer.
 /// Existing unenrolled originals are verified and reused but require explicit legacy migration.
-#[cfg(not(verus_keep_ghost))]
 pub fn publish_owned_original(
     root: &Path,
     producer: &str,
@@ -4173,7 +3979,6 @@ pub fn publish_owned_original(
 
 #[cfg(feature = "retention-test")]
 #[doc(hidden)]
-#[cfg(not(verus_keep_ghost))]
 pub fn publish_owned_observed(
     root: &Path,
     producer: &str,
@@ -4197,7 +4002,6 @@ pub fn publish_owned_observed(
     )
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn publish_owned_with(
     root: &Path,
     producer: &str,
@@ -4313,7 +4117,6 @@ fn publish_owned_with(
 /// The final report keeps its publication role until the actual fixed-slot
 /// settlement transfers its closure to the current report. A settled failure
 /// then has a finite diagnostic window rather than an invented permanent reader.
-#[cfg(not(verus_keep_ghost))]
 pub fn publish_final_original(
     root: &Path,
     producer: &str,
@@ -4342,7 +4145,6 @@ pub fn publish_final_original(
 }
 /// Inputs of an unfinished report stay rooted until the actual fixed-slot
 /// publisher hands their closure to a final original. Interruption is not release.
-#[cfg(not(verus_keep_ghost))]
 pub fn publish_pending_original(
     root: &Path,
     producer: &str,
@@ -4363,7 +4165,6 @@ pub fn publish_pending_original(
 }
 
 /// Streaming equivalent for the actual retained-blob publisher.
-#[cfg(not(verus_keep_ghost))]
 pub fn publish_pending_file(
     root: &Path,
     producer: &str,
@@ -4400,7 +4201,6 @@ pub fn publish_pending_file(
 
 /// Commit exact report edges and the current fixed report slot before publishing its pointer.
 /// Pending native delivery is a distinct explicit root; only its owner may acknowledge/release it.
-#[cfg(not(verus_keep_ghost))]
 pub fn reference_report(
     root: &Path,
     slot: &str,
@@ -4413,7 +4213,6 @@ pub fn reference_report(
     Ok(publisher)
 }
 
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn report_slot(root: &Path, slot: &str) -> Result<Option<Lease>, String> {
     crate::relative_path(slot)?;
     Inventory::adopted(root)?
@@ -4422,7 +4221,6 @@ pub(crate) fn report_slot(root: &Path, slot: &str) -> Result<Option<Lease>, Stri
 }
 
 /// The caller holds report_slot through intent creation, publication and settlement.
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn reference_report_held(
     root: &Path,
     slot: &str,
@@ -4445,7 +4243,6 @@ pub(crate) fn reference_report_held(
     Ok(())
 }
 /// Release the previous fixed-slot reference only after its replacement is durably published.
-#[cfg(not(verus_keep_ghost))]
 pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), String> {
     if let Some(inventory) = Inventory::adopted(root)? {
         let role = format!("current-report:{}", sha256(slot.as_bytes()));
@@ -4475,12 +4272,10 @@ pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), Stri
 /// A second domain may remove a copied body/cache only when the final-original
 /// owner has retired every overlapping publication. Hold only an addressed
 /// removal capability across the effect; independent publication remains free.
-#[cfg(not(verus_keep_ghost))]
 pub struct RemovalGuard {
     inventory: Inventory,
     exclusion: Gate,
 }
-#[cfg(not(verus_keep_ghost))]
 impl RemovalGuard {
     /// Recheck the final-original policy immediately before the other owner's effect.
     /// The declared paths exclude overlapping publications through this capability.
@@ -4488,11 +4283,9 @@ impl RemovalGuard {
         self.inventory.stable(&self.exclusion)
     }
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn external_removal_guard(root: &Path, path: &str) -> Result<Option<RemovalGuard>, String> {
     external_removal_guards(root, &[path.to_owned()])
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn external_removal_guards(
     root: &Path,
     paths: &[String],

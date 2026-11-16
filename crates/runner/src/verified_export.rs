@@ -344,13 +344,13 @@ pub open spec fn parent_result<S, P, M, B, L, A, C, R, D, Y, W, G, O, F>(
     O: Fn(S, M, bool) -> (S, M),
     F: Fn(S, &P, M) -> (S, Result<(), String>)
 {
-    exists|parent: (S, Option<P>)| io.parent.ensures((state, path), parent)
+    exists|parent: (S, Option<P>)| #[trigger] io.parent.ensures((state, path), parent)
         && match parent.1 {
             None => out.0 == parent.0 && match out.1 {
                 Err(error) => error@ == "snapshot parent"@, _ => false,
             },
             Some(directory) => exists|created: (S, Result<(), String>)|
-                io.create_parent.ensures((parent.0, directory), created) && match created.1 {
+                #[trigger] io.create_parent.ensures((parent.0, directory), created) && match created.1 {
                     Err(error) => out == (created.0, Err::<u64, String>(error)),
                     Ok(()) => read_result(created.0, path, relative, mode, previous, limit, supported, io, out),
                 },

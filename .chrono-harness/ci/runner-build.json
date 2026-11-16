@@ -10,19 +10,164 @@
   "verus_directory": ".chrono-harness/bin/verus",
   "rust_toolchain": "1.95.0",
   "output_contract": {
-    "version": "0.2026.04.24.f8e1704",
-    "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+    "version": "0.2026.05.05.d03e906",
+    "commit": "d03e9063f15af2b5d1668be45bb7ccd5e8544f4c"
   },
   "library": {
     "manifest": "crates/identifiers/Cargo.toml",
     "source": "crates/identifiers/src/lib.rs",
     "target": "chrono_identifiers",
-    "sources": ["crates/identifiers/src/lib.rs"]
+    "sources": [
+      "crates/identifiers/src/lib.rs"
+    ]
   },
   "binary": {
     "source": "crates/runner/src/main.rs",
     "target": "chrono-harness",
     "published": "crates/runner/target/debug/chrono-harness",
     "dependency_prefix": "chrono_harness-"
+  },
+  "dependencies": {
+    "operation": "prepare.ci-generation-dependency.runner",
+    "bootstrap_profile": ".chrono-harness/ci/bootstrap-core.json",
+    "receipt": "crates/runner/target/.chrono-runner-dependencies.json",
+    "consumers": {
+      "investigate.ci-generation-dependency.consumer": {
+        "tool": "verus-json-contract",
+        "executable": "$COMPONENT/verus",
+        "argv": [
+          "--crate-type=lib",
+          "--no-cheating",
+          "--no-external-by-default",
+          "--num-threads",
+          "2",
+          "--output-json",
+          "--compile",
+          "--edition=2024",
+          "--crate-name",
+          "ci_generation_dependency",
+          "-Zunstable-options",
+          "--env-set",
+          "CARGO_PKG_VERSION=0.1.0",
+          "--extern",
+          "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib",
+          "--extern",
+          "serde",
+          "--extern",
+          "serde_json",
+          "--import",
+          "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.vir",
+          "--export",
+          ".chrono-harness/state/libci-generation-dependency-20261114-consumer.vir",
+          "--emit=link=.chrono-harness/state/libci-generation-dependency-20261114-consumer.rlib,dep-info=.chrono-harness/state/libci-generation-dependency-20261114-consumer.rlib.d",
+          "crates/ci/src/verified_generation.rs",
+          "-o",
+          ".chrono-harness/state/libci-generation-dependency-20261114-consumer.rlib",
+          "-Zchecksum-hash-algorithm=sha256"
+        ]
+      },
+      "investigate.ci-generation-dependency.missing": {
+        "tool": "verus-json-contract",
+        "executable": "$COMPONENT/verus",
+        "argv": [
+          "--crate-type=lib",
+          "--no-cheating",
+          "--no-external-by-default",
+          "--num-threads",
+          "2",
+          "--output-json",
+          "--compile",
+          "--edition=2024",
+          "--crate-name",
+          "ci_generation_dependency",
+          "-Zunstable-options",
+          "--env-set",
+          "CARGO_PKG_VERSION=0.1.0",
+          "--extern",
+          "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib",
+          "--extern",
+          "serde",
+          "--extern",
+          "serde_json",
+          "--import",
+          "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-absent.vir",
+          "--export",
+          ".chrono-harness/state/libci-generation-dependency-20261114-missing.vir",
+          "--emit=link=.chrono-harness/state/libci-generation-dependency-20261114-missing.rlib,dep-info=.chrono-harness/state/libci-generation-dependency-20261114-missing.rlib.d",
+          "crates/ci/src/verified_generation.rs",
+          "-o",
+          ".chrono-harness/state/libci-generation-dependency-20261114-missing.rlib",
+          "-Zchecksum-hash-algorithm=sha256"
+        ]
+      },
+      "investigate.verus-tool-contract.reject": {
+        "tool": "verus-json-contract",
+        "executable": "$COMPONENT/verus",
+        "argv": [
+          "--crate-type=lib",
+          "--no-cheating",
+          "--no-external-by-default",
+          "--num-threads",
+          "2",
+          "--output-json",
+          "--compile",
+          "--edition=2021",
+          "--crate-name",
+          "verus_tool_contract_reject",
+          "--extern",
+          "serde_json",
+          "--export",
+          ".chrono-harness/state/runner-tool-contract-reject.vir",
+          "--emit=link=.chrono-harness/state/runner-tool-contract-reject.rlib,dep-info=.chrono-harness/state/runner-tool-contract-reject.rlib.d",
+          ".chrono-harness/experiments/verus-tool-contract/fixtures/reject.rs",
+          "-o",
+          ".chrono-harness/state/runner-tool-contract-reject.rlib",
+          "-Zchecksum-hash-algorithm=sha256"
+        ]
+      }
+    },
+    "component": {
+      "checksum": ".chrono-harness/ci/verus-macos-arm64.sha256",
+      "archive": ".chrono-harness/bin/verus.zip",
+      "patch": ".chrono-harness/experiments/verus-tool-contract/vstd.patch",
+      "source": "crates/runner/src/json_value_specs.rs",
+      "receipt": "crates/runner/target/.chrono-runner-component.json",
+      "archive_root": "verus-arm64-macos",
+      "argv": [
+        "--crate-type=lib",
+        "--crate-name",
+        "vstd",
+        "--is-vstd",
+        "--num-threads",
+        "2",
+        "--output-json",
+        "--compile",
+        "--edition=2021",
+        "--cfg",
+        "feature=\"std\"",
+        "--cfg",
+        "feature=\"alloc\"",
+        "--extern",
+        "serde_json",
+        "--export",
+        "$COMPONENT/vstd.vir",
+        "--emit=link=$COMPONENT/libvstd.rlib,dep-info=$COMPONENT/libvstd.rlib.d",
+        "$COMPONENT/vstd/vstd.rs",
+        "-o",
+        "$COMPONENT/libvstd.rlib",
+        "-Zchecksum-hash-algorithm=sha256",
+        "-Zbinary-dep-depinfo"
+      ],
+      "files": [
+        "verus",
+        "rust_verify",
+        "z3",
+        "libverus_builtin_macros.dylib",
+        "libverus_builtin.rlib",
+        "libvstd.rlib",
+        "libvstd.rlib.d",
+        "vstd.vir"
+      ]
+    }
   }
 }

@@ -1,0 +1,616 @@
+--- a/source/rust_verify/src/rust_to_vir_base.rs
++++ b/source/rust_verify/src/rust_to_vir_base.rs
+@@ -1308,6 +1308,12 @@
+         }
+         TyKind::Dynamic(preds, _) => {
+             use rustc_middle::ty::ExistentialPredicate;
++            let principal_id = preds.principal().map(|p| p.skip_binder().def_id);
++            let is_callable = principal_id.is_some()
++                && (principal_id == tcx.lang_items().fn_trait()
++                    || principal_id == tcx.lang_items().fn_mut_trait()
++                    || principal_id == tcx.lang_items().fn_once_trait());
++            let mut output = None;
+             for pred in preds.iter() {
+                 match pred.skip_binder() {
+                     ExistentialPredicate::Trait(_) => {}
+@@ -1321,6 +1327,18 @@
+                         // these markers add no VIR facts. Rust keeps the original dyn
+                         // predicates for type, borrow, and executable-code checking.
+                         // trait_conflicts also sees the same abstract principal type.
++                    }
++                    ExistentialPredicate::Projection(projection)
++                        if is_callable
++                            && Some(projection.def_id) == tcx.lang_items().fn_once_output() =>
++                    {
++                        if output.is_some() {
++                            unsupported_err!(span, "dyn callable with duplicate Output");
++                        }
++                        let TermKind::Ty(output_ty) = projection.term.kind() else {
++                            unsupported_err!(span, "dyn callable with non-type Output");
++                        };
++                        output = Some(t_rec(&output_ty)?.0);
+                     }
+                     ExistentialPredicate::Projection(_) => {
+                         unsupported_err!(span, "dyn with more than one trait");
+@@ -1352,7 +1370,10 @@
+                         None,
+                         span,
+                     )?;
+-                    let typx = TypX::Dyn(trait_path, Arc::new(typ_args), impl_paths);
++                    if is_callable && output.is_none() {
++                        unsupported_err!(span, "dyn callable without Output");
++                    }
++                    let typx = TypX::Dyn(trait_path, Arc::new(typ_args), output, impl_paths);
+                     (Arc::new(typx), false)
+                 }
+                 None => {
+--- a/source/rust_verify/src/trait_conflicts.rs
++++ b/source/rust_verify/src/trait_conflicts.rs
+@@ -101,9 +101,13 @@
+         vir::ast::TypX::Datatype(Dt::Path(path), typs, _) => {
+             Box::new(TypX::Datatype(state.datatype_name(path), vec![], gen_typs(state, typs)))
+         }
+-        vir::ast::TypX::Dyn(path, typs, _) => {
++        vir::ast::TypX::Dyn(path, typs, output, _) => {
+             let id = state.trait_name(path);
+-            Box::new(TypX::Dyn(id, gen_typs(state, typs)))
++            let output = output.as_ref().map(|output| {
++                let name = state.typ_param("Output".to_owned(), None);
++                (name, gen_typ(state, output))
++            });
++            Box::new(TypX::Dyn(id, gen_typs(state, typs), output))
+         }
+         vir::ast::TypX::Primitive(Primitive::Array, ts) => {
+             assert!(ts.len() == 2);
+@@ -428,6 +432,42 @@
+         if !dyn_traits.contains(&t.x.name) {
+             continue;
+         }
++        if let Some(principal) = vir::ast::ClosureKind::from_trait_path(&t.x.name) {
++            use vir::ast::ClosureKind;
++            // Fn/FnMut inherit Output from FnOnce. Model the whole supertrait
++            // chain on the same synthetic object, including that Output in its
++            // identity, as in VIR's callable object impls.
++            let base = vir_crate.traits.iter().find(|t| t.x.name == ClosureKind::FnOnce.trait_path()).unwrap();
++            let (mut generic_params, mut generic_bounds) = gen_generics(state,
++                &base.x.typ_params.iter().map(|(x, _)| x.clone()).collect(), &base.x.typ_bounds, None);
++            let t_args: Vec<_> = generic_params.iter().map(|p| Box::new(TypX::TypParam(p.name.clone()))).collect();
++            let output_name = state.typ_param("DynCallableOutput".to_owned(), None);
++            generic_params.push(GenericParam { name: output_name.clone(), const_typ: None });
++            let output = Box::new(TypX::TypParam(output_name));
++            generic_bounds.push(GenericBound { typ: output.clone(), bound_vars: vec![], bound: Bound::Sized });
++            let output_assoc = state.typ_param("Output".to_owned(), None);
++            let box_name = Id::new(IdKind::Builtin, 0, "Box".to_owned());
++            let ts = generic_params.iter().map(|p| {
++                Box::new(TypX::Datatype(box_name.clone(), vec![], vec![Box::new(TypX::TypParam(p.name.clone()))]))
++            }).collect();
++            let self_typ = Box::new(TypX::Datatype(Id::new(IdKind::Builtin, 0, "Dyn".to_owned()), vec![], vec![
++                Box::new(TypX::Primitive(n_trait.to_string())), Box::new(TypX::Tuple(ts)),
++            ]));
++            for kind in [ClosureKind::FnOnce, ClosureKind::FnMut, ClosureKind::Fn] {
++                if (principal == ClosureKind::FnOnce && kind != ClosureKind::FnOnce)
++                    || (principal == ClosureKind::FnMut && kind == ClosureKind::Fn) { continue }
++                let trait_name = state.trait_name(&kind.trait_path());
++                state.trait_impls.push(TraitImpl {
++                    span: spans.from_air_span(&t.span, None), self_typ: self_typ.clone(),
++                    generic_params: generic_params.clone(), generic_bounds: generic_bounds.clone(),
++                    trait_as_datatype: Box::new(TypX::Datatype(trait_name, vec![], t_args.clone())),
++                    assoc_typs: if kind == ClosureKind::FnOnce { vec![(output_assoc.clone(), vec![], output.clone())] } else { vec![] },
++                    trait_polarity: rustc_middle::ty::ImplPolarity::Positive, is_clone: false,
++                });
++            }
++            n_trait += 1;
++            continue;
++        }
+         let name = state.trait_name(&t.x.name);
+         let span = spans.from_air_span(&t.span, None);
+         let (mut generic_params, mut generic_bounds) = gen_generics(
+--- a/source/rust_verify/src/trait_check_ast.rs
++++ b/source/rust_verify/src/trait_check_ast.rs
+@@ -36,7 +36,7 @@
+     TraitSelf,
+     Tuple(Vec<Typ>),
+     Datatype(Id, Vec<Id>, Vec<Typ>),
+-    Dyn(Id, Vec<Typ>),
++    Dyn(Id, Vec<Typ>, Option<(Id, Typ)>),
+     Slice(Typ),
+     StrSlice,
+     Projection {
+--- a/source/rust_verify/src/trait_check_emit.rs
++++ b/source/rust_verify/src/trait_check_emit.rs
+@@ -85,8 +85,9 @@
+             TypX::Datatype(path, lifetimes, args) => {
+                 typ_args_to_string(Some(path), lifetimes, args, &None)
+             }
+-            TypX::Dyn(path, args) => {
+-                format!("dyn {}", typ_args_to_string(Some(path), &vec![], args, &None))
++            TypX::Dyn(path, args, output) => {
++                let equality = output.as_ref().map(|(name, typ)| (name.clone(), vec![], typ.clone()));
++                format!("dyn {}", typ_args_to_string(Some(path), &vec![], args, &equality))
+             }
+             TypX::Slice(elem) => {
+                 format!("[{}]", elem.to_string())
+--- a/source/vir/src/ast.rs
++++ b/source/vir/src/ast.rs
+@@ -307,8 +307,10 @@
+     FnDef(Fun, Typs, Option<Fun>),
+     /// Datatype (concrete or abstract) applied to type arguments
+     Datatype(Dt, Typs, ImplPaths),
+-    /// dyn T<...args...> for some trait T (given by the Path) applied to trait type arguments
+-    Dyn(Path, Typs, ImplPaths),
++    /// dyn T<...args...> applied to trait type arguments.
++    /// Only Fn/FnMut/FnOnce support an associated type here: the optional Output.
++    /// Output participates in type identity and is never a trait type argument.
++    Dyn(Path, Typs, Option<Typ>, ImplPaths),
+     /// When an opaque type is defined (e.g., by a function return), Rustc creates
+     /// an unique opaque type constructor for it.
+     /// This opaque type is just an instantiation of the opaque type constructor with args
+--- a/source/vir/src/ast_util.rs
++++ b/source/vir/src/ast_util.rs
+@@ -229,8 +229,12 @@
+         (TypX::Datatype(path1, ts1, _), TypX::Datatype(path2, ts2, _)) => {
+             path1 == path2 && n_types_equal(ts1, ts2)
+         }
+-        (TypX::Dyn(path1, ts1, _), TypX::Dyn(path2, ts2, _)) => {
+-            path1 == path2 && n_types_equal(ts1, ts2)
++        (TypX::Dyn(path1, ts1, out1, _), TypX::Dyn(path2, ts2, out2, _)) => {
++            path1 == path2 && n_types_equal(ts1, ts2) && match (out1, out2) {
++                (None, None) => true,
++                (Some(t1), Some(t2)) => types_equal(t1, t2),
++                _ => false,
++            }
+         }
+         (TypX::Primitive(p1, ts1), TypX::Primitive(p2, ts2)) => p1 == p2 && n_types_equal(ts1, ts2),
+         (TypX::Decorate(d1, a1, t1), TypX::Decorate(d2, a2, t2)) => {
+@@ -285,7 +289,7 @@
+         (TypX::SpecFn(_, _), _) => false,
+         (TypX::AnonymousClosure(_, _, _, _), _) => false,
+         (TypX::Datatype(_, _, _), _) => false,
+-        (TypX::Dyn(_, _, _), _) => false,
++        (TypX::Dyn(_, _, _, _), _) => false,
+         (TypX::Primitive(_, _), _) => false,
+         (TypX::Decorate(..), _) => false,
+         (TypX::Boxed(_), _) => false,
+@@ -1094,15 +1098,14 @@
+                 format!("")
+             }
+         ),
+-        TypX::Dyn(path, typs, _) => format!(
+-            "dyn {}{}",
+-            path_as_friendly_rust_name(path),
+-            if typs.len() > 0 {
+-                format!("<{}>", typs_to_comma_separated_str(typs))
+-            } else {
+-                format!("")
+-            }
+-        ),
++        TypX::Dyn(path, typs, output, _) => {
++            let mut args = typs.iter().map(typ_to_diagnostic_str).collect::<Vec<_>>();
++            if let Some(output) = output {
++                args.push(format!("Output = {}", typ_to_diagnostic_str(output)));
++            }
++            format!("dyn {}{}", path_as_friendly_rust_name(path),
++                if args.is_empty() { String::new() } else { format!("<{}>", args.join(", ")) })
++        }
+         TypX::Decorate(TypDecoration::Ref, _, typ) => {
+             format!("&{}", typ_to_diagnostic_str(typ))
+         }
+@@ -1644,7 +1647,11 @@
+ }
+ 
+ impl ClosureKind {
+-    pub(crate) fn trait_path(&self) -> Path {
++    pub fn from_trait_path(path: &Path) -> Option<Self> {
++        [Self::Fn, Self::FnMut, Self::FnOnce].into_iter().find(|kind| kind.trait_path() == *path)
++    }
++
++    pub fn trait_path(&self) -> Path {
+         match self {
+             ClosureKind::Fn => crate::path![CrateId::Core => "ops", "function", "Fn"],
+             ClosureKind::FnMut => crate::path![CrateId::Core => "ops", "function", "FnMut"],
+--- a/source/vir/src/ast_visitor.rs
++++ b/source/vir/src/ast_visitor.rs
+@@ -1028,9 +1028,10 @@
+                     Arc::new(TypX::Datatype(path.clone(), R::get_vec_a(ts), impl_paths.clone()))
+                 })
+             }
+-            TypX::Dyn(path, ts, impl_paths) => {
++            TypX::Dyn(path, ts, output, impl_paths) => {
+                 let ts = self.visit_typs(ts)?;
+-                R::ret(|| Arc::new(TypX::Dyn(path.clone(), R::get_vec_a(ts), impl_paths.clone())))
++                let output = self.visit_opt_typ(output)?;
++                R::ret(|| Arc::new(TypX::Dyn(path.clone(), R::get_vec_a(ts), R::get_opt(output), impl_paths.clone())))
+             }
+             TypX::Primitive(p, ts) => {
+                 let ts = self.visit_typs(ts)?;
+--- a/source/vir/src/ast_simplify.rs
++++ b/source/vir/src/ast_simplify.rs
+@@ -1575,6 +1575,62 @@
+     trait_impls.push(Spanned::new(ctx.no_span.clone(), trait_implx));
+ }
+ 
++// Rust supplies the Fn-family object impls implicitly. Keep the same callable
++// bounds and inherited FnOnce::Output in VIR; this does not assert requires or
++// ensures for any value of the dynamic type.
++fn add_dyn_callable_impls(
++    ctx: &GlobalCtx,
++    krate: &Krate,
++    trait_impls: &mut Vec<TraitImpl>,
++    assoc_type_impls: &mut Vec<AssocTypeImpl>,
++) {
++    use crate::ast::{GenericBoundX, Sizedness, TraitId};
++    let mut paths: Vec<_> = crate::traits::get_dyn_traits(krate).into_iter().collect();
++    paths.sort_by_key(crate::ast_util::path_as_friendly_rust_name);
++    for principal in paths {
++        let Some(principal_kind) = ClosureKind::from_trait_path(&principal) else { continue };
++        let args_name = Arc::new("DynCallableArgs".to_owned());
++        let output_name = Arc::new("DynCallableOutput".to_owned());
++        let typ_params = Arc::new(vec![args_name.clone(), output_name.clone()]);
++        let args = Arc::new(TypX::TypParam(args_name));
++        let output = Arc::new(TypX::TypParam(output_name));
++        let self_typ = Arc::new(TypX::Dyn(
++            principal.clone(), Arc::new(vec![args.clone()]), Some(output.clone()), Arc::new(vec![]),
++        ));
++        let trait_typ_args = Arc::new(vec![self_typ, args.clone()]);
++        let typ_bounds = Arc::new(vec![
++            Arc::new(GenericBoundX::Trait(
++                TraitId::Path(crate::path![CrateId::Core => "marker", "Tuple"]), Arc::new(vec![args.clone()]),
++            )),
++            Arc::new(GenericBoundX::Trait(TraitId::Sizedness(Sizedness::Sized), Arc::new(vec![args]))),
++            Arc::new(GenericBoundX::Trait(TraitId::Sizedness(Sizedness::Sized), Arc::new(vec![output.clone()]))),
++        ]);
++        for kind in [ClosureKind::FnOnce, ClosureKind::FnMut, ClosureKind::Fn] {
++            if (principal_kind == ClosureKind::FnOnce && kind != ClosureKind::FnOnce)
++                || (principal_kind == ClosureKind::FnMut && kind == ClosureKind::Fn) { continue }
++            let impl_path = Arc::new(crate::ast::PathX {
++                krate: CrateId::Internal,
++                segments: Arc::new(vec![crate::ast::Segment::T(Arc::new(format!("impl_dyn_callable&%{principal_kind}&%{kind}")), 0)]),
++            });
++            let trait_implx = crate::ast::TraitImplX {
++                impl_path: impl_path.clone(), typ_params: typ_params.clone(), typ_bounds: typ_bounds.clone(),
++                trait_path: kind.trait_path(), trait_typ_args: trait_typ_args.clone(),
++                trait_typ_arg_impls: Spanned::new(ctx.no_span.clone(), Arc::new(vec![])),
++                owning_module: None, auto_imported: true, external_trait_blanket: false,
++            };
++            trait_impls.push(Spanned::new(ctx.no_span.clone(), trait_implx));
++            if kind == ClosureKind::FnOnce {
++                assoc_type_impls.push(Spanned::new(ctx.no_span.clone(), crate::ast::AssocTypeImplX {
++                    name: Arc::new("Output".to_owned()), impl_path,
++                    typ_params: typ_params.clone(), typ_bounds: typ_bounds.clone(),
++                    trait_path: kind.trait_path(), trait_typ_args: trait_typ_args.clone(),
++                    typ: output.clone(), impl_paths: Arc::new(vec![]),
++                }));
++            }
++        }
++    }
++}
++
+ pub fn simplify_krate(ctx: &mut GlobalCtx, krate: &Krate) -> Result<Krate, VirErr> {
+     let KrateX {
+         functions,
+@@ -1606,6 +1662,7 @@
+     let mut trait_impls = vec_map_result(&trait_impls, |t| simplify_trait_impl(&mut state, t))?;
+     let mut assoc_type_impls =
+         vec_map_result(&assoc_type_impls, |a| simplify_assoc_type_impl(&mut state, a))?;
++    add_dyn_callable_impls(ctx, krate, &mut trait_impls, &mut assoc_type_impls);
+ 
+     let fn_once_trait_path = ClosureKind::FnOnce.trait_path();
+     let fn_once_trait_in_scope = traits.iter().any(|t| t.x.name == fn_once_trait_path);
+--- a/source/vir/src/well_formed.rs
++++ b/source/vir/src/well_formed.rs
+@@ -174,7 +174,7 @@
+             let _ = check_path_and_get_datatype(ctxt, path, span, emit)?;
+             Ok(())
+         }
+-        TypX::Dyn(path, _, _) => {
++        TypX::Dyn(path, _, _, _) => {
+             if ctxt.lookup.merged_traits.trait_map.contains_key(path) {
+                 emit.dyn_compatability_checks.entry(path.clone()).or_insert(span.clone());
+                 Ok(())
+--- a/source/vir/src/sst_to_air.rs
++++ b/source/vir/src/sst_to_air.rs
+@@ -353,7 +353,11 @@
+                 vec![t]
+             }
+         }
+-        TypX::Dyn(name, typs, _) => mk_id(dyn_id(ctx, name, typs), crate::def::DECORATE_NIL_DYN),
++        TypX::Dyn(name, typs, output, _) => {
++            let mut args = (**typs).clone();
++            args.extend(output.iter().cloned());
++            mk_id(dyn_id(ctx, name, &Arc::new(args)), crate::def::DECORATE_NIL_DYN)
++        }
+         TypX::Primitive(name, typs) => {
+             let base = decoration_base_for_primitive(*name);
+             mk_id(primitive_id(ctx, &name, typs), base)
+@@ -1285,7 +1289,7 @@
+                 Arc::new(ExprX::Apply(str_ident(crate::def::HAS_RESOLVED), Arc::new(exprs)))
+             }
+             UnaryOpr::ToDyn(inner_self_typ, _) => {
+-                let TypX::Dyn(trait_path, typ_args, _) = &*undecorate_typ(&exp.typ) else {
++                let TypX::Dyn(trait_path, typ_args, _, _) = &*undecorate_typ(&exp.typ) else {
+                     panic!("ToDyn should have type TypX::Dyn: {:?}", exp.typ)
+                 };
+                 let mut args: Vec<Expr> = typ_to_ids(inner_self_typ);
+--- a/source/vir/src/traits.rs
++++ b/source/vir/src/traits.rs
+@@ -1118,6 +1118,18 @@
+     bound_exprs
+ }
+ 
++// FnMut/Fn inherit Output from FnOnce. The coercion uses that actual projection,
++// rather than introducing an unconstrained result type or a call-contract axiom.
++fn dyn_fn_output(path: &Path, trait_typ_args: &Typs) -> Option<Typ> {
++    crate::ast::ClosureKind::from_trait_path(path).map(|_| {
++        Arc::new(TypX::Projection {
++            trait_typ_args: trait_typ_args.clone(),
++            trait_path: crate::ast::ClosureKind::FnOnce.trait_path(),
++            name: Arc::new("Output".to_owned()),
++        })
++    })
++}
++
+ pub fn trait_decls_to_air(ctx: &Ctx, krate: &crate::sst::KrateSst) -> Commands {
+     // Axioms about broadcast_forall and spec functions need justification
+     // for any trait bounds.
+@@ -1149,6 +1161,9 @@
+         commands.push(Arc::new(CommandX::Global(decl_trait_bound)));
+ 
+         if ctx.reached_dyn_traits.contains(&tr.x.name) {
++            if crate::ast::ClosureKind::from_trait_path(&tr.x.name).is_some() {
++                iparams.extend(crate::def::types().iter().map(|s| str_typ(s))); // Output
++            }
+             let decl_trait_id = Arc::new(DeclX::fun_or_const(
+                 ctx.name_ctxt.prefix_dyn_id(&tr.x.name),
+                 Arc::new(iparams),
+@@ -1174,6 +1189,7 @@
+             let dyn_typ = Arc::new(TypX::Dyn(
+                 tr.x.name.clone(),
+                 Arc::new(typ_args[1..].to_vec()),
++                dyn_fn_output(&tr.x.name, &Arc::new(typ_args.clone())),
+                 Arc::new(vec![]),
+             ));
+             let x_name = "x!";
+@@ -1284,7 +1300,7 @@
+         if n == 0 {
+             let typ_args_no_self = Arc::new(trait_typ_args.iter().skip(1).cloned().collect());
+             let dyn_typ =
+-                Arc::new(TypX::Dyn(trait_path.clone(), typ_args_no_self, Arc::new(vec![])));
++                Arc::new(TypX::Dyn(trait_path.clone(), typ_args_no_self, dyn_fn_output(trait_path, trait_typ_args), Arc::new(vec![])));
+             lhs_args.extend(typ_to_ids(ctx, &dyn_typ));
+         } else {
+             lhs_args.extend(typ_to_ids(ctx, targ));
+@@ -1765,7 +1781,7 @@
+     use crate::ast_visitor::{AstVisitor, WalkTypVisitorEnv};
+     let mut dyn_traits: HashSet<Path> = HashSet::new();
+     let ft = &|dyn_traits: &mut HashSet<Path>, typ: &Typ| {
+-        if let TypX::Dyn(trait_path, _, _) = &**typ {
++        if let TypX::Dyn(trait_path, _, _, _) = &**typ {
+             dyn_traits.insert(trait_path.clone());
+         }
+         Ok(())
+--- a/source/vir/src/recursive_types.rs
++++ b/source/vir/src/recursive_types.rs
+@@ -280,10 +280,13 @@
+             check_impl_paths(impl_paths, &my_node)?;
+             Ok(())
+         }
+-        TypX::Dyn(trait_path, ts, impl_paths) => {
++        TypX::Dyn(trait_path, ts, output, impl_paths) => {
+             for t in ts.iter() {
+                 // For simplicity, just reject recursive types going through dyn T type args.
+                 check_positive_uses(datatype, global, local, None, t)?;
++            }
++            if let Some(output) = output {
++                check_positive_uses(datatype, global, local, None, output)?;
+             }
+             let trait_node = TypNode::Trait(trait_path.clone());
+             let my_node = TypNode::Datatype(Dt::Path(local.my_datatype.clone()));
+@@ -357,7 +360,7 @@
+             type_graph.add_edge(src.clone(), TypNode::TraitImpl(impl_path.clone()));
+         }
+     }
+-    if let TypX::Dyn(path, _, impl_paths) = &**typ {
++    if let TypX::Dyn(path, _, _, impl_paths) = &**typ {
+         type_graph.add_edge(src.clone(), TypNode::Trait(path.clone()));
+         for impl_path in impl_paths.iter() {
+             type_graph.add_edge(src.clone(), TypNode::TraitImpl(impl_path.clone()));
+@@ -762,7 +765,7 @@
+ 
+ pub(crate) fn add_trait_type_edges(call_graph: &mut GraphBuilder<Node>, src: &Node, typ: &Typ) {
+     match &**typ {
+-        TypX::Dyn(dyn_t_path, _, _) => {
++        TypX::Dyn(dyn_t_path, _, _, _) => {
+             call_graph.add_edge(src.clone(), Node::Trait(dyn_t_path.clone()));
+         }
+         _ => {}
+--- a/source/vir/src/prune.rs
++++ b/source/vir/src/prune.rs
+@@ -293,10 +293,15 @@
+         | TypX::PointeeMetadata(_) => {
+             reach_type(ctxt, state, &typ_to_reached_type(typ));
+         }
+-        TypX::Dyn(trait_path, _, _) => {
++        TypX::Dyn(trait_path, _, output, _) => {
+             reach_type(ctxt, state, &typ_to_reached_type(typ));
+             reach_bound_trait(ctxt, state, trait_path);
+             state.dyn_traits.insert(trait_path.clone());
++            if output.is_some() {
++                reach_assoc_type_decl(ctxt, state, &(
++                    crate::ast::ClosureKind::FnOnce.trait_path(), Arc::new("Output".to_owned()),
++                ));
++            }
+         }
+         TypX::Opaque { def_path, .. } => {
+             reach_opaque_type(ctxt, state, def_path);
+--- a/source/rust_verify_test/tests/traits_dyn.rs
++++ b/source/rust_verify_test/tests/traits_dyn.rs
+@@ -635,12 +635,12 @@
+     } => Ok(())
+ }
+ 
+-test_verify_one_file! {
+-    #[test] dyn_unsupported2 verus_code! {
+-        trait T {}
++test_verify_one_file_with_options! {
++    #[test] dyn_callable_output ["vstd"] => verus_code! {
++        use vstd::prelude::*;
+         fn test(d: &dyn Fn() -> ()) {
+         }
+-    } => Err(err) => assert_vir_error_msg(err, "Verus does not currently support dyn with more than one trait")
++    } => Ok(())
+ }
+ 
+ test_verify_one_file! {
+--- a/source/rust_verify/src/verifier.rs
++++ b/source/rust_verify/src/verifier.rs
+@@ -1393,11 +1393,12 @@
+         // encountered below.
+         let mut bucket_context = vec![
+             CommandBatch::new("Fuel", ctx.fuel()),
+-            CommandBatch::new("Trait-Decls", vir::traits::trait_decls_to_air(ctx, &krate)),
+             CommandBatch::new(
+                 "Associated-Type-Decls",
+                 vir::assoc_types_to_air::assoc_type_decls_to_air(ctx, &krate.traits),
+             ),
++            // Dynamic callable typing uses the inherited FnOnce::Output projection.
++            CommandBatch::new("Trait-Decls", vir::traits::trait_decls_to_air(ctx, &krate)),
+             CommandBatch::new(
+                 "Datatypes",
+                 vir::datatype_to_air::datatypes_and_primitives_to_air(
+--- a/source/builtin/src/lib.rs
++++ b/source/builtin/src/lib.rs
+@@ -2167,6 +2167,32 @@
+ pub fn call_opens_invariants<Args: core::marker::Tuple, F: FnOnce<Args>, I>(
+     _f: F,
+     _args: Args,
++) -> I {
++    unimplemented!();
++}
++
++/// The current callable's contract, read through a shared reference so that F
++/// may be unsized. These use the same predicates as the by-value forms above.
++#[cfg(verus_keep_ghost)]
++#[rustc_diagnostic_item = "verus::verus_builtin::call_requires_unsized"]
++pub fn call_requires_unsized<Args: core::marker::Tuple, F: ?Sized + FnOnce<Args>>(
++    _f: &F, _args: Args,
++) -> bool {
++    unimplemented!();
++}
++
++#[cfg(verus_keep_ghost)]
++#[rustc_diagnostic_item = "verus::verus_builtin::call_ensures_unsized"]
++pub fn call_ensures_unsized<Args: core::marker::Tuple, F: ?Sized + FnOnce<Args>>(
++    _f: &F, _args: Args, _output: F::Output,
++) -> bool {
++    unimplemented!();
++}
++
++#[cfg(verus_keep_ghost)]
++#[rustc_diagnostic_item = "verus::verus_builtin::call_opens_invariants_unsized"]
++pub fn call_opens_invariants_unsized<Args: core::marker::Tuple, F: ?Sized + FnOnce<Args>, I>(
++    _f: &F, _args: Args,
+ ) -> I {
+     unimplemented!();
+ }
+--- a/source/rust_verify/src/fn_call_to_vir.rs
++++ b/source/rust_verify/src/fn_call_to_vir.rs
+@@ -2298,20 +2298,23 @@
+         VerusItem::BuiltinFunction(
+             re @ (BuiltinFunctionItem::CallRequires
+             | BuiltinFunctionItem::CallEnsures
+-            | BuiltinFunctionItem::CallOpensInvariants),
++            | BuiltinFunctionItem::CallOpensInvariants
++            | BuiltinFunctionItem::CallRequiresUnsized
++            | BuiltinFunctionItem::CallEnsuresUnsized
++            | BuiltinFunctionItem::CallOpensInvariantsUnsized),
+         ) => {
+             record_spec_fn(bctx, expr);
+ 
+             let bsf = match re {
+-                BuiltinFunctionItem::CallRequires => {
++                BuiltinFunctionItem::CallRequires | BuiltinFunctionItem::CallRequiresUnsized => {
+                     assert!(args.len() == 2);
+                     BuiltinSpecFun::ClosureReq
+                 }
+-                BuiltinFunctionItem::CallEnsures => {
++                BuiltinFunctionItem::CallEnsures | BuiltinFunctionItem::CallEnsuresUnsized => {
+                     assert!(args.len() == 3);
+                     BuiltinSpecFun::ClosureEns
+                 }
+-                BuiltinFunctionItem::CallOpensInvariants => {
++                BuiltinFunctionItem::CallOpensInvariants | BuiltinFunctionItem::CallOpensInvariantsUnsized => {
+                     assert!(args.len() == 2);
+                     BuiltinSpecFun::ClosureOpensInvariants
+                 }
+--- a/source/rust_verify/src/verus_items.rs
++++ b/source/rust_verify/src/verus_items.rs
+@@ -423,6 +423,9 @@
+     CallRequires,
+     CallEnsures,
+     CallOpensInvariants,
++    CallRequiresUnsized,
++    CallEnsuresUnsized,
++    CallOpensInvariantsUnsized,
+     ConstrainType,
+     GetFutureOutputType,
+     ProofWithCallee,
+@@ -787,6 +790,9 @@
+         ("verus::verus_builtin::call_requires",           VerusItem::BuiltinFunction(BuiltinFunctionItem::CallRequires)),
+         ("verus::verus_builtin::call_ensures",            VerusItem::BuiltinFunction(BuiltinFunctionItem::CallEnsures)),
+         ("verus::verus_builtin::call_opens_invariants",   VerusItem::BuiltinFunction(BuiltinFunctionItem::CallOpensInvariants)),
++        ("verus::verus_builtin::call_requires_unsized",   VerusItem::BuiltinFunction(BuiltinFunctionItem::CallRequiresUnsized)),
++        ("verus::verus_builtin::call_ensures_unsized",    VerusItem::BuiltinFunction(BuiltinFunctionItem::CallEnsuresUnsized)),
++        ("verus::verus_builtin::call_opens_invariants_unsized", VerusItem::BuiltinFunction(BuiltinFunctionItem::CallOpensInvariantsUnsized)),
+         ("verus::verus_builtin::constrain_type",          VerusItem::BuiltinFunction(BuiltinFunctionItem::ConstrainType)),
+         ("verus::verus_builtin::get_future_output_type",  VerusItem::BuiltinFunction(BuiltinFunctionItem::GetFutureOutputType)),
+         ("verus::verus_builtin::proof_with_callee",       VerusItem::BuiltinFunction(BuiltinFunctionItem::ProofWithCallee)),
+--- a/source/vstd/function.rs
++++ b/source/vstd/function.rs
+@@ -182,19 +182,19 @@
+             f.ensures(args, output) ==> #[trigger] R::ens(args, output),
+ ;
+ 
+-pub broadcast axiom fn axiom_fn_mut_call_requires<Args: core::marker::Tuple, F: FnMut<Args>>(
++pub broadcast axiom fn axiom_fn_mut_call_requires<Args: core::marker::Tuple, F: ?Sized + FnMut<Args>>(
+     f: &mut F,
+     args: Args,
+ )
+     requires
+-        call_requires::<Args, F>(mut_ref_current(f), args),
++        call_requires_unsized::<Args, F>(&*old(f), args),
+     ensures
+         #[trigger] call_requires::<Args, &mut F>(f, args),
+ ;
+ 
+ // The output contract concerns the callable's current value. The reference may
+ // outlive the call and be used to replace the callable, so its future is unconstrained.
+-pub broadcast axiom fn axiom_fn_mut_call_ensures<Args: core::marker::Tuple, F: FnMut<Args>>(
++pub broadcast axiom fn axiom_fn_mut_call_ensures<Args: core::marker::Tuple, F: ?Sized + FnMut<Args>>(
+     f: &mut F,
+     args: Args,
+     output: F::Output,
+@@ -202,20 +202,20 @@
+     requires
+         #[trigger] call_ensures::<Args, &mut F>(f, args, output),
+     ensures
+-        call_ensures::<Args, F>(mut_ref_current(f), args, output),
++        call_ensures_unsized::<Args, F>(&*old(f), args, output),
+ ;
+ 
+ pub broadcast axiom fn axiom_fn_mut_call_opens_invariants<
+     Args: core::marker::Tuple,
+-    F: FnMut<Args>,
++    F: ?Sized + FnMut<Args>,
+     I,
+ >(f: &mut F, args: Args)
+     ensures
+-        #[trigger] call_opens_invariants::<Args, &mut F, I>(f, args) == call_opens_invariants::<
++        #[trigger] call_opens_invariants::<Args, &mut F, I>(f, args) == call_opens_invariants_unsized::<
+             Args,
+             F,
+             I,
+-        >(mut_ref_current(f), args),
++        >(&*old(f), args),
+ ;
+ 
+ pub broadcast group group_function_axioms {

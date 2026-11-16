@@ -1,0 +1,60 @@
+--- a/source/rust_verify/src/rust_to_vir_expr.rs
++++ b/source/rust_verify/src/rust_to_vir_expr.rs
+@@ -4581,7 +4581,8 @@
+             } else {
+                 let item = bctx.ctxt.tcx.hir_item(*item_id);
+                 match &item.kind {
+-                    ItemKind::Use(..) | ItemKind::Macro(..) => {
++                    // Crate aliases only affect Rust name resolution, like use items.
++                    ItemKind::Use(..) | ItemKind::ExternCrate(..) | ItemKind::Macro(..) => {
+                         return Ok(vec![]);
+                     }
+                     // Ghost code is erased for compilation, but an impl there can still change
+--- /dev/null
++++ b/source/rust_verify_test/tests/nested_extern_crate.rs
+@@ -0,0 +1,45 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] nested_extern_crate_in_exec
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        fn alias() -> (out: u8)
++            ensures out == 7,
++        {
++            extern crate core as local_core;
++            let value: local_core::primitive::u8 = 7;
++            value
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] nested_extern_crate_in_proof
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        proof fn alias() {
++            extern crate core as local_core;
++            let value: local_core::primitive::u8 = 7;
++            assert(value == 7);
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] nested_extern_crate_keeps_inner_checks
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        use vstd::prelude::*;
++        const _: () = {
++            extern crate core as local_core;
++            verus! {
++                fn invalid() -> (out: local_core::primitive::u8)
++                    ensures out == 7, // FAILS
++                {
++                    8 // FAILS
++                }
++            }
++        };
++    } => Err(err) => assert_one_fails(err)
++}

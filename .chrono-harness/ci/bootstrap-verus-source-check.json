@@ -1,0 +1,33 @@
+{
+  "schema": "chrono-bootstrap/v1",
+  "projects": ".chrono-harness/projects.json",
+  "rust_toolchain": "1.99.1",
+  "tools": {},
+  "operations": [
+    "investigate.verus-source.dependencies",
+    "investigate.verus-source.execution"
+  ],
+  "install": [],
+  "participation": {
+    "coordinator_root": "git-main-worktree",
+    "program": ".chrono-harness/bin/chrono-worktree",
+    "git": "/usr/bin/git",
+    "config": ".chrono-harness/worktree.json"
+  },
+  "entrypoint": {
+    "tool": "bash",
+    "script": ".chrono-harness/ci/bootstrap-native.sh"
+  },
+  "require_tool_bindings": true,
+  "tool_bindings_registry": ".chrono-harness/ci/verus-source-toolchains.json",
+  "report_path": ".chrono-harness/state/verus-source-check.json",
+  "rust_incremental": true,
+  "environment": {
+    "RUSTC_BOOTSTRAP": "1",
+    "VERUS_Z3_PATH": ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source/z3"
+  },
+  "host_environment": {
+    "CARGO_HOME": ".chrono-harness/cache/bootstrap-owner-tooling/cargo",
+    "TMPDIR": ".chrono-harness/cache/bootstrap-owner-tooling/tmp"
+  }
+}

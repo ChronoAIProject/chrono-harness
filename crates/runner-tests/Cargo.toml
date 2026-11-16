@@ -49,6 +49,10 @@ path = "tests/git_inputs.rs"
 name = "verified_git_binding"
 path = "tests/verified_git_binding.rs"
 
+[[test]]
+name = "json_adapters"
+path = "tests/json_adapters.rs"
+
 # Compile the real runner with its registered development optimization.
 # Finite retention rounds exercise snapshot work; debug assertions remain enabled.
 [profile.dev]

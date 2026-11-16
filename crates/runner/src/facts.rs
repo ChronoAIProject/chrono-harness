@@ -1,11 +1,11 @@
 //! Immutable Git facts. Admissibility belongs to the consuming judge.
 pub use crate::facts_binding::{
     OpenFailure, Reader, RegistryBlob, acquire_immutable_input, acquire_registry_blobs,
-    declaration as git_declaration,
+    declaration as git_declaration, source_continuity,
 };
 pub use crate::facts_configs::Identity as ConfigIdentity;
 pub use crate::verified_identifiers::full_oid;
-pub use crate::verified_status::{Tree, TreeEntry as Entry, TreePath};
+pub use crate::verified_status::{Tree, TreeEntry as Entry, TreePath, select_fixed_source_read};
 use crate::{
     json, no_symlink_parents, relative_path,
     wire::{Checkout, Delta, IndexFlag},
@@ -136,12 +136,6 @@ pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistryS
 /// Assemble one fixed registry snapshot through the caller's blob reader.
 /// The caller binds acquisition to its immutable endpoint and retains any
 /// process observations; this helper performs no disk or Git acquisition.
-pub fn registry_snapshot_with(
-    path: &str,
-    read: impl FnMut(&str) -> Result<Vec<u8>, String>,
-) -> Result<RegistrySnapshot, String> {
-    registry_snapshot_with_target(path, None, read)
-}
 fn registry_snapshot_with_target<F>(
     path: &str,
     target: Option<crate::facts_configs::RegistryTarget<'_>>,
@@ -283,6 +277,24 @@ impl Reader {
     pub fn blob(&self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
         relative_path(path)?;
         self.blob_with_reuse(root, oid, path)
+    }
+    /// 只读取显式输入。固定、已绑定端点复用原批量获取及回执；其他端点沿原逐项读取。
+    pub fn blobs(&self, root: &Path, oid: &str, paths: &[String]) -> Result<Vec<Vec<u8>>, String> {
+        select_fixed_source_read(
+            self.can_reuse_oid(oid),
+            (self, root, oid, paths),
+            |(reader, root, oid, paths)| {
+                paths
+                    .iter()
+                    .map(|path| reader.blob(root, oid, path))
+                    .collect()
+            },
+            |(reader, root, oid, paths)| {
+                reader
+                    .immutable_blobs(root, oid, paths)
+                    .map(|rows| rows.into_iter().map(|(_, bytes)| bytes).collect())
+            },
+        )
     }
     pub fn parents(&self, root: &Path, oid: &str) -> Result<Vec<String>, String> {
         full_oid(oid)?;

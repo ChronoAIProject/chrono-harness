@@ -232,6 +232,224 @@ fn policy_migration_requires_each_endpoints_own_committed_inputs() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn explicit_cleanup_adoption_keeps_target_source_and_uses_fixed_policy_until_migration() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    edit(&h.root, CLEANUP, |v| {
+        v["artifacts"][0]["disposition"] = value!("retain");
+    });
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("old-policy");
+    let (code, report, error) = h.invoke("integration", "old-policy", &target);
+    assert_eq!(code, 0, "{report} {error}");
+    let original = h.ledger()["entries"][0].clone();
+    let head = git(&target, &["rev-parse", "HEAD"]);
+    let policy_bytes = fs::read(target.join(CLEANUP)).unwrap();
+    assert_eq!(
+        json(&policy_bytes).unwrap()["artifacts"][0]["disposition"],
+        "retain"
+    );
+    let source_bytes = fs::read(target.join("payload")).unwrap();
+    cache(&target);
+    edit(&h.root, CLEANUP, |v| {
+        v["artifacts"][0]["disposition"] = value!("dispose");
+    });
+    commit(&h.root);
+    let source_head = git(&h.root, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        migrate(&h, &target)["policy_migration"]["status"],
+        "already-current"
+    );
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(target.join("output λ/cache").exists());
+    let (code, adopted, error) = h.auto(
+        "migrate",
+        &["--path", target.to_str().unwrap(), "--adopt-cleanup-policy"],
+    );
+    assert_eq!(code, 0, "{adopted} {error}");
+    assert_eq!(adopted["policy_migration"]["status"], "adopted");
+    assert_eq!(adopted["policy_migration"]["disposal"], "not-performed");
+    assert!(target.join("output λ/cache").exists());
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["enrollment"], original["enrollment"]);
+    assert_eq!(entry["policy_sha256"], original["policy_sha256"]);
+    assert_eq!(entry["status"], "active");
+    assert!(entry["terminal"].is_null());
+    let receipt = &adopted["policy_migration"]["receipt"];
+    let record = json(&fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap()).unwrap();
+    assert_eq!(record["next"]["head"], head.trim());
+    assert_eq!(record["next"]["policy_source"]["head"], source_head.trim());
+    let (code, repeated, error) = h.auto(
+        "migrate",
+        &["--path", target.to_str().unwrap(), "--adopt-cleanup-policy"],
+    );
+    assert_eq!(code, 0, "{repeated} {error}");
+    assert_eq!(repeated["policy_migration"]["status"], "already-current");
+    assert_eq!(h.ledger()["entries"][0], entry);
+    // Later caller policy changes cannot reinterpret the already adopted fixed source.
+    edit(&h.root, CLEANUP, |v| {
+        v["artifacts"][0]["disposition"] = value!("retain");
+    });
+    commit(&h.root);
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(!target.join("output λ").exists());
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+    assert_eq!(fs::read(target.join(CLEANUP)).unwrap(), policy_bytes);
+    assert_eq!(fs::read(target.join("payload")).unwrap(), source_bytes);
+    // The existing explicit migration can return responsibility to target policy.
+    assert_eq!(
+        migrate(&h, &target)["policy_migration"]["status"],
+        "adopted"
+    );
+    cache(&target);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(target.join("output λ/cache").exists());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn explicit_cleanup_adoption_rejects_live_use_and_target_undeclared_outputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let (h, target) = fixture();
+    advance(&h);
+    cache(&target);
+    let original = h.ledger()["entries"][0].clone();
+    let held =
+        fs::File::open(h.root.join(original["ownership"]["path"].as_str().unwrap())).unwrap();
+    held.lock_shared().unwrap();
+    let (code, report, error) = h.auto(
+        "migrate",
+        &["--path", target.to_str().unwrap(), "--adopt-cleanup-policy"],
+    );
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(report.to_string().contains("live registered consumers"));
+    assert_eq!(h.ledger()["entries"][0], original);
+    drop(held);
+    edit(&h.root, CONFIG, |v| {
+        v["artifacts"].as_array_mut().unwrap().push(
+            value!({"path":"new/output/","owner":"host","kind":"declared-output","tracked":false}),
+        );
+    });
+    edit(&h.root, CLEANUP, |v| {
+        v["artifacts"]
+            .as_array_mut()
+            .unwrap()
+            .push(value!({"path":"new/output/","disposition":"dispose"}));
+    });
+    commit(&h.root);
+    let (code, report, error) = h.auto(
+        "migrate",
+        &["--path", target.to_str().unwrap(), "--adopt-cleanup-policy"],
+    );
+    assert_ne!(code, 0, "{report} {error}");
+    assert_eq!(h.ledger()["entries"][0], original);
+    assert!(target.join("output λ/cache").exists());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn explicit_cleanup_adoption_preserves_changed_inputs_and_corrupt_source_evidence() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let (h, target) = fixture();
+    advance(&h);
+    cache(&target);
+    let before = h.ledger()["entries"][0].clone();
+    let bytes = fs::read(target.join(CLEANUP)).unwrap();
+    fs::write(target.join(CLEANUP), [bytes.as_slice(), b"\n"].concat()).unwrap();
+    assert_ne!(
+        h.auto(
+            "migrate",
+            &["--path", target.to_str().unwrap(), "--adopt-cleanup-policy",]
+        )
+        .0,
+        0
+    );
+    assert_eq!(h.ledger()["entries"][0], before);
+    fs::write(target.join(CLEANUP), bytes).unwrap();
+    let (code, adopted, error) = h.auto(
+        "migrate",
+        &["--path", target.to_str().unwrap(), "--adopt-cleanup-policy"],
+    );
+    assert_eq!(code, 0, "{adopted} {error}");
+    let record = json(
+        &fs::read(
+            h.root.join(
+                adopted["policy_migration"]["receipt"]["path"]
+                    .as_str()
+                    .unwrap(),
+            ),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let source = record["migration_inputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["phase"] == "next-policy-source" && row["path"] == CLEANUP)
+        .unwrap();
+    let original = h.root.join(source["input"]["path"].as_str().unwrap());
+    fs::write(original, b"changed retained source bytes").unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(target.join("output λ/cache").exists());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn explicit_cleanup_adoption_keeps_terminal_original_until_new_responsibility_handoff() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let (h, target) = fixture();
+    let (code, report, error) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--artifacts-only"],
+    );
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    let original = h.ledger()["entries"][0].clone();
+    assert_eq!(original["status"], "retained");
+    let terminal = h
+        .root
+        .join(original["terminal"]["receipt"]["path"].as_str().unwrap());
+    let terminal_bytes = fs::read(&terminal).unwrap();
+    advance(&h);
+    cache(&target);
+    let (code, adopted, error) = h.auto(
+        "migrate",
+        &["--path", target.to_str().unwrap(), "--adopt-cleanup-policy"],
+    );
+    assert_eq!(code, 0, "{adopted} {error}");
+    assert_eq!(h.ledger()["entries"][0]["terminal"], original["terminal"]);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
+    assert!(target.join("output λ/cache").exists());
+    let (code, report, error) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--artifacts-only"],
+    );
+    assert_eq!(code, 0, "{report} {error}");
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(!target.join("output λ").exists());
+    assert_eq!(fs::read(terminal).unwrap(), terminal_bytes);
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["terminal_history"][0],
+        original["terminal"]["receipt"]
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn independent_worktree_policy_migrates_without_changing_coordinator_choices() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -925,9 +1143,12 @@ fn checkout_migration_preserves_quiescent_cleanup_observations_and_cache_history
             }
         );
         assert_eq!(original["status"], "active");
-        let report = h
-            .root
-            .join(original["cleanup"]["report_path"].as_str().unwrap());
+        assert_eq!(original["cleanup"]["report_path"].is_null(), busy);
+        let report = h.root.join(if busy {
+            maintained["report_path"].as_str().unwrap()
+        } else {
+            original["cleanup"]["report_path"].as_str().unwrap()
+        });
         let report_bytes = fs::read(&report).unwrap();
         let cache_exists = target.join("output λ/cache").exists();
         assert_eq!(cache_exists, busy);

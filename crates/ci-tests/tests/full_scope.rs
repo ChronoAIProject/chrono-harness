@@ -261,7 +261,39 @@ fn independent_sources_regenerate_only_their_owned_projection_and_keep_customiza
     );
     assert!(!generate(root, collect_source, true).unwrap());
     assert!(!root.join(".chrono-harness/ci/full.json").exists());
-    assert!(!root.join(".chrono-harness/state").exists());
+    let operations = fs::read_dir(root.join(".chrono-harness/state/ci-generation-operations"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    // Four CLI calls and three API calls each retain their own original result.
+    assert_eq!(operations.len(), 7);
+    let mut sources = [0, 0];
+    let mut changed = 0;
+    let mut unchanged = 0;
+    let mut failed = 0;
+    for operation in operations {
+        let intent: Value =
+            serde_json::from_slice(&fs::read(operation.join("intent.json")).unwrap()).unwrap();
+        match intent["config"].as_str().unwrap() {
+            source if source == unit_source => sources[0] += 1,
+            source if source == collect_source => sources[1] += 1,
+            source => panic!("unexpected generation source: {source}"),
+        }
+        let path = operation.strip_prefix(root).unwrap().to_str().unwrap();
+        let report = chrono_ci::generation::status(root, path).unwrap();
+        assert_eq!(report["completion"], "confirmed-evaluation");
+        let result = &report["original_result"]["producer_evaluation"];
+        if let Some(error) = result["error"].as_str() {
+            assert!(error.contains("drift"), "{report}");
+            failed += 1;
+        } else if result["changed"].as_bool().unwrap() {
+            changed += 1;
+        } else {
+            unchanged += 1;
+        }
+    }
+    assert_eq!(sources, [4, 3]);
+    assert_eq!((changed, unchanged, failed), (3, 3, 1));
     let expected = fs::read(root.join(&unit.workflow_path)).unwrap();
     fs::write(
         root.join(&unit.workflow_path),

@@ -1,0 +1,313 @@
+diff --git a/source/rust_verify/src/rust_to_vir_expr.rs b/source/rust_verify/src/rust_to_vir_expr.rs
+index 3a7bca9..a52ec9d 100644
+--- a/source/rust_verify/src/rust_to_vir_expr.rs
++++ b/source/rust_verify/src/rust_to_vir_expr.rs
+@@ -633,7 +633,11 @@ pub(crate) fn patexpr_to_vir<'tcx>(
+     let tcx = bctx.ctxt.tcx;
+     match pat_expr.kind {
+         PatExprKind::Lit { lit, negated } => {
+-            patexpr_unsupported_type_err(bctx, span, pat)?;
++            // Literal strings are matched by their complete contents, not SMT reference equality.
++            // The pattern lowering uses the existing string and slice length/index operations.
++            if !matches!(lit.node, LitKind::Str(..) | LitKind::ByteStr(..)) {
++                patexpr_unsupported_type_err(bctx, span, pat)?;
++            }
+             Ok(PatternX::Expr(lit_to_vir(bctx, span, lit, negated, pat_typ, None)?))
+         }
+         PatExprKind::Path(qpath) => {
+diff --git a/source/vir/src/patterns.rs b/source/vir/src/patterns.rs
+index 44cb4e7..9dcebc2 100644
+--- a/source/vir/src/patterns.rs
++++ b/source/vir/src/patterns.rs
+@@ -185,7 +185,55 @@ fn pattern_to_exprs_rec(
+         }
+         PatternX::Expr(e) => {
+             let expr = read_place(&place);
+-            Ok(mk_eq(&pattern.span, &expr, e))
++            match &e.x {
++                ExprX::Const(Constant::StrSlice(lit)) => {
++                    let actual_len = SpannedTyped::new(
++                        &pattern.span,
++                        &int_typ(),
++                        ExprX::Unary(UnaryOp::StrLen, expr.clone()),
++                    );
++                    let expected_len = mk_int_lit_from_usize(&pattern.span, lit.chars().count());
++                    let mut conjuncts = vec![mk_eq(&pattern.span, &actual_len, &expected_len)];
++                    let char_typ = Arc::new(TypX::Int(IntRange::Char));
++                    for (i, c) in lit.chars().enumerate() {
++                        let idx = mk_int_lit_from_usize(&pattern.span, i);
++                        let actual = SpannedTyped::new(
++                            &pattern.span,
++                            &char_typ,
++                            ExprX::Binary(BinaryOp::StrGetChar, expr.clone(), idx),
++                        );
++                        let expected = SpannedTyped::new(
++                            &pattern.span,
++                            &char_typ,
++                            ExprX::Const(Constant::Char(c)),
++                        );
++                        conjuncts.push(mk_eq(&pattern.span, &actual, &expected));
++                    }
++                    Ok(conjoin(&pattern.span, &conjuncts))
++                }
++                ExprX::Const(Constant::ByteStr(lit)) => {
++                    // Reuse ordinary slice/array pattern lowering, including its exact length test.
++                    let (_, elem_typ) = array_kind_of_typ(&pattern.typ);
++                    let pats = lit
++                        .iter()
++                        .map(|b| {
++                            let e = SpannedTyped::new(
++                                &pattern.span,
++                                &elem_typ,
++                                ExprX::Const(Constant::Int((*b).into())),
++                            );
++                            SpannedTyped::new(&pattern.span, &elem_typ, PatternX::Expr(e))
++                        })
++                        .collect();
++                    let expanded = SpannedTyped::new(
++                        &pattern.span,
++                        &pattern.typ,
++                        PatternX::Slice(Arc::new(pats)),
++                    );
++                    pattern_to_exprs_rec(ctx, &expanded, place, bindings, in_immut)
++                }
++                _ => Ok(mk_eq(&pattern.span, &expr, e)),
++            }
+         }
+         PatternX::Range(lower, upper) => {
+             let expr = read_place(&place);
+diff --git a/source/vir/src/prune.rs b/source/vir/src/prune.rs
+index 70addaa..56f7c88 100644
+--- a/source/vir/src/prune.rs
++++ b/source/vir/src/prune.rs
+@@ -641,6 +641,15 @@ fn traverse_reachable(ctxt: &Ctxt, state: &mut State) {
+             };
+             let fp = |state: &mut State, _: &mut VisitorScopeMap, pat: &Pattern| {
+                 match &pat.x {
++                    PatternX::Expr(expr)
++                        if matches!(&expr.x, ExprX::Const(crate::ast::Constant::ByteStr(_))) =>
++                    {
++                        // Literal patterns become length/index tests after this first pruning pass.
++                        if array_kind_of_typ(&pat.typ).0 == ArrayKind::Slice {
++                            reach_function(ctxt, state, &fn_slice_index());
++                            reach_function(ctxt, state, &fn_slice_len());
++                        }
++                    }
+                     PatternX::Slice(..) => match array_kind_of_typ(&pat.typ).0 {
+                         ArrayKind::Array => {
+                             reach_function(ctxt, state, &fn_array_update());
+diff --git a/source/rust_verify_test/tests/literal_patterns.rs b/source/rust_verify_test/tests/literal_patterns.rs
+new file mode 100644
+index 0000000..2475e0c
+--- /dev/null
++++ b/source/rust_verify_test/tests/literal_patterns.rs
+@@ -0,0 +1,209 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] string_literal_patterns_preserve_complete_contents
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        broadcast use vstd::string::group_string_axioms;
++
++        fn classify(s: &str) -> (r: u8)
++            ensures
++                (r == 0) <==> s@ == seq![],
++                (r == 1) <==> s@ == seq!['u', 'n', 'i', 't'],
++                (r == 2) <==> s@ == seq!['λ', '\0', '中'],
++                r <= 3,
++        {
++            let r = match s {
++                "" => 0,
++                "unit" => 1,
++                "λ\0中" => 2,
++                _ => 3,
++            };
++            proof {
++                if r == 0 { assert(s@ =~= seq![]); }
++                if r == 1 { assert(s@ =~= seq!['u', 'n', 'i', 't']); }
++                if r == 2 { assert(s@ =~= seq!['λ', '\0', '中']); }
++            }
++            r
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] string_literal_pattern_rejects_wrong_content
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        broadcast use vstd::string::group_string_axioms;
++
++        fn wrong(s: &str) {
++            match s {
++                "unit" => {
++                    assert(s@[3] == 'x'); // FAILS
++                }
++                _ => {},
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] empty_string_pattern_rejects_nonempty_claim
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        broadcast use vstd::string::group_string_axioms;
++
++        fn wrong(s: &str) {
++            match s {
++                "" => {
++                    assert(s@.len() > 0); // FAILS
++                }
++                _ => {},
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] byte_slice_literal_patterns_preserve_complete_contents
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn classify(s: &[u8]) -> (r: u8)
++            ensures
++                (r == 0) <==> s@ == seq![],
++                (r == 1) <==> s@ == seq![117u8, 110u8, 105u8, 116u8],
++                (r == 2) <==> s@ == seq![0u8, 255u8],
++                r <= 3,
++        {
++            let r = match s {
++                b"" => 0,
++                b"unit" => 1,
++                b"\0\xff" => 2,
++                _ => 3,
++            };
++            proof {
++                if r == 0 { assert(s@ =~= seq![]); }
++                if r == 1 { assert(s@ =~= seq![117u8, 110u8, 105u8, 116u8]); }
++                if r == 2 { assert(s@ =~= seq![0u8, 255u8]); }
++            }
++            r
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] byte_array_literal_patterns_preserve_complete_contents
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn classify(s: &[u8; 2]) -> (r: bool)
++            ensures r <==> s@ == seq![0u8, 255u8],
++        {
++            let r = match s {
++                b"\0\xff" => true,
++                _ => false,
++            };
++            proof {
++                if r { assert(s@ =~= seq![0u8, 255u8]); }
++            }
++            r
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] byte_literal_pattern_rejects_wrong_content
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong(s: &[u8]) {
++            match s {
++                b"\0\xff" => {
++                    assert(s@[1] == 0u8); // FAILS
++                }
++                _ => {},
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] nested_literals_keep_or_patterns_and_guards
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        broadcast use vstd::string::group_string_axioms;
++
++        fn nested_or(s: Option<&str>) -> (r: bool)
++            ensures
++                r ==> (s is Some
++                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])),
++                (s is Some
++                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])) ==> r,
++        {
++            proof {
++                if s is Some {
++                    vstd::string::axiom_str_literal_len(s->Some_0);
++                    vstd::string::axiom_str_literal_get_char(s->Some_0, 0);
++                }
++            }
++            let r = match s {
++                Some("a" | "b") => true,
++                _ => false,
++            };
++            proof {
++                if r {
++                    assert(s is Some);
++                    if s->Some_0@[0] == 'a' {
++                        assert(s->Some_0@ =~= seq!['a']);
++                    } else {
++                        assert(s->Some_0@ =~= seq!['b']);
++                    }
++                }
++            }
++            r
++        }
++
++        fn nested_guard(s: Option<&str>, enabled: bool) -> (r: bool)
++            ensures
++                r ==> (enabled && s is Some
++                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])),
++                (enabled && s is Some
++                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])) ==> r,
++        {
++            proof {
++                if s is Some {
++                    vstd::string::axiom_str_literal_len(s->Some_0);
++                    vstd::string::axiom_str_literal_get_char(s->Some_0, 0);
++                }
++            }
++            let r = match s {
++                Some("a") if enabled => true,
++                Some("b") if enabled => true,
++                _ => false,
++            };
++            proof {
++                if r {
++                    assert(s is Some);
++                    if s->Some_0@[0] == 'a' {
++                        assert(s->Some_0@ =~= seq!['a']);
++                    } else {
++                        assert(s->Some_0@ =~= seq!['b']);
++                    }
++                }
++            }
++            r
++        }
++    } => Ok(())
++}

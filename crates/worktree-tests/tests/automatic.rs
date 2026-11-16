@@ -17,6 +17,26 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn imported_policy_source_preserves_explicit_field_and_only_uses_absent_field_source() {
+    let policy = "policy";
+    let source = "source";
+    require_selected_source(absence_policy::imported_policy_source_commit(true, Some(policy), Some(source)), policy);
+    require_selected_source(absence_policy::imported_policy_source_commit(true, Some(policy), None), policy);
+    require_absence_expectation(absence_policy::imported_policy_source_commit(true, None, Some(source)).is_none());
+    require_selected_source(absence_policy::imported_policy_source_commit(false, None, Some(source)), source);
+    require_absence_expectation(absence_policy::imported_policy_source_commit(false, None, None).is_none());
+}
+
+fn require_selected_source(actual: Option<&str>, expected: &str)
+    requires match actual { Some(actual) => actual@ == expected@, None => false },
+{
+    match actual {
+        Some(actual) => require_absence_expectation(absence_identifiers::equal_text(actual, expected)),
+        None => require_absence_expectation(false),
+    }
+}
+
 fn require_capacity_fixture_exit(code: i32)
     requires code == 0,
     ensures code == 0,
@@ -28,6 +48,168 @@ fn require_absence_expectation(actual: bool)
     requires actual,
 {
     if !actual { panic!(); }
+}
+
+fn handoff_trace_step(trace: Vec<u8>, stage: u8, result: Result<(), String>)
+    -> (out: (Vec<u8>, Result<(), String>))
+    ensures out.0@ == trace@.push(stage), out.1 == result,
+{
+    let mut trace = trace;
+    trace.push(stage);
+    (trace, result)
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn ordinary_admission_selects_only_complete_registered_operation_names() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("use"); reveal_strlit("check"); reveal_strlit("bootstrap");
+        reveal_strlit("status"); reveal_strlit("maintain"); reveal_strlit("migrate");
+        reveal_strlit("deploy-owner"); reveal_strlit("import");
+        reveal_strlit(""); reveal_strlit("use\0");
+        assert("use"@.len() == 3);
+        assert("check"@.len() == 5);
+        assert("bootstrap"@.len() == 9);
+        assert("status"@.len() == 6);
+        assert("maintain"@.len() == 8);
+        assert("migrate"@.len() == 7);
+        assert("deploy-owner"@.len() == 12);
+        assert("import"@.len() == 6);
+        assert(""@.len() == 0);
+        assert("use\0"@.len() == 4);
+    }
+    require_absence_expectation(absence_policy::ordinary_admission("use"));
+    require_absence_expectation(absence_policy::ordinary_admission("check"));
+    require_absence_expectation(absence_policy::ordinary_admission("bootstrap"));
+    require_absence_expectation(!absence_policy::ordinary_admission("status"));
+    require_absence_expectation(!absence_policy::ordinary_admission("maintain"));
+    require_absence_expectation(!absence_policy::ordinary_admission("migrate"));
+    require_absence_expectation(!absence_policy::ordinary_admission("deploy-owner"));
+    require_absence_expectation(!absence_policy::ordinary_admission("import"));
+    require_absence_expectation(!absence_policy::ordinary_admission(""));
+    require_absence_expectation(!absence_policy::ordinary_admission("use\0"));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn admission_handoff_orders_recovery_and_preserves_full_errors() {
+    broadcast use vstd::array::group_array_axioms;
+    let handoff_ok = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(1), out.1 == Ok::<(), String>(()),
+        { handoff_trace_step(trace, 1, Ok(())) };
+    let handoff_error = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(1),
+            match out.1 { Err(error) => error@ == "原交接错误\0完整"@, Ok(()) => false },
+        { handoff_trace_step(trace, 1, Err("原交接错误\0完整".to_string())) };
+    let reload_ok = |trace: Vec<u8>, _error: String| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(2), out.1 == Ok::<(), String>(()),
+        { handoff_trace_step(trace, 2, Ok(())) };
+    let reload_error = |trace: Vec<u8>, error: String| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(2), out.1 == Err::<(), String>(error),
+        { handoff_trace_step(trace, 2, Err(error)) };
+    let protect_ok = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(3), out.1 == Ok::<(), String>(()),
+        { handoff_trace_step(trace, 3, Ok(())) };
+    let protect_error = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(3),
+            match out.1 { Err(error) => error@ == "必要保护失败\0完整"@, Ok(()) => false },
+        { handoff_trace_step(trace, 3, Err("必要保护失败\0完整".to_string())) };
+    let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
+        handoff_ok, reload_error, protect_ok);
+    assert(trace@ =~= seq![1u8, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 3]));
+    require_absence_expectation(result.is_ok());
+
+    let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
+        handoff_error, reload_ok, protect_ok);
+    assert(trace@ =~= seq![1u8, 2, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 2, 3]));
+    require_absence_expectation(result.is_ok());
+
+    let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
+        handoff_error, reload_error, protect_ok);
+    assert(trace@ =~= seq![1u8, 2]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 2]));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "原交接错误\0完整")),
+        Ok(()) => require_absence_expectation(false),
+    }
+
+    let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
+        handoff_ok, reload_ok, protect_error);
+    assert(trace@ =~= seq![1u8, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 3]));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "必要保护失败\0完整")),
+        Ok(()) => require_absence_expectation(false),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn enrollment_publication_skips_only_the_shrinking_preparation_and_stops_on_first_error() {
+    broadcast use vstd::array::group_array_axioms;
+    let before_ok = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(1), out.1 == Ok::<(), String>(()),
+        { handoff_trace_step(trace, 1, Ok(())) };
+    let before_error = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(1),
+            match out.1 { Err(error) => error@ == "新增引用保护失败\0原件"@, Ok(()) => false },
+        { handoff_trace_step(trace, 1, Err("新增引用保护失败\0原件".to_string())) };
+    let forbidden = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(1),
+            match out.1 { Err(error) => error@ == "不得执行"@, Ok(()) => false },
+        { handoff_trace_step(trace, 1, Err("不得执行".to_string())) };
+    let write_ok = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(2), out.1 == Ok::<(), String>(()),
+        { handoff_trace_step(trace, 2, Ok(())) };
+    let write_error = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(2),
+            match out.1 { Err(error) => error@ == "账本写入失败\0原件"@, Ok(()) => false },
+        { handoff_trace_step(trace, 2, Err("账本写入失败\0原件".to_string())) };
+    let after_ok = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(3), out.1 == Ok::<(), String>(()),
+        { handoff_trace_step(trace, 3, Ok(())) };
+    let after_error = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(3),
+            match out.1 { Err(error) => error@ == "引用收窄失败\0原件"@, Ok(()) => false },
+        { handoff_trace_step(trace, 3, Err("引用收窄失败\0原件".to_string())) };
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), true,
+        before_ok, write_ok, after_ok);
+    assert(trace@ =~= seq![1u8, 2, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[1u8, 2, 3]));
+    require_absence_expectation(result.is_ok());
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
+        forbidden, write_ok, after_ok);
+    assert(trace@ =~= seq![2u8, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[2u8, 3]));
+    require_absence_expectation(result.is_ok());
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), true,
+        before_error, write_ok, after_ok);
+    assert(trace@ =~= seq![1u8]);
+    let expected = [1u8];
+    assert(expected@ =~= seq![1u8]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &expected));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "新增引用保护失败\0原件")),
+        Ok(()) => require_absence_expectation(false),
+    }
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
+        before_ok, write_error, after_ok);
+    assert(trace@ =~= seq![2u8]);
+    let expected = [2u8];
+    assert(expected@ =~= seq![2u8]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &expected));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "账本写入失败\0原件")),
+        Ok(()) => require_absence_expectation(false),
+    }
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
+        before_ok, write_ok, after_error);
+    assert(trace@ =~= seq![2u8, 3]);
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &[2u8, 3]));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "引用收窄失败\0原件")),
+        Ok(()) => require_absence_expectation(false),
+    }
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -272,10 +454,10 @@ impl EnrollmentOriginalsFixture {
             }
             retained.insert(POLICY.into(), config_bytes.clone());
             retained.insert(AUTO_POLICY.into(), policy_bytes.clone());
-            if fault == "config-bytes" {
+            if matches!(fault, "config-bytes" | "source-only-config-bytes") {
                 retained.insert(POLICY.into(), format!("{config_bytes}\n"));
             }
-            if fault == "policy-bytes" {
+            if matches!(fault, "policy-bytes" | "source-only-policy-bytes") {
                 retained.insert(AUTO_POLICY.into(), format!("{policy_bytes}\n"));
             }
             if fault == "registration" {
@@ -308,12 +490,34 @@ impl EnrollmentOriginalsFixture {
             .unwrap();
             let mut report = value!({
                 "schema":"chrono-worktree-report/v1","operation":"import","status":"imported",
-                "source_root":root,"policy_source_root":root,"policy_source_commit":source,
+                "source_root":root,"source_commit":source,"policy_source_root":root,"policy_source_commit":source,
                 "report_path":original,"config_path":POLICY,
                 "config_sha256":sha256(config_bytes.as_bytes())
             });
             match fault {
+                "explicit-policy-source" => report["source_commit"] = value!("b".repeat(64)),
+                "source-only" | "source-only-config-bytes" | "source-only-policy-bytes" => {
+                    report
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("policy_source_commit");
+                }
+                "null-policy-source" => report["policy_source_commit"] = value!(null),
+                "invalid-policy-source" => report["policy_source_commit"] = value!(17),
+                "short-policy-source" => report["policy_source_commit"] = value!("not-an-oid"),
+                "source-only-null" | "source-only-invalid" | "source-only-short" => {
+                    report
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("policy_source_commit");
+                    report["source_commit"] = match fault {
+                        "source-only-null" => value!(null),
+                        "source-only-invalid" => value!(17),
+                        _ => value!("not-an-oid"),
+                    };
+                }
                 "missing-source" => {
+                    report.as_object_mut().unwrap().remove("source_commit");
                     report
                         .as_object_mut()
                         .unwrap()
@@ -419,6 +623,254 @@ impl EnrollmentOriginalsFixture {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn ordinary_handoff_keeps_each_sealed_reports_inputs_out_of_the_callers_relation_budget() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = EnrollmentOriginalsFixture::imported();
+    // Ordinary use admits an existing path before opening its enrollment.
+    // Keep the checkout unqualified so only predecessor recovery can succeed.
+    fs::create_dir(&h.target).unwrap();
+    let policy_path = h.root.join(POLICY_PATH);
+    let previous_policy = fs::read(&policy_path).unwrap();
+    let mut policy = json(&previous_policy).unwrap();
+    policy["max_related_outputs"] = value!(8);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory.migrate_policy(&previous_policy, None).unwrap();
+    let role = format!(
+        "worktree-enrollment:{}",
+        sha256(h.target.to_str().unwrap().as_bytes())
+    );
+    let mut receipts = Vec::new();
+    let mut reports = Vec::new();
+    let mut originals = Vec::new();
+    for index in 0..6 {
+        let path = format!(".chrono-harness/state/ordinary-pending-{index}.json");
+        let report_path = format!(".chrono-harness/state/ordinary-final-{index}.json");
+        let bytes = serde_json::to_vec(&value!({
+            "schema":"chrono-worktree-managed-use-result/v1","report_path":report_path
+        }))
+        .unwrap();
+        let receipt = value!({"path":path,"sha256":sha256(&bytes)});
+        let report_bytes = serde_json::to_vec(&value!({
+            "schema":"chrono-worktree-report/v1","report_path":report_path,
+            "status":"used","managed_use_receipt":receipt
+        }))
+        .unwrap();
+        for (path, bytes) in [(&path, bytes), (&report_path, report_bytes)] {
+            fs::write(h.root.join(path), &bytes).unwrap();
+            Inventory::adopted(&h.root)
+                .unwrap()
+                .unwrap()
+                .begin("lifecycle-original", path, value!(null))
+                .unwrap()
+                .complete_sealed(value!({"status":"used"}))
+                .unwrap();
+            originals.push((path.clone(), bytes));
+        }
+        receipts.push(receipt);
+        reports.push(report_path);
+    }
+    inventory
+        .reference_paths("actual-final-report-readers", &reports)
+        .unwrap();
+    let mut paths = vec![h.original.clone()];
+    paths.extend(receipts.iter().map(|r| r["path"].as_str().unwrap().into()));
+    inventory.reference_paths(&role, &paths).unwrap();
+    let ledger_path = h.record.join("ledger.json");
+    let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    ledger["entries"][0]["enrollment"]["completed_uses"] = value!(receipts);
+    fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
+    // The final report's reader and the pending domain role are independent.
+    // A partial report must keep its own receipt while sealed siblings settle.
+    fs::write(h.root.join(&reports[5]), b"{\"status\":").unwrap();
+    let invoke = || {
+        let output = chrono_worktree::run(&[
+            "use".into(),
+            "--host-root".into(),
+            h.root.to_str().unwrap().into(),
+            "--path".into(),
+            h.target.to_str().unwrap().into(),
+            "--operation".into(),
+            "not-a-registered-consumer".into(),
+        ]);
+        assert_ne!(
+            output.exit_code, 0,
+            "an unqualified checkout cannot execute unregistered work"
+        );
+        let report = json(output.stdout.as_bytes()).unwrap_or_else(|error| {
+            panic!("{error}: stdout={} stderr={}", output.stdout, output.stderr)
+        });
+        assert!(report["result_handoff_error"].is_null(), "{report}");
+        assert!(
+            !report
+                .to_string()
+                .contains("caller handoff dependency capacity")
+        );
+        report
+    };
+    let report = invoke();
+    let current = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    assert_eq!(
+        current["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipts[5]]),
+        "historical inputs belong to their sealed reports, not this caller: {report}"
+    );
+    assert_eq!(current["entries"][0]["status"], "active");
+    assert!(current["entries"][0]["terminal"].is_null());
+    assert_eq!(fs::read(h.root.join(&reports[5])).unwrap(), b"{\"status\":");
+    fs::write(h.root.join(&reports[5]), &originals[11].1).unwrap();
+    let report = invoke();
+    assert!(json(&fs::read(&ledger_path).unwrap()).unwrap()["entries"][0]
+        ["enrollment"]["completed_uses"].is_null(), "{report}");
+    inventory.maintain().unwrap();
+    for (path, bytes) in &originals {
+        assert_eq!(
+            fs::read(h.root.join(path)).unwrap(),
+            *bytes,
+            "actual report readers must retain the original bytes"
+        );
+    }
+    assert_eq!(
+        json(&fs::read(&policy_path).unwrap()).unwrap()["max_related_outputs"],
+        8
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn published_result_handoffs_recover_a_full_enrollment_without_raising_capacity() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = EnrollmentOriginalsFixture::imported();
+    let policy_path = h.root.join(POLICY_PATH);
+    let previous_policy = fs::read(&policy_path).unwrap();
+    let mut policy = json(&previous_policy).unwrap();
+    policy["max_related_outputs"] = value!(4);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory.migrate_policy(&previous_policy, None).unwrap();
+    let role = format!(
+        "worktree-enrollment:{}",
+        sha256(h.target.to_str().unwrap().as_bytes())
+    );
+    let mut receipts = Vec::new();
+    let mut parents = Vec::new();
+    let mut parent_bytes = Vec::new();
+    for n in 0..4 {
+        let path = format!(".chrono-harness/state/pending-use-{n}.json");
+        let parent = format!(".chrono-harness/state/final-use-{n}.json");
+        let raw = serde_json::to_vec(&value!({
+            "schema":"chrono-worktree-managed-use-result/v1","report_path":parent
+        }))
+        .unwrap();
+        let receipt = value!({"path":path,"sha256":sha256(&raw)});
+        fs::write(h.root.join(&path), raw).unwrap();
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .begin("lifecycle-original", &path, value!(null))
+            .unwrap()
+            .complete(value!({"status":"used"}))
+            .unwrap();
+        let raw = serde_json::to_vec(&value!({
+            "schema":"chrono-worktree-report/v1","report_path":parent,
+            "status":"used","managed_use_receipt":receipt
+        }))
+        .unwrap();
+        fs::write(h.root.join(&parent), &raw).unwrap();
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .begin("lifecycle-original", &parent, value!(null))
+            .unwrap()
+            .complete(value!({"status":"used"}))
+            .unwrap();
+        receipts.push(receipt);
+        parents.push(parent);
+        parent_bytes.push(raw);
+    }
+    inventory
+        .reference_paths("actual-final-report-reader", &parents)
+        .unwrap();
+    let mut old_paths = vec![h.original.clone()];
+    old_paths.extend(
+        receipts[..3]
+            .iter()
+            .map(|r| r["path"].as_str().unwrap().to_owned()),
+    );
+    inventory.reference_paths(&role, &old_paths).unwrap();
+    // A joined result was committed after the role reached its limit. The
+    // next invocation must accept sealed parents before protecting all paths.
+    let ledger_path = h.record.join("ledger.json");
+    let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    ledger["entries"][0]["enrollment"]["completed_uses"] = value!(receipts);
+    fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
+    // A partial parent remains pending even while the other handoffs settle.
+    fs::write(h.root.join(&parents[3]), b"{\"status\":").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let before = fs::read(&ledger_path).unwrap();
+        let old_role = fs::read(retention_state::role_path(&h.root, &role)).unwrap();
+        let permissions = fs::metadata(&h.record).unwrap().permissions();
+        fs::set_permissions(&h.record, fs::Permissions::from_mode(0o500)).unwrap();
+        let (_code, failed) = h.invoke("maintain", false);
+        fs::set_permissions(&h.record, permissions).unwrap();
+        assert!(failed.to_string().contains("Permission denied"), "{failed}");
+        assert_eq!(
+            fs::read(&ledger_path).unwrap(),
+            before,
+            "failed ledger publication must leave the original recovery inputs"
+        );
+        assert_eq!(
+            fs::read(retention_state::role_path(&h.root, &role)).unwrap(),
+            old_role,
+            "a failed handoff must not release the old role"
+        );
+    }
+    let (_code, maintained) = h.invoke("maintain", false);
+    let current = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    assert_eq!(
+        current["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipts[3]]),
+        "sealed report handoffs must not deadlock behind capacity: {maintained}"
+    );
+    let snapshot = retention_state::snapshot(&h.root);
+    assert_eq!(snapshot["roots"][&role].as_array().unwrap().len(), 2);
+    assert!(
+        !maintained
+            .to_string()
+            .contains("related retention graph capacity")
+    );
+    for receipt in &receipts {
+        assert!(
+            h.root.join(receipt["path"].as_str().unwrap()).exists(),
+            "actual report readers must keep their inputs"
+        );
+    }
+    let (_code, _) = h.invoke("maintain", false);
+    assert_eq!(
+        json(&fs::read(&ledger_path).unwrap()).unwrap()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipts[3]]),
+        "partial originals must survive retries"
+    );
+    fs::write(h.root.join(&parents[3]), &parent_bytes[3]).unwrap();
+    let (_code, maintained) = h.invoke("maintain", false);
+    assert!(json(&fs::read(&ledger_path).unwrap()).unwrap()["entries"][0]["enrollment"]["completed_uses"].is_null(),
+        "restored sealed parent must finish its own handoff: {maintained}");
+    assert_eq!(
+        json(&fs::read(&policy_path).unwrap()).unwrap()["max_related_outputs"],
+        4
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -455,6 +907,41 @@ fn present_import_restores_adopted_caller_policy_without_reinterpreting_target_i
         ("unsaved-source.rs", "unique source\n"),
     ] {
         assert_eq!(fs::read(h.target.join(path)).unwrap(), expected.as_bytes());
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn import_uses_original_fixed_caller_source_only_when_policy_field_is_absent() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for (present, fault) in [
+        (false, "source-only"),
+        (true, "source-only"),
+        (false, "explicit-policy-source"),
+        (true, "explicit-policy-source"),
+    ] {
+        let h = EnrollmentOriginalsFixture::build(Some(fault));
+        if present {
+            h.make_present();
+        }
+        let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+        let original = fs::read(h.root.join(&h.original)).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{report}");
+        assert_eq!(report["cleanup_failures"], value!([]), "{report}");
+        assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+        assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
+        assert_eq!(h.target.exists(), present);
+        if present {
+            assert_eq!(
+                fs::read(h.target.join("unsaved-source.rs")).unwrap(),
+                b"unique source\n"
+            );
+        } else {
+            assert_eq!(attention_row(&report, &h.target)["work_state"], "unknown");
+        }
     }
 }
 
@@ -533,6 +1020,14 @@ fn assert_import_recovery_rejects_faults(present: bool) {
     }
     for fault in [
         "missing-source",
+        "null-policy-source",
+        "invalid-policy-source",
+        "short-policy-source",
+        "source-only-null",
+        "source-only-invalid",
+        "source-only-short",
+        "source-only-config-bytes",
+        "source-only-policy-bytes",
         "schema",
         "operation",
         "status",
@@ -689,7 +1184,7 @@ fn absent_adoption_rejects_invalid_addresses_and_original_drift() {
         let h = EnrollmentOriginalsFixture::new();
         let mut config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
         match fault {
-            "host-type" => config["host_config"] = Value::Null,
+            "host-type" => config["host_config"] = value!(null),
             "policy-type" => config["automatic_cleanup"] = value!(7),
             "relocated-policy" => {
                 config["automatic_cleanup"] = value!(".chrono-harness/other.json")
@@ -794,6 +1289,19 @@ fn enrollment_originals_are_protected_before_global_maintenance() {
             .contains("mock retained policy read failed"),
         "{report}"
     );
+    assert_ne!(
+        report["output_retention"]["status"], "preserved",
+        "a policy failure after verified original protection must not defer independent retention: {report}"
+    );
+    assert!(
+        report["drain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["path"] == value!(h.target)
+                && row["original_protection"]["status"] == "protected"),
+        "the failed cleanup must separately report current original protection: {report}"
+    );
     // A 25 ms round may publish only the disposal intent. Continue the same
     // bounded owner maintenance; the failed policy's input must stay rooted.
     let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
@@ -827,6 +1335,11 @@ fn empty_admission_preserves_foreign_checkout_without_reading_its_policy() {
     let foreign_policy = h.target.join(POLICY);
     let foreign_bytes = b"this checkout has not adopted this coordinator's policy\n";
     fs::write(&foreign_policy, foreign_bytes).unwrap();
+    let foreign_retention = h
+        .target
+        .join(chrono_harness::retained_artifacts::retention::POLICY_PATH);
+    let foreign_retention_bytes = b"this retention store has not adopted this coordinator\n";
+    fs::write(&foreign_retention, foreign_retention_bytes).unwrap();
     let source = h.target.join("unsaved-source");
     fs::write(&source, b"independent work\n").unwrap();
 
@@ -836,6 +1349,15 @@ fn empty_admission_preserves_foreign_checkout_without_reading_its_policy() {
     assert_ne!(report["output_retention"]["status"], "preserved");
     assert_eq!(fs::read(&ledger_path).unwrap(), ledger_bytes);
     assert_eq!(fs::read(&foreign_policy).unwrap(), foreign_bytes);
+    assert_eq!(
+        fs::read(&foreign_retention).unwrap(),
+        foreign_retention_bytes
+    );
+    assert!(
+        report["linked_output_retention"]
+            .as_array()
+            .is_none_or(|rows| rows.is_empty())
+    );
     assert_eq!(fs::read(&source).unwrap(), b"independent work\n");
     let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
         .unwrap()
@@ -866,8 +1388,47 @@ fn enrollment_originals_unknown_metadata_defers_only_global_original_maintenance
             .as_array()
             .unwrap()
             .iter()
-            .any(|row| row["path"] == value!(h.target) && row["status"] == "preserved")
+            .any(|row| row["path"] == value!(h.target)
+                && row["status"] == "preserved"
+                && row["original_protection"]["status"] == "unknown")
     );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn enrollment_originals_changed_identity_still_defers_global_maintenance() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = EnrollmentOriginalsFixture::new();
+    let owner_path = h.record.join("owner.json");
+    let mut owner = json(&fs::read(&owner_path).unwrap()).unwrap();
+    owner["path"] = value!(h.root.join("another-checkout"));
+    let owner_bytes = serde_json::to_vec(&owner).unwrap();
+    fs::write(&owner_path, &owner_bytes).unwrap();
+    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 2, "{report}");
+    assert_eq!(report["output_retention"]["status"], "preserved");
+    assert_eq!(report["output_retention"]["namespace_complete"], false);
+    assert!(
+        report["complete_inventory"]["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| error
+                .as_str()
+                .unwrap()
+                .contains("enrollment declaration address differs from its namespace"))
+    );
+    assert_eq!(fs::read(&owner_path).unwrap(), owner_bytes);
+    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_eq!(
+        fs::read(h.root.join(&h.original)).unwrap(),
+        b"original failure bytes\n"
+    );
+    assert!(h.root.join(&h.sibling).is_file());
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -926,7 +1487,12 @@ impl Host {
     pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
         self.auto_command_at(&self.root, command, extra)
     }
-    fn auto_command_at(&self, invoking: &Path, command: &str, extra: &[&str]) -> Command {
+    pub(super) fn auto_command_at(
+        &self,
+        invoking: &Path,
+        command: &str,
+        extra: &[&str],
+    ) -> Command {
         let mut c = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")));
         c.current_dir(invoking)
             .env_clear()
@@ -2871,6 +3437,126 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn ordinary_use_hands_off_sealed_results_and_keeps_unqualified_results_pending() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    adopt_lifecycle_retention(&h);
+    let policy_path = h.root.join(POLICY_PATH);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["producers"]["lifecycle-original"] = value!([
+        ".chrono-harness/state/worktrees/",
+        ".chrono-harness/state/automatic-cleanup/"
+    ]);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("ordinary-result-handoff");
+    let (code, created, error) = h.invoke("integration", "ordinary-result-handoff", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let mut results = Vec::new();
+    for _ in 0..2 {
+        let (code, used, error) = h.auto(
+            "use",
+            &[
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
+        );
+        assert_eq!(code, 0, "{used} {error}");
+        let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+        inventory
+            .reference_paths(
+                &format!("fixture-use-report:{}", results.len()),
+                &[used["report_path"].as_str().unwrap().into()],
+            )
+            .unwrap();
+        results.push(used);
+    }
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(
+        entry["enrollment"]["completed_uses"],
+        value!([results[1]["managed_use_receipt"]]),
+        "ordinary admission must hand off its predecessor without a maintenance round"
+    );
+    assert_eq!(entry["status"], "active");
+    assert!(entry["terminal"].is_null());
+    for used in &results {
+        let receipt = &used["managed_use_receipt"];
+        let bytes = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
+        assert_eq!(value!(sha256(&bytes)), receipt["sha256"]);
+        let process = h
+            .root
+            .join(used["managed_process_original"]["path"].as_str().unwrap());
+        assert_eq!(fs::read(process.join("stdout")).unwrap(), b"ordinary-work");
+    }
+    let second_report = h.root.join(results[1]["report_path"].as_str().unwrap());
+    let second_bytes = fs::read(&second_report).unwrap();
+    fs::write(&second_report, b"{\"status\":").unwrap();
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([
+            results[1]["managed_use_receipt"],
+            used["managed_use_receipt"]
+        ]),
+        "an incomplete predecessor report must stay pending while independent work proceeds"
+    );
+    assert_eq!(fs::read(&second_report).unwrap(), b"{\"status\":");
+    fs::write(&second_report, second_bytes).unwrap();
+    let receipt_path = h
+        .root
+        .join(results[1]["managed_use_receipt"]["path"].as_str().unwrap());
+    let receipt_bytes = fs::read(&receipt_path).unwrap();
+    fs::write(&receipt_path, b"changed original receipt").unwrap();
+    let third_receipt = used["managed_use_receipt"].clone();
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    assert_eq!(
+        used["result_handoff_error"],
+        "original lifecycle receipt changed"
+    );
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([
+            results[1]["managed_use_receipt"],
+            third_receipt,
+            used["managed_use_receipt"]
+        ]),
+        "a failed handoff must not publish a partial in-memory ledger or block independent use"
+    );
+    assert_eq!(
+        fs::read(&receipt_path).unwrap(),
+        b"changed original receipt"
+    );
+    fs::write(receipt_path, receipt_bytes).unwrap();
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn terminal_history_rotation_preserves_live_consumers_and_changed_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -4053,18 +4739,14 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    use std::{
-        thread,
-        time::{Duration, Instant},
-    };
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     native_consumer(&h, "managed-child");
     let target = h.parent.join("in-use");
     assert_eq!(h.invoke("feature", "in-use", &target).0, 0);
     output(&target);
-    let mut child = h
-        .auto_command(
+    let mut child = super::interrupted_cleanup::CapturedChild::spawn(
+        &mut h.auto_command(
             "use",
             &[
                 "--path",
@@ -4072,20 +4754,13 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
                 "--operation",
                 "use.consumer",
             ],
-        )
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    let began = Instant::now();
-    while !target.join(".chrono-harness/state/ready").exists()
-        && began.elapsed() < Duration::from_secs(10)
-    {
-        if child.try_wait().unwrap().is_some() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(20));
-    }
+        ),
+        &h.root,
+    );
+    child.release_on_drop(target.join(".chrono-harness/state/release"));
+    // Input preparation precedes the consumer. Use its registered process
+    // bounds and retain the wrapper's complete result, as other managed tests do.
+    child.await_managed_file(&target.join(".chrono-harness/state/ready"));
     let ready = target.join(".chrono-harness/state/ready").exists();
     // Join the wrapper before asserting, including its failure path. A missing
     // readiness marker must expose the real wrapper result and retain its receipt.
@@ -4124,13 +4799,15 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks() {
+fn automatic_terminal_rejects_changed_head_rewound_ref_policy_attachment_and_git_locks() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
     for fault in [
         "head",
-        "ref",
+        "rewound-ref",
+        "diverged-ref",
+        "symbolic-ref",
         "policy",
         "target-policy",
         "target-config",
@@ -4161,7 +4838,11 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
                 fs::write(target.join("payload"), "changed head").unwrap();
                 commit(&target);
             }
-            "ref" => {
+            "rewound-ref" => {
+                git(&h.root, &["update-ref", "refs/heads/dev", "HEAD^"]);
+            }
+            "diverged-ref" => {
+                git(&h.root, &["update-ref", "refs/heads/dev", "HEAD^"]);
                 git(
                     &h.root,
                     &[
@@ -4172,7 +4853,21 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
                         "commit",
                         "--allow-empty",
                         "-qm",
-                        "advanced reference",
+                        "diverged reference",
+                    ],
+                );
+            }
+            "symbolic-ref" => {
+                git(
+                    &h.root,
+                    &["update-ref", "refs/heads/retention-alias", "HEAD"],
+                );
+                git(
+                    &h.root,
+                    &[
+                        "symbolic-ref",
+                        "refs/heads/dev",
+                        "refs/heads/retention-alias",
                     ],
                 );
             }
@@ -4220,6 +4915,52 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
         assert_ne!(code, 0, "{fault}: {r} {e}");
         assert!(target.exists());
         assert!(target.join("output λ/data").exists());
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn automatic_terminal_resumes_after_ref_advance_using_the_original_saved_commit() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for retention in ["ancestor", "same-tree"] {
+        let h = Host::new("payload");
+        h.automatic("evidence-retain");
+        let mut policy = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
+        policy["retention"] = value!(retention);
+        fs::write(
+            h.root.join(AUTO_POLICY),
+            serde_json::to_vec(&policy).unwrap(),
+        )
+        .unwrap();
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        let target = h.parent.join("saved-before-advance");
+        assert_eq!(h.invoke("feature", "saved-before-advance", &target).0, 0);
+        output(&target);
+        let (code, report, error) = h.auto(
+            "finish",
+            &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+        );
+        assert_eq!(code, 0, "{report} {error}");
+        let terminal = h.ledger()["entries"][0]["terminal"].clone();
+        let original_path = h.root.join(terminal["receipt"]["path"].as_str().unwrap());
+        let original_bytes = fs::read(&original_path).unwrap();
+        let saved = terminal["retained_commit"].as_str().unwrap();
+        fs::write(h.root.join("payload"), "later independent change\n").unwrap();
+        let advanced = commit(&h.root);
+        assert_ne!(advanced, saved);
+        assert_ne!(
+            git(&h.root, &["rev-parse", &format!("{advanced}^{{tree}}")]),
+            git(&h.root, &["rev-parse", &format!("{saved}^{{tree}}")]),
+        );
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{retention}: {report} {error}");
+        assert!(!target.exists(), "the saved checkout must be reclaimed");
+        assert_eq!(git(&h.root, &["rev-parse", "dev"]), advanced);
+        assert_eq!(fs::read(&original_path).unwrap(), original_bytes);
+        assert_eq!(h.ledger()["entries"][0]["terminal"], terminal);
     }
 }
 

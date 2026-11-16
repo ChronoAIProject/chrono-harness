@@ -13,30 +13,280 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::retained_artifacts::retention as accounting;
+use chrono_harness::verified_identifiers as identifiers;
 #[cfg(verus_keep_ghost)]
-use policy::accounting;
+use policy::identifiers;
+
+#[cfg(verus_keep_ghost)]
+#[path = "support/retention_frontier.rs"]
+mod retention_frontier;
 
 verus! {
 
-#[cfg_attr(not(verus_keep_ghost), test)]
-fn recovery_accounting_never_substitutes_for_domain_completion() {
-    expect_true(!accounting::accounting_releases(false, false));
-    expect_true(!accounting::accounting_releases(false, true));
-    expect_true(!accounting::accounting_releases(true, false));
-    expect_true(accounting::accounting_releases(true, true));
+fn expect_retirement_deferral(metadata_room: bool, nodes: usize, node_limit: usize,
+    elapsed_millis: u128, max_millis: u64, deferred: bool)
+    requires deferred == (!metadata_room || nodes >= node_limit
+        || elapsed_millis >= max_millis as u128),
+{
+    let reason = policy::retirement_deferral(metadata_room, nodes, node_limit,
+        elapsed_millis, max_millis);
+    match reason {
+        Some(text) => {
+            expect_true(deferred);
+            let same = identifiers::equal_text(text,
+                "retirement round budget exhausted; original not attempted");
+            expect_true(same);
+        },
+        None => expect_true(!deferred),
+    }
 }
 
-#[cfg(verus_keep_ghost)]
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retirement_admission_keeps_each_original_budget_boundary_and_full_reason() {
+    expect_retirement_deferral(true, 0, 1, 0, 1, false);
+    expect_retirement_deferral(true, 31, 32, 24, 25, false);
+    expect_retirement_deferral(false, 0, 1, 0, 1, true);
+    expect_retirement_deferral(true, 32, 32, 0, 25, true);
+    expect_retirement_deferral(true, 33, 32, 0, 25, true);
+    expect_retirement_deferral(true, 0, 32, 25, 25, true);
+    expect_retirement_deferral(true, 0, 32, 26, 25, true);
+    expect_retirement_deferral(true, 0, 0, 0, 25, true);
+    expect_retirement_deferral(true, 0, 32, 0, 0, true);
+    expect_retirement_deferral(true, usize::MAX - 1, usize::MAX,
+        u64::MAX as u128 - 1, u64::MAX, false);
+    expect_retirement_deferral(true, usize::MAX, usize::MAX,
+        u128::MAX, u64::MAX, true);
+}
+
+fn skipped_disposal_checkpoint_preserves_state(tree: bool, remaining: usize)
+    requires !tree || remaining == 0,
+{
+    let persist = |calls: u8| -> (out: (u8, Result<(), &str>))
+        ensures out.0 == 1, out.1 == Err::<(), &str>("unexpected checkpoint"),
+    { (1, Err("unexpected checkpoint")) };
+    let (calls, result) = policy::checkpoint_disposal(0u8, tree, remaining, &persist);
+    expect_true(calls == 0 && result.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn disposal_checkpoint_skips_files_and_exhausted_tree_cursors() {
+    skipped_disposal_checkpoint_preserves_state(false, 0);
+    skipped_disposal_checkpoint_preserves_state(false, 1);
+    skipped_disposal_checkpoint_preserves_state(false, usize::MAX);
+    skipped_disposal_checkpoint_preserves_state(true, 0);
+}
+
+fn partial_tree_checkpoint_preserves_original_result(remaining: usize, error: &str)
+    requires remaining > 0,
+{
+    let persist = |calls: u8| -> (out: (u8, Result<(), &str>))
+        ensures out.0 == if calls == 0 { 1u8 } else { 2u8 },
+            out.1 == Err::<(), &str>(error),
+    { (if calls == 0 { 1 } else { 2 }, Err(error)) };
+    let (calls, result) = policy::checkpoint_disposal(0u8, true, remaining, &persist);
+    expect_true(calls == 1);
+    match result {
+        Err(actual) => {
+            let same = identifiers::equal_text(actual, error);
+            expect_true(same);
+        },
+        Ok(()) => { assert(false); panic!(); },
+    }
+    let persist_ok = |calls: u8| -> (out: (u8, Result<(), &str>))
+        ensures out.0 == if calls == 0 { 1u8 } else { 2u8 }, out.1.is_ok(),
+    { (if calls == 0 { 1 } else { 2 }, Ok(())) };
+    let (calls, result) = policy::checkpoint_disposal(0u8, true, remaining, &persist_ok);
+    expect_true(calls == 1 && result.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn disposal_checkpoint_persists_partial_trees_once_and_preserves_complete_errors() {
+    partial_tree_checkpoint_preserves_original_result(1, "");
+    partial_tree_checkpoint_preserves_original_result(2, "checkpoint: 中\0original\nerror");
+    partial_tree_checkpoint_preserves_original_result(usize::MAX, "original IO failure");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn absent_disposal_recovery_retains_its_original_phase_classification() {
+    proof {
+        reveal_strlit("disposing"); reveal_strlit("released"); reveal_strlit("");
+        reveal_strlit("disposing\0tail");
+        assert("released"@.len() != "disposing"@.len());
+        assert(""@.len() != "disposing"@.len());
+        assert("disposing\0tail"@.len() != "disposing"@.len());
+    }
+    let partial = policy::absent_disposal_fact("disposing");
+    let same = identifiers::equal_text(partial, "absent-after-partial-disposal");
+    expect_true(same);
+    let released = policy::absent_disposal_fact("released");
+    let same = identifiers::equal_text(released, "already-absent-before-disposal");
+    expect_true(same);
+    let empty = policy::absent_disposal_fact("");
+    let same = identifiers::equal_text(empty, "already-absent-before-disposal");
+    expect_true(same);
+    let unknown = policy::absent_disposal_fact("disposing\0tail");
+    let same = identifiers::equal_text(unknown, "already-absent-before-disposal");
+    expect_true(same);
+}
+
+spec fn fixture_edge(rows: Seq<(String, Vec<String>)>, source: Seq<char>, target: Seq<char>) -> bool {
+    exists|i: int, j: int| 0 <= i < rows.len() && 0 <= j < rows[i].1@.len()
+        && rows[i].0@ == source && (#[trigger] rows[i].1@[j])@ == target
+}
+
+fn reference_fixture<'a>(rows: &'a [(String, Vec<String>)], source: &str, target: &str)
+    -> (found: bool)
+    ensures found == fixture_edge(rows@, source@, target@),
+{
+    let observe = |row: &'a (String, Vec<String>)| -> (out: (&'a str, &'a [String]))
+        ensures out.0@ == row.0@, out.1@ == row.1@,
+    { (row.0.as_str(), row.1.as_slice()) };
+    let found = policy::objects_reference(rows, source, target, observe);
+    proof {
+        let trace = choose|trace: Seq<(&str, &[String])>| policy::output_reference_trace(
+            rows, observe, source@, target@, found, trace);
+        assert forall|i: int| 0 <= i < trace.len() implies
+            trace[i].0@ == rows@[i].0@ && trace[i].1@ == rows@[i].1@ by {
+            assert(observe.ensures((&rows@[i],), trace[i]));
+        }
+        if found {
+            let i = trace.len() - 1;
+            let j = choose|j: int| 0 <= j < trace[i].1@.len()
+                && trace[i].1@[j]@ == target@;
+            assert(rows@[i].0@ == source@ && rows@[i].1@[j]@ == target@);
+            assert(fixture_edge(rows@, source@, target@));
+        } else {
+            assert forall|i: int, j: int| 0 <= i < rows.len() && 0 <= j < rows@[i].1@.len()
+                implies rows@[i].0@ != source@ || rows@[i].1@[j]@ != target@ by {
+                assert(!policy::output_edge_matches(trace[i], source@, target@));
+            }
+        }
+    }
+    found
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn output_references_require_both_complete_source_and_complete_target() {
+    proof {
+        reveal_strlit("source"); reveal_strlit("other"); reveal_strlit("target");
+        reveal_strlit("absent");
+        assert("source"@[0] != "other"@[0]);
+        assert("source"@[0] != "absent"@[0]);
+        assert("target"@[0] != "absent"@[0]);
+    }
+    let empty = reference_fixture(&Vec::new(), "source", "target");
+    expect_true(!empty);
+    let rows = vec![
+        ("other".to_owned(), vec!["target".to_owned()]),
+        ("source".to_owned(), vec!["absent".to_owned()]),
+    ];
+    let crossed = reference_fixture(&rows, "source", "target");
+    let present = reference_fixture(&rows, "other", "target");
+    let missing_source = reference_fixture(&rows, "absent", "target");
+    assert(rows@[0].0@ == "other"@ && rows@[0].1@[0]@ == "target"@);
+    assert(fixture_edge(rows@, "other"@, "target"@));
+    assert(!crossed);
+    assert(!missing_source);
+    expect_true(!crossed && present && !missing_source);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn output_references_search_every_duplicate_source_and_reference_position() {
+    proof {
+        reveal_strlit("source"); reveal_strlit("other"); reveal_strlit("target");
+        reveal_strlit("before"); reveal_strlit("after");
+        assert("target"@[0] != "before"@[0] && "target"@[0] != "after"@[0]);
+        assert("source"@[0] != "other"@[0]);
+    }
+    let rows = vec![
+        ("source".to_owned(), Vec::new()),
+        ("other".to_owned(), vec!["target".to_owned()]),
+        ("source".to_owned(), vec!["before".to_owned(), "target".to_owned(), "after".to_owned()]),
+        ("source".to_owned(), vec!["target".to_owned(), "target".to_owned()]),
+    ];
+    let target = reference_fixture(&rows, "source", "target");
+    let final_reference = reference_fixture(&rows, "source", "after");
+    let empty_row = vec![("source".to_owned(), Vec::new())];
+    let empty_first = reference_fixture(&empty_row, "source", "target");
+    assert(rows@[2].0@ == "source"@ && rows@[2].1@[1]@ == "target"@);
+    assert(fixture_edge(rows@, "source"@, "target"@));
+    assert(rows@[2].0@ == "source"@ && rows@[2].1@[2]@ == "after"@);
+    assert(fixture_edge(rows@, "source"@, "after"@));
+    expect_true(target && final_reference && !empty_first);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn output_references_preserve_empty_unicode_nul_and_case_sensitive_ids() {
+    proof {
+        reveal_strlit(""); reveal_strlit("source: é\0full\nend");
+        reveal_strlit("target: 中\0tail\nend"); reveal_strlit("Source: é\0full\nend");
+        reveal_strlit("target: 中\0tail\nEnd");
+        assert("source: é\0full\nend"@[0] != "Source: é\0full\nend"@[0]);
+        assert("target: 中\0tail\nend"@[15] != "target: 中\0tail\nEnd"@[15]);
+    }
+    let rows = vec![
+        ("".to_owned(), vec!["".to_owned()]),
+        ("source: é\0full\nend".to_owned(), vec!["target: 中\0tail\nend".to_owned()]),
+    ];
+    let empty_ids = reference_fixture(&rows, "", "");
+    let full_ids = reference_fixture(&rows, "source: é\0full\nend", "target: 中\0tail\nend");
+    let source_case = reference_fixture(&rows, "Source: é\0full\nend", "target: 中\0tail\nend");
+    let target_case = reference_fixture(&rows, "source: é\0full\nend", "target: 中\0tail\nEnd");
+    assert(rows@[0].0@ == ""@ && rows@[0].1@[0]@ == ""@);
+    assert(fixture_edge(rows@, ""@, ""@));
+    assert(rows@[1].0@ == "source: é\0full\nend"@ && rows@[1].1@[0]@ == "target: 中\0tail\nend"@);
+    assert(fixture_edge(rows@, "source: é\0full\nend"@, "target: 中\0tail\nend"@));
+    expect_true(empty_ids && full_ids && !source_case && !target_case);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_accounting_never_substitutes_for_domain_completion() {
+    expect_true(!policy::accounting_releases(false, false));
+    expect_true(!policy::accounting_releases(false, true));
+    expect_true(!policy::accounting_releases(true, false));
+    expect_true(policy::accounting_releases(true, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn migration_custody_excludes_existing_capabilities_without_attaching_reservations() {
+    proof {
+        reveal_strlit("reserving"); reveal_strlit("creating");
+        reveal_strlit("released"); reveal_strlit(""); reveal_strlit("inode:original");
+        assert("creating"@.len() != "reserving"@.len());
+    }
+    let absent = policy::migration_custody("reserving", "", true);
+    expect_true(absent.admitted && !absent.acquire && absent.expected.is_none());
+    let unbound = policy::migration_custody("reserving", "", false);
+    expect_true(unbound.admitted && unbound.acquire && unbound.expected.is_none());
+    let unknown = policy::migration_custody("creating", "", false);
+    expect_true(!unknown.admitted && unknown.acquire && unknown.expected.is_none());
+    let missing_unknown = policy::migration_custody("creating", "", true);
+    expect_true(!missing_unknown.admitted && !missing_unknown.acquire
+        && missing_unknown.expected.is_none());
+    let attached = policy::migration_custody("creating", "inode:original", false);
+    expect_true(attached.admitted && attached.acquire);
+    expect_true(policy::contains(&vec![attached.expected.unwrap().to_owned()], "inode:original"));
+    let missing_attached = policy::migration_custody("creating", "inode:original", true);
+    expect_true(missing_attached.admitted && missing_attached.acquire);
+    expect_true(policy::contains(&vec![missing_attached.expected.unwrap().to_owned()], "inode:original"));
+    let reserved_attached = policy::migration_custody("reserving", "inode:original", true);
+    expect_true(reserved_attached.admitted && reserved_attached.acquire);
+    expect_true(policy::contains(&vec![reserved_attached.expected.unwrap().to_owned()], "inode:original"));
+    let completed = policy::migration_custody("released", "inode:original", false);
+    expect_true(completed.admitted && completed.acquire);
+    expect_true(policy::contains(&vec![completed.expected.unwrap().to_owned()], "inode:original"));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn bounded_inputs_accept_the_limit_and_reject_the_next_byte() {
-    expect_true(policy::commands::within_bound(0, 0));
-    expect_true(!policy::commands::within_bound(1, 0));
-    expect_true(policy::commands::within_bound(65536, 65536));
-    expect_true(!policy::commands::within_bound(65537, 65536));
-    expect_true(policy::commands::within_bound(1048576, 1048576));
-    expect_true(!policy::commands::within_bound(1048577, 1048576));
-    expect_true(policy::commands::within_bound(u64::MAX, u64::MAX));
-    expect_true(!policy::commands::within_bound(u64::MAX, u64::MAX - 1));
+    expect_true(policy::within_bound(0, 0));
+    expect_true(!policy::within_bound(1, 0));
+    expect_true(policy::within_bound(65536, 65536));
+    expect_true(!policy::within_bound(65537, 65536));
+    expect_true(policy::within_bound(1048576, 1048576));
+    expect_true(!policy::within_bound(1048577, 1048576));
+    expect_true(policy::within_bound(u64::MAX, u64::MAX));
+    expect_true(!policy::within_bound(u64::MAX, u64::MAX - 1));
 }
 
 fn expect_retirement_id(actual: &String, expected: &str)
@@ -211,10 +461,10 @@ fn finalized_requires_sealed_released_or_disposing_output_and_no_retired_leases(
     expect_true(!policy::original_finalized(0, Some((true, "released\0"))));
     expect_true(!policy::original_finalized(1, Some((true, "released"))));
     expect_true(!policy::original_finalized(usize::MAX, Some((true, "disposing"))));
-    expect_true(policy::defer_finalized_original(true, true));
-    expect_true(!policy::defer_finalized_original(false, true));
-    expect_true(!policy::defer_finalized_original(true, false));
-    expect_true(!policy::defer_finalized_original(false, false));
+    expect_true(policy::defer_declared_original(true, true));
+    expect_true(!policy::defer_declared_original(false, true));
+    expect_true(!policy::defer_declared_original(true, false));
+    expect_true(!policy::defer_declared_original(false, false));
 }
 
 fn expect_expansion(actual: policy::FinalizedExpansion, expected: u8)
@@ -243,16 +493,20 @@ fn only_actual_roots_stop_expansion_and_rootless_cycles_remain_related() {
         assert("initial"@.len() != "initial\0"@.len());
         assert("é"@[0] != "e\u{301}"@[0]);
     }
-    expect_expansion(policy::finalized_expansion(true, Some("initial"), "initial", 1, 1), 0);
-    expect_expansion(policy::finalized_expansion(true, Some("initial"), "parent", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(true, None, "parent", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 0, 0), 2);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 1, 0), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", usize::MAX, 0), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 0, 1), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "parent", 0, 0), 3);
-    expect_expansion(policy::finalized_expansion(true, Some("initial"), "initial\0", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(false, Some("é"), "e\u{301}", 0, 0), 3);
+    expect_expansion(policy::original_expansion(true, true, Some("initial"), "initial", 1, 1), 0);
+    expect_expansion(policy::original_expansion(true, true, Some("initial"), "parent", 0, 1), 1);
+    expect_expansion(policy::original_expansion(true, true, None, "parent", 0, 1), 1);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", 0, 0), 2);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", 1, 0), 3);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", usize::MAX, 0), 3);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", 0, 1), 3);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "parent", 0, 0), 2);
+    expect_expansion(policy::original_expansion(true, true, Some("initial"), "initial\0", 0, 1), 1);
+    expect_expansion(policy::original_expansion(false, true, Some("é"), "e\u{301}", 0, 0), 2);
+    expect_expansion(policy::original_expansion(true, false, Some("initial"), "initial", 0, 1), 0);
+    expect_expansion(policy::original_expansion(true, false, Some("initial"), "parent", 0, 1), 1);
+    expect_expansion(policy::original_expansion(false, false, Some("initial"), "initial", 0, 0), 3);
+    expect_expansion(policy::original_expansion(false, false, Some("initial"), "parent", 1, 0), 3);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -285,15 +539,23 @@ fn discovered_frontier_keeps_actual_members_dependencies_and_retiring_originals(
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn maintenance_paths_keep_partial_originals_and_skip_only_records_without_an_original() {
-    expect_true(!policy::maintenance_path_required(false, false, false));
-    expect_true(!policy::maintenance_path_required(false, true, false));
-    expect_true(!policy::maintenance_path_required(false, false, true));
-    expect_true(!policy::maintenance_path_required(false, true, true));
-    expect_true(policy::maintenance_path_required(true, false, false));
-    expect_true(policy::maintenance_path_required(true, true, false));
-    expect_true(!policy::maintenance_path_required(true, false, true));
-    expect_true(policy::maintenance_path_required(true, true, true));
+fn maintenance_paths_preserve_initial_roots_and_exclude_only_the_retiring_report() {
+    expect_true(!policy::maintenance_path_required(false, false, false, false));
+    expect_true(!policy::maintenance_path_required(false, true, false, false));
+    expect_true(!policy::maintenance_path_required(false, false, true, false));
+    expect_true(!policy::maintenance_path_required(false, true, true, false));
+    expect_true(policy::maintenance_path_required(true, false, false, false));
+    expect_true(policy::maintenance_path_required(true, true, false, false));
+    expect_true(!policy::maintenance_path_required(true, false, true, false));
+    expect_true(policy::maintenance_path_required(true, true, true, false));
+    expect_true(!policy::maintenance_path_required(false, false, false, true));
+    expect_true(!policy::maintenance_path_required(false, true, false, true));
+    expect_true(!policy::maintenance_path_required(false, false, true, true));
+    expect_true(!policy::maintenance_path_required(false, true, true, true));
+    expect_true(policy::maintenance_path_required(true, false, false, true));
+    expect_true(policy::maintenance_path_required(true, true, false, true));
+    expect_true(!policy::maintenance_path_required(true, false, true, true));
+    expect_true(!policy::maintenance_path_required(true, true, true, true));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -305,6 +567,81 @@ fn only_empty_retiring_reports_with_pending_edges_can_skip_path_exclusion() {
     expect_true(!policy::metadata_only_retirement(true, true, true, false, true));
     expect_true(!policy::metadata_only_retirement(true, true, true, true, false));
     expect_true(!policy::metadata_only_retirement(false, false, false, false, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn metadata_path_readiness_preserves_empty_vacuity_and_the_retirement_guard()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let empty = Vec::<String>::new();
+    let loaded = std::collections::BTreeSet::<String>::new();
+    expect_true(policy::metadata_path_ready(true, &empty, &loaded));
+    expect_true(!policy::metadata_path_ready(false, &empty, &loaded));
+    let pending = vec!["pending".to_owned()];
+    expect_true(!policy::metadata_path_ready(false, &pending, &loaded));
+    expect_true(!policy::metadata_path_ready(true, &pending, &loaded));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn metadata_path_readiness_rejects_missing_first_middle_and_last_references()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let first = "first".to_owned();
+    let middle = "middle".to_owned();
+    let last = "last".to_owned();
+    proof {
+        reveal_strlit("first"); reveal_strlit("middle"); reveal_strlit("last");
+        assert(first@.len() != middle@.len());
+        assert(first@.len() != last@.len());
+        assert(middle@.len() != last@.len());
+    }
+    let references = vec![first.clone(), middle.clone(), last.clone()];
+    let mut suffix = std::collections::BTreeSet::new();
+    suffix.insert(middle.clone());
+    suffix.insert(last.clone());
+    expect_true(!policy::metadata_path_ready(true, &references, &suffix));
+    let mut edges = std::collections::BTreeSet::new();
+    edges.insert(first.clone());
+    edges.insert(last.clone());
+    expect_true(!policy::metadata_path_ready(true, &references, &edges));
+    let mut prefix = std::collections::BTreeSet::new();
+    prefix.insert(first.clone());
+    prefix.insert(middle.clone());
+    expect_true(!policy::metadata_path_ready(true, &references, &prefix));
+    suffix.insert(first.clone());
+    expect_true(policy::metadata_path_ready(true, &references, &suffix));
+    expect_true(!policy::metadata_path_ready(false, &references, &suffix));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn metadata_path_readiness_keeps_full_text_duplicates_and_unrelated_loaded_edges()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let empty = "".to_owned();
+    let embedded = "a\0\n".to_owned();
+    let prefix = "a".to_owned();
+    let unicode = "中é".to_owned();
+    proof {
+        reveal_strlit(""); reveal_strlit("a\0\n");
+        reveal_strlit("a"); reveal_strlit("中é");
+        assert(empty@.len() == 0); assert(embedded@.len() == 3);
+        assert(prefix@.len() == 1); assert(unicode@.len() == 2);
+    }
+    let references = vec![unicode.clone(), embedded.clone(), empty.clone(),
+        embedded.clone(), prefix.clone()];
+    let mut loaded = std::collections::BTreeSet::new();
+    loaded.insert(empty.clone());
+    loaded.insert(embedded.clone());
+    loaded.insert(unicode.clone());
+    expect_true(!policy::metadata_path_ready(true, &references, &loaded));
+    loaded.insert(prefix.clone());
+    expect_true(policy::metadata_path_ready(true, &references, &loaded));
+    loaded.insert("unrelated".to_owned());
+    expect_true(policy::metadata_path_ready(true, &references, &loaded));
+    let reordered = vec![prefix.clone(), empty.clone(), unicode.clone(), embedded.clone()];
+    expect_true(policy::metadata_path_ready(true, &reordered, &loaded));
+    let repeated = vec![embedded.clone(), embedded.clone(), embedded.clone()];
+    expect_true(policy::metadata_path_ready(true, &repeated, &loaded));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

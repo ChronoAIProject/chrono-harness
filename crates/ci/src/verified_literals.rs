@@ -1,7 +1,4 @@
 //! CI 配置的字面单行判断及原生缓存登记准入，供现役投影使用。
-#[cfg(verus_keep_ghost)]
-#[path = "release.rs"]
-mod release_projection;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -16,6 +13,12 @@ mod identifiers;
 use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
+
+pub fn publisher_success_gate(explicit_always: bool, needs_publisher: bool) -> (required: bool)
+    ensures required == (!explicit_always && needs_publisher),
+{
+    !explicit_always && needs_publisher
+}
 
 pub enum NativeJobState { Succeeded, ReadDetail { id: u64 }, Rejected }
 

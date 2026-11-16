@@ -1,0 +1,15 @@
+--- a/source/rust_verify/src/rust_to_vir_func.rs
++++ b/source/rust_verify/src/rust_to_vir_func.rs
+@@ -3377,8 +3377,11 @@
+ 
+     let (func_mode, body_mode, ret_mode) = if is_static {
+         // All statics are exec
+-        // For consistency with const, require the user to mark it 'exec' explicitly
++        // Ordinary Rust (including macro expansions) has no spec-static syntax.
++        // Check its initializer in exec mode, with the same body and mode checks
++        // as an explicit exec static. Verus syntax still requires explicit mode.
+         match mode_opt {
++            None if !vattrs.verus_macro => {}
+             None => {
+                 return err_span(
+                     span,

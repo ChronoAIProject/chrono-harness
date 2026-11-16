@@ -1,0 +1,81 @@
+diff --git a/source/vstd/vstd.rs b/source/vstd/vstd.rs
+index f61a786..7ce640b 100644
+--- a/source/vstd/vstd.rs
++++ b/source/vstd/vstd.rs
+@@ -83,6 +83,8 @@ pub mod resource;
+ pub mod rwlock;
+ pub mod seq;
+ pub mod seq_lib;
++#[cfg(all(feature = "std", verus_keep_ghost))]
++pub mod serde_specs;
+ pub mod set;
+ pub mod set_lib;
+ pub mod shared;
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+new file mode 100644
+--- /dev/null
++++ b/source/vstd/serde_specs.rs
+@@ -0,0 +1,13 @@
++//! External interfaces used by the actual Serde 1.0.229 derive expansion.
++use crate::prelude::*;
++use std::borrow::Cow;
++
++verus! {
++
++// This opaque boundary does not promise decoded text, allocation, or ownership.
++pub assume_specification<'a>[serde::__private229::from_utf8_lossy](
++    bytes: &'a [u8],
++) -> Cow<'a, str>
++;
++
++}
+diff --git a/source/rust_verify_test/tests/serde_lossy.rs b/source/rust_verify_test/tests/serde_lossy.rs
+new file mode 100644
+--- /dev/null
++++ b/source/rust_verify_test/tests/serde_lossy.rs
+@@ -0,0 +1,45 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_lossy_accepts_original_bytes_and_result
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn forward(bytes: &[u8]) -> std::borrow::Cow<'_, str> {
++            serde::__private229::from_utf8_lossy(bytes)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_lossy_does_not_assume_empty_text
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong(bytes: &[u8]) {
++            let result = serde::__private229::from_utf8_lossy(bytes);
++            assert(result@.len() == 0); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_lossy_does_not_assume_nonempty_text
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong(bytes: &[u8]) {
++            let result = serde::__private229::from_utf8_lossy(bytes);
++            assert(result@.len() > 0); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}

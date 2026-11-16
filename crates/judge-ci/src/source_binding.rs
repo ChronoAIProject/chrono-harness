@@ -1,4 +1,5 @@
 //! 固定请求的只读获取适配。仓内准入与失败状态由 Verus 所有者产生。
+use crate::verified_collection::observe_candidate_bytes;
 use chrono_harness::{
     Request,
     facts::Reader,
@@ -27,9 +28,13 @@ impl CandidateSourceRead for CandidateIo<'_> {
         self.tree.get(path).map(|entry| entry.0.clone())
     }
 
-    fn blob(&self, path: &str) -> Result<Vec<u8>, String> {
-        self.reader
-            .blob(&self.request.host_root, &self.request.candidate, path)
+    fn blobs(&self, paths: &Vec<String>) -> Result<Vec<Vec<u8>>, String> {
+        observe_candidate_bytes(
+            self.reader,
+            (&self.request.host_root, &self.request.candidate),
+            paths,
+            |reader, (root, candidate), paths| reader.blobs(root, candidate, paths),
+        )
     }
 
     fn digest(&self, bytes: &[u8]) -> Vec<u8> {
@@ -56,19 +61,57 @@ pub(super) fn bind_output(
     registry: &Result<SourceRegistry, String>,
     io: &CandidateIo<'_>,
 ) -> Result<Option<ProofAdmission>, String> {
+    let nested = original
+        .and_then(|r| r.nested_proof.as_ref())
+        .map(|r| r.as_ref())
+        .transpose()?;
+    if let Some(child) = nested {
+        child.validate(&io.request.host_root, operation, &child.declaration)?;
+        for method in methods.iter().filter(|m| m.operation == operation) {
+            if method.argv != &child.declaration.argv
+                || method.output_contract != &child.declaration.output_contract
+            {
+                return Err("E_VERUS_NESTED: child declaration differs from selected proof".into());
+            }
+        }
+    }
+    let resolved = methods
+        .iter()
+        .map(|method| ProofInvocation {
+            operation: method.operation,
+            argv: nested
+                .filter(|_| method.operation == operation)
+                .map(|child| &child.resolved_argv)
+                .unwrap_or(method.argv),
+            output_contract: method.output_contract,
+            output_limit_bytes: method.output_limit_bytes,
+        })
+        .collect();
     chrono_harness::verified_verifier::bind_operation_output(
         state,
         operation,
-        methods,
-        original.map(|receipt| ProofProcess {
-            operation: &receipt.operation,
-            argv: &receipt.process.argv,
-            stdout: &receipt.process.stdout_bytes,
-            exit: receipt.process.exit_code,
-            failed: receipt.process.failure.is_some(),
-            dependency: &receipt.compiler_dependency,
-            artifact: &receipt.compiler_artifact,
-        }),
+        &resolved,
+        nested
+            .map(|child| ProofProcess {
+                operation: &child.operation,
+                argv: &child.process.argv,
+                stdout: &child.process.stdout_bytes,
+                exit: child.process.exit_code,
+                failed: child.process.failure.is_some(),
+                dependency: &child.compiler_dependency,
+                artifact: &child.compiler_artifact,
+            })
+            .or_else(|| {
+                original.map(|receipt| ProofProcess {
+                    operation: &receipt.operation,
+                    argv: &receipt.process.argv,
+                    stdout: &receipt.process.stdout_bytes,
+                    exit: receipt.process.exit_code,
+                    failed: receipt.process.failure.is_some(),
+                    dependency: &receipt.compiler_dependency,
+                    artifact: &receipt.compiler_artifact,
+                })
+            }),
         registry,
         io,
         |message, path| format!("{message}{path}"),

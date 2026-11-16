@@ -1,0 +1,221 @@
+diff --git a/source/vstd/std_specs/core.rs b/source/vstd/std_specs/core.rs
+--- a/source/vstd/std_specs/core.rs
++++ b/source/vstd/std_specs/core.rs
+@@ -3,6 +3,11 @@
+
+ use verus as verus_skip_verusfmt;
+ verus_skip_verusfmt! {
++
++#[verifier::external_trait_specification]
++pub trait ExStdError: core::fmt::Debug + core::fmt::Display {
++    type ExternalTraitSpecificationFor: core::error::Error;
++}
+
+ #[verifier::external_trait_specification]
+ pub trait ExTuple {
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -6,6 +6,34 @@
+
+ #[verifier::external_type_specification]
+ pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
++
++#[verifier::external_trait_specification]
++pub trait ExSerializeError: Sized + core::error::Error {
++    type ExternalTraitSpecificationFor: serde::ser::Error;
++
++    fn custom<T: core::fmt::Display>(message: T) -> Self;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExDeserializeError: Sized + core::error::Error {
++    type ExternalTraitSpecificationFor: serde::de::Error;
++
++    fn custom<T: core::fmt::Display>(message: T) -> Self;
++
++    fn invalid_type(value: serde::de::Unexpected<'_>, expected: &dyn serde::de::Expected) -> Self;
++
++    fn invalid_value(value: serde::de::Unexpected<'_>, expected: &dyn serde::de::Expected) -> Self;
++
++    fn invalid_length(length: usize, expected: &dyn serde::de::Expected) -> Self;
++
++    fn unknown_variant(value: &str, expected: &'static [&'static str]) -> Self;
++
++    fn unknown_field(value: &str, expected: &'static [&'static str]) -> Self;
++
++    fn missing_field(field: &'static str) -> Self;
++
++    fn duplicate_field(field: &'static str) -> Self;
++}
+
+ #[verifier::external_trait_specification]
+ pub trait ExExpected {
+diff --git a/source/rust_verify_test/tests/serde_errors.rs b/source/rust_verify_test/tests/serde_errors.rs
+new file mode 100644
+--- /dev/null
++++ b/source/rust_verify_test/tests/serde_errors.rs
+@@ -0,0 +1,163 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_errors_forward_original_arguments_and_results
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Error, Expected, Unexpected};
++
++        fn custom<E: Error, T: core::fmt::Display>(message: T) -> E {
++            E::custom(message)
++        }
++
++        fn ser_custom<E: serde::ser::Error, T: core::fmt::Display>(message: T) -> E {
++            E::custom(message)
++        }
++
++        fn invalid_type<E: Error>(value: Unexpected<'_>, expected: &dyn Expected) -> E {
++            E::invalid_type(value, expected)
++        }
++
++        fn invalid_value<E: Error>(value: Unexpected<'_>, expected: &dyn Expected) -> E {
++            E::invalid_value(value, expected)
++        }
++
++        fn invalid_length<E: Error>(length: usize, expected: &dyn Expected) -> E {
++            E::invalid_length(length, expected)
++        }
++
++        fn unknown_variant<E: Error>(value: &str, expected: &'static [&'static str]) -> E {
++            E::unknown_variant(value, expected)
++        }
++
++        fn unknown_field<E: Error>(value: &str, expected: &'static [&'static str]) -> E {
++            E::unknown_field(value, expected)
++        }
++
++        fn missing_field<E: Error>(field: &'static str) -> E {
++            E::missing_field(field)
++        }
++
++        fn duplicate_field<E: Error>(field: &'static str) -> E {
++            E::duplicate_field(field)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_errors_check_correct_local_implementations
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        struct ErrorValue;
++
++        impl core::fmt::Debug for ErrorValue {
++            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
++                f.write_str("error")
++            }
++        }
++
++        impl core::fmt::Display for ErrorValue {
++            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
++                f.write_str("error")
++            }
++        }
++
++        impl core::error::Error for ErrorValue {}
++
++        impl serde::de::Error for ErrorValue {
++            fn custom<T: core::fmt::Display>(_message: T) -> Self {
++                ErrorValue
++            }
++        }
++
++        impl serde::ser::Error for ErrorValue {
++            fn custom<T: core::fmt::Display>(_message: T) -> Self {
++                ErrorValue
++            }
++        }
++
++        fn make_de(message: &str) -> ErrorValue {
++            <ErrorValue as serde::de::Error>::custom(message)
++        }
++
++        fn make_ser(message: &str) -> ErrorValue {
++            <ErrorValue as serde::ser::Error>::custom(message)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_errors_do_not_assume_equal_results
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong<E: serde::de::Error>(field: &str, expected: &'static [&'static str]) {
++            let first = E::unknown_field(field, expected);
++            let second = E::unknown_field(field, expected);
++            assert(first == second); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_errors_do_not_assume_distinct_results
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong<E: serde::de::Error>(variant: &str, expected: &'static [&'static str]) {
++            let first = E::unknown_variant(variant, expected);
++            let second = E::unknown_variant(variant, expected);
++            assert(first != second); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_errors_reject_both_wrong_local_implementations
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        struct ErrorValue;
++
++        impl core::fmt::Debug for ErrorValue {
++            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
++                f.write_str("error")
++            }
++        }
++
++        impl core::fmt::Display for ErrorValue {
++            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
++                f.write_str("error")
++            }
++        }
++
++        impl core::error::Error for ErrorValue {}
++
++        impl serde::de::Error for ErrorValue {
++            fn custom<T: core::fmt::Display>(_message: T) -> Self {
++                assert(false); // FAILS
++                ErrorValue
++            }
++        }
++
++        impl serde::ser::Error for ErrorValue {
++            fn custom<T: core::fmt::Display>(_message: T) -> Self {
++                assert(false); // FAILS
++                ErrorValue
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_fails(err, 2);
++    }
++}

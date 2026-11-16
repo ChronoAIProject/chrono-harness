@@ -8,7 +8,15 @@ use vstd::prelude::*;
 mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
-use identifiers::equal_text;
+pub use identifiers::equal_text;
+
+#[cfg(verus_keep_ghost)]
+#[path = "maintenance.rs"]
+mod maintenance_verification;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::maintenance::retained_reference_ancestor_required;
+#[cfg(verus_keep_ghost)]
+pub use maintenance_verification::retained_reference_ancestor_required;
 
 #[cfg(verus_keep_ghost)]
 #[path = "start.rs"]
@@ -26,28 +34,38 @@ pub use start_verification::select_report_input_scope;
 mod automatic_verification;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::{
-    MissingCacheObservation, absence_probe_required, absent_attachment_conflict,
-    known_absent_enrollment, missing_cache_observation,
+    MissingCacheObservation, absence_probe_required, absent_attachment_conflict, admission_handoff,
+    known_absent_enrollment, missing_cache_observation, publish_enrollment_record,
 };
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::{
-    MissingCacheObservation, absence_probe_required, absent_attachment_conflict,
-    known_absent_enrollment, missing_cache_observation,
+    MissingCacheObservation, absence_probe_required, absent_attachment_conflict, admission_handoff,
+    known_absent_enrollment, missing_cache_observation, publish_enrollment_record,
 };
 
 #[cfg(not(verus_keep_ghost))]
-pub use crate::automatic::age::reusable_release;
+pub use crate::automatic::age::{age_preservation_required, reusable_release};
 #[cfg(verus_keep_ghost)]
-pub use automatic_verification::age::reusable_release;
+pub use automatic_verification::age::{age_preservation_required, reusable_release};
 
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::inventory::append_action_index;
 #[cfg(not(verus_keep_ghost))]
-pub use crate::automatic::service::maintenance_idle_exit;
+pub use crate::automatic::migration::checkout_migration_ready;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::service::{
+    maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,
+    validate_activation_sequence,
+};
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::inventory::append_action_index;
 #[cfg(verus_keep_ghost)]
-pub use automatic_verification::service::maintenance_idle_exit;
+pub use automatic_verification::migration::checkout_migration_ready;
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::service::{
+    maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,
+    validate_activation_sequence,
+};
 
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::producer::rolling::{rolling_disposal, rolling_keep};
@@ -65,7 +83,9 @@ pub use automatic_verification::producer::{
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::retirement::{retire_cache_history, retire_history};
 #[cfg(not(verus_keep_ghost))]
-pub use crate::recovery::{ImportedPolicyReceipt, imported_policy_receipt_valid};
+pub use crate::recovery::{
+    ImportedPolicyReceipt, imported_policy_receipt_valid, imported_policy_source_commit,
+};
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::retirement::{retire_cache_history, retire_history};
 #[cfg(verus_keep_ghost)]
@@ -74,7 +94,8 @@ pub use automatic_verification::retirement::{retire_cache_history, retire_histor
 mod recovery_verification;
 #[cfg(verus_keep_ghost)]
 pub use recovery_verification::{
-    ImportedPolicyReceipt, imported_policy_receipt_valid, required_text,
+    ImportedPolicyReceipt, imported_policy_receipt_valid, imported_policy_source_commit,
+    required_text,
 };
 
 #[cfg(not(verus_keep_ghost))]
@@ -87,6 +108,15 @@ mod cli_status_owner;
 pub use cli_status_owner::successful_report_status;
 
 verus! {
+
+/// 普通消费交接不改变观察、导入、迁移或部署的现有资格边界。
+pub fn ordinary_admission(operation: &str) -> (selected: bool)
+    ensures selected <==> (operation@ == "use"@ || operation@ == "check"@
+        || operation@ == "bootstrap"@),
+{
+    equal_text(operation, "use") || equal_text(operation, "check")
+        || equal_text(operation, "bootstrap")
+}
 
 /// An address left by failed admission has no checkout policy consumer.
 pub fn enrolled_policy_required(entries: usize) -> (required: bool)
@@ -133,22 +163,56 @@ pub enum CleanupStage {
     Disposed,
 }
 
+pub open spec fn cleanup_stage(cache: bool, status: Seq<char>, removal: Seq<char>) -> CleanupStage {
+    if status != "cleaned"@ { CleanupStage::Failed }
+    else if cache { CleanupStage::CachesReleased }
+    else if removal == "verified-absent"@ || removal == "already-absent"@ {
+        CleanupStage::Disposed
+    } else { CleanupStage::Retained }
+}
+
 pub fn cleanup_result(cache: bool, status: &str, removal: &str) -> (stage: CleanupStage)
-    ensures
-        status@ != "cleaned"@ ==> stage == CleanupStage::Failed,
-        status@ == "cleaned"@ && cache ==> stage == CleanupStage::CachesReleased,
-        status@ == "cleaned"@ && !cache ==>
-            (stage == CleanupStage::Disposed <==>
-                removal@ == "verified-absent"@ || removal@ == "already-absent"@),
-        status@ == "cleaned"@ && !cache
-            && removal@ != "verified-absent"@ && removal@ != "already-absent"@
-            ==> stage == CleanupStage::Retained,
+    ensures stage == cleanup_stage(cache, status@, removal@),
 {
     if !equal_text(status, "cleaned") { CleanupStage::Failed }
     else if cache { CleanupStage::CachesReleased }
     else if equal_text(removal, "verified-absent") || equal_text(removal, "already-absent") {
         CleanupStage::Disposed
     } else { CleanupStage::Retained }
+}
+
+pub struct CleanupOutcome {
+    pub cache: bool,
+    pub cleaned: bool,
+    pub stage: CleanupStage,
+}
+
+pub open spec fn cleanup_field(value: Option<&str>) -> Seq<char> {
+    match value { Some(text) => text@, None => ""@ }
+}
+
+/// 原 JSON 观察只投影字段；缓存资格、成功与终态优先级由同一证明根决定。
+pub fn observed_cleanup_result(cache: bool, enrollment_status: &str,
+    age_outcome: Option<&str>, status: Option<&str>, removal: Option<&str>)
+    -> (out: CleanupOutcome)
+    ensures out.cache == (cleanup_field(age_outcome) == "reusable-source-preserved"@
+            || cleanup_field(age_outcome) == "no-disposable-output-retained-checkout"@
+            || (cache && cleanup_field(age_outcome)
+                != "expired-checkout-verified-absent-source-branches-retained"@)),
+        out.cleaned == (cleanup_field(status) == "cleaned"@),
+        out.stage == cleanup_stage(out.cache && enrollment_status@ != "terminal"@,
+            cleanup_field(status), cleanup_field(removal)),
+{
+    let age = match age_outcome { Some(value) => value, None => "" };
+    let cache_outcome = equal_text(age, "reusable-source-preserved")
+        || equal_text(age, "no-disposable-output-retained-checkout")
+        || (cache && !equal_text(age, "expired-checkout-verified-absent-source-branches-retained"));
+    let status = match status { Some(value) => value, None => "" };
+    let removal = match removal { Some(value) => value, None => "" };
+    let cleaned = equal_text(status, "cleaned");
+    let stage = cleanup_result(cache_outcome && !equal_text(enrollment_status, "terminal"),
+        status, removal);
+    CleanupOutcome { cache: cache_outcome, cleaned, stage }
 }
 
 pub fn select_cleanup(status: &str, cache_pending: bool, maintenance: bool, artifacts_only: bool) -> (selected: bool)
@@ -172,16 +236,6 @@ pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: boo
         || (kind@ == "birth"@ && registered)),
 {
     equal_text(kind, "import") || (equal_text(kind, "birth") && registered)
-}
-
-// The caller holds the original exclusive lease. Cleanup observations are
-// diagnostic history; actual unjoined work still prevents checkout adoption.
-pub fn checkout_migration_ready(status: &str, terminal: bool, uses_pending: bool,
-    handoff_pending: bool) -> (ready: bool)
-    ensures ready <==> (status@ == "active"@ && !terminal
-        && !uses_pending && !handoff_pending),
-{
-    equal_text(status, "active") && !terminal && !uses_pending && !handoff_pending
 }
 
 pub fn accepts_cleanup_branch(kind: &str, registered: bool) -> (accepted: bool)

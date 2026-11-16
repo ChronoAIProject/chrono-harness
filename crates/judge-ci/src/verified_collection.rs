@@ -11,6 +11,11 @@ mod identifiers;
 use chrono_harness::verified_identifiers as identifiers;
 use identifiers::equal_text;
 
+#[cfg(not(verus_keep_ghost))]
+pub use chrono_judge_registration::inputs::select_snapshot_schema;
+#[cfg(verus_keep_ghost)]
+pub use source_registration::inputs::select_snapshot_schema;
+
 #[cfg(verus_keep_ghost)]
 #[path = "../../runner/src/verified_status.rs"]
 pub mod result_types;
@@ -18,7 +23,88 @@ pub mod result_types;
 pub use chrono_harness::verified_status as result_types;
 use result_types::{CheckResult, Status};
 
+pub use chrono_harness::verified_verifier as source_verifier;
+pub use source_verifier::sources::validate_source_plan;
+
+#[cfg(verus_keep_ghost)]
+#[path = "../../judge-registration/src/lib.rs"]
+mod source_registration;
+#[cfg(not(verus_keep_ghost))]
+pub use chrono_judge_registration::{
+    ObjectFieldError, Retained, RetainedError, RetainedObservation, object_error_parts,
+    parse_retained, select_retained, validate_object_fields, validate_reference_syntax,
+};
+#[cfg(verus_keep_ghost)]
+pub use source_registration::inputs::{
+    retained_decoding, retained_error_head, retained_error_suffix, retained_field_failure,
+    retained_fields_ok, retained_mode, retained_selection,
+};
+#[cfg(verus_keep_ghost)]
+pub use source_registration::{
+    ObjectFieldError, Retained, RetainedError, RetainedObservation, object_error_parts,
+    parse_retained, select_retained, validate_object_fields, validate_reference_syntax,
+};
+
 verus! {
+
+pub open spec fn source_pipeline_result<S, P, C, N, T, R, E, O, V>(
+    initial: S, previous: P, candidate: C, paths: N, observe: O, validate: V,
+    out: (S, Result<R, E>),
+) -> bool
+    where O: FnOnce(S, P, C, N) -> (S, Result<T, E>),
+        V: FnOnce(S, T) -> (S, Result<R, E>),
+{
+    exists|observed: (S, Result<T, E>)|
+        observe.ensures((initial, previous, candidate, paths), observed)
+        && match observed.1 {
+            Err(error) => out.0 == observed.0 && out.1 == Err::<R, E>(error),
+            Ok(evidence) => validate.ensures((observed.0, evidence), out),
+        }
+}
+
+/// 原两端和所选路径只观察一次；验证只接收该次观察的完整原结果。
+pub fn with_source_continuity<S, P, C, N, T, R, E, O, V>(
+    state: S, previous: P, candidate: C, paths: N, observe: O, validate: V,
+) -> (out: (S, Result<R, E>))
+    where O: FnOnce(S, P, C, N) -> (S, Result<T, E>),
+        V: FnOnce(S, T) -> (S, Result<R, E>),
+    requires forall|s: S, p: P, c: C, n: N| observe.requires((s, p, c, n)),
+        forall|s: S, evidence: T| validate.requires((s, evidence)),
+    ensures source_pipeline_result(state, previous, candidate, paths, observe, validate, out),
+{
+    let ghost initial = state;
+    let ghost p = previous;
+    let ghost c = candidate;
+    let ghost n = paths;
+    let observed = observe(state, previous, candidate, paths);
+    let ghost observation = observed;
+    let (state, result) = observed;
+    let out = match result {
+        Err(error) => (state, Err(error)),
+        Ok(evidence) => validate(state, evidence),
+    };
+    proof {
+        assert(observe.ensures((initial, p, c, n), observation));
+        assert(exists|observed: (S, Result<T, E>)|
+            observe.ensures((initial, p, c, n), observed)
+            && match observed.1 {
+                Err(error) => out.0 == observed.0 && out.1 == Err::<R, E>(error),
+                Ok(evidence) => validate.ensures((observed.0, evidence), out),
+            });
+    }
+    out
+}
+
+/// 固定生产者、端点和完整路径输入只转发一次，原观察结果直接交还调用方。
+pub fn observe_candidate_bytes<P, C, N, R, F>(producer: P, candidate: C, paths: N, observe: F)
+    -> (out: R)
+    where F: FnOnce(P, C, N) -> R,
+    requires forall|p: P, c: C, n: N| observe.requires((p, c, n)),
+    ensures observe.ensures((producer, candidate, paths), out),
+{
+    observe(producer, candidate, paths)
+}
+
 
 /// Registered hosts admit action references only from their full configuration.
 pub open spec fn authoritative_tool_present(

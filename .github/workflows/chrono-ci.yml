@@ -64,7 +64,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -169,7 +169,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -265,7 +265,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/cache-tests/Cargo.lock', 'crates/cache/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/cache-tests/Cargo.lock', 'crates/cache/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -387,7 +387,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/cache-tests/Cargo.lock', 'crates/cache/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/cache-tests/Cargo.lock', 'crates/cache/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -418,7 +418,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -540,7 +540,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -571,7 +571,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.diagnostics-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/diagnostics-tests/Cargo.lock', 'crates/diagnostics/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.diagnostics-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/diagnostics-tests/Cargo.lock', 'crates/diagnostics/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -693,7 +693,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.diagnostics-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/diagnostics-tests/Cargo.lock', 'crates/diagnostics/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.diagnostics-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/diagnostics-tests/Cargo.lock', 'crates/diagnostics/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -724,7 +724,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.distribution-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/distribution-tests/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.distribution-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/distribution-tests/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -846,7 +846,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.distribution-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/distribution-tests/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.distribution-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/distribution-tests/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -877,7 +877,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.host-bootstrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native-tests/Cargo.lock', '.chrono-harness/ci/native/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.host-bootstrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap-tests/Cargo.lock', 'crates/host-bootstrap/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -960,7 +960,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.host-bootstrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native-tests/Cargo.lock', '.chrono-harness/ci/native/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.host-bootstrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap-tests/Cargo.lock', 'crates/host-bootstrap/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -991,7 +991,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.inputs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/inputs-tests/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.inputs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/inputs-tests/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1113,7 +1113,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.inputs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/inputs-tests/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.inputs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/inputs-tests/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1144,7 +1144,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.instructions-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/instructions-tests/Cargo.lock', 'crates/instructions/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.instructions-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/instructions-tests/Cargo.lock', 'crates/instructions/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1266,7 +1266,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.instructions-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/instructions-tests/Cargo.lock', 'crates/instructions/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.instructions-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/instructions-tests/Cargo.lock', 'crates/instructions/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1297,7 +1297,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1419,7 +1419,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1450,7 +1450,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-cost-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-cost-tests/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-cost-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-cost-tests/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1572,7 +1572,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-cost-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-cost-tests/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-cost-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-cost-tests/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1603,7 +1603,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-filemap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-filemap-tests/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-filemap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-filemap-tests/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1725,7 +1725,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-filemap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-filemap-tests/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-filemap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-filemap-tests/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1756,7 +1756,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-mixed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed-tests/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-mixed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed-tests/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1878,7 +1878,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-mixed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed-tests/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-mixed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed-tests/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -1909,7 +1909,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-projects-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects-tests/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-projects-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects-tests/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2031,7 +2031,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-projects-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects-tests/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-projects-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects-tests/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2062,7 +2062,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-registration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-registration-tests/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-registration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-registration-tests/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2184,7 +2184,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-registration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-registration-tests/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-registration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-registration-tests/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2215,7 +2215,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-routes-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-routes-tests/Cargo.lock', 'crates/judge-routes/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-routes-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-routes-tests/Cargo.lock', 'crates/judge-routes/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2337,7 +2337,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-routes-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-routes-tests/Cargo.lock', 'crates/judge-routes/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-routes-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/judge-routes-tests/Cargo.lock', 'crates/judge-routes/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2368,7 +2368,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2499,7 +2499,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2530,7 +2530,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-short-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-short-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2661,7 +2661,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-short-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-short-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2692,7 +2692,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-units-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-units-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2814,7 +2814,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-units-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-units-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2845,7 +2845,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', '.chrono-harness/release/native/Cargo.lock', '.chrono-harness/release/native-tests/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/host-release/Cargo.lock', 'crates/host-release-tests/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2928,7 +2928,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', '.chrono-harness/release/native/Cargo.lock', '.chrono-harness/release/native-tests/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/host-release/Cargo.lock', 'crates/host-release-tests/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -2959,7 +2959,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.runner-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/identifiers-tests/Cargo.lock', 'crates/identifiers/Cargo.lock', 'crates/runner-tests/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.runner-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/identifiers-tests/Cargo.lock', 'crates/identifiers/Cargo.lock', 'crates/runner-tests/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -3081,7 +3081,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.runner-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/identifiers-tests/Cargo.lock', 'crates/identifiers/Cargo.lock', 'crates/runner-tests/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.runner-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/identifiers-tests/Cargo.lock', 'crates/identifiers/Cargo.lock', 'crates/runner-tests/Cargo.lock', 'crates/runner/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -3112,7 +3112,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.worktree-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/pr-tests/Cargo.lock', 'crates/pr/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.worktree-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/pr-tests/Cargo.lock', 'crates/pr/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -3243,7 +3243,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.worktree-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/pr-tests/Cargo.lock', 'crates/pr/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.worktree-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/pr-tests/Cargo.lock', 'crates/pr/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -3274,7 +3274,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.worktree-adoption-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.worktree-adoption-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -3396,7 +3396,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.worktree-adoption-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.worktree-adoption-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -3425,7 +3425,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.aggregate-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.aggregate-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -3497,7 +3497,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.aggregate-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.aggregate-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/

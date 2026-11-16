@@ -1,31 +1,35 @@
 #![cfg(unix)]
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
-use super::policy::artifact_disposal as disposal;
+use super::policy as footprint_policy;
 #[cfg(verus_keep_ghost)]
-use super::policy::maintenance_signal as signal;
+use super::policy::maintenance_signal as send_policy;
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::artifact_disposal as disposal;
+use chrono_harness::maintenance_signal::verified_send as send_policy;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_limits as footprint_policy;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
+#[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 verus! {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn observing_a_socket_requires_both_the_observer_and_socket_kind() {
-    if !disposal::observable_socket(true, true)
-        || disposal::observable_socket(false, true)
-        || disposal::observable_socket(true, false)
-        || disposal::observable_socket(false, false) { panic!(); }
+    if !footprint_policy::observable_socket(true, true)
+        || footprint_policy::observable_socket(false, true)
+        || footprint_policy::observable_socket(true, false)
+        || footprint_policy::observable_socket(false, false) { panic!(); }
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn hint_length_keeps_the_original_nonempty_64_byte_boundary() {
-    if signal::valid_hint_length(0) || !signal::valid_hint_length(1)
-        || !signal::valid_hint_length(64) || signal::valid_hint_length(65)
-        || signal::valid_hint_length(usize::MAX) { panic!(); }
+    if send_policy::valid_hint_length(0) || !send_policy::valid_hint_length(1)
+        || !send_policy::valid_hint_length(64) || send_policy::valid_hint_length(65)
+        || send_policy::valid_hint_length(usize::MAX) { panic!(); }
 }
 
 fn expect_hint(actual: bool)
@@ -71,7 +75,7 @@ fn hint_send_case<'a>(payload: &'a str, bytes: usize, failure: u8, sent: usize) 
         trace.push((2, socket, false));
         (trace, if failure == 3 { Err(payload.to_string()) } else { Ok(sent) })
     };
-    let (trace, result) = signal::send_hint(Vec::new(), bytes, open, nonblocking, send);
+    let (trace, result) = send_policy::send_hint(Vec::new(), bytes, open, nonblocking, send);
     if bytes == 0 || bytes > 64 {
         expect_hint(trace.len() == 0);
         match result {
@@ -131,6 +135,179 @@ fn hint_send_requires_the_exact_observed_length() {
     hint_send_case("retained", 64, 0, 65);
     hint_send_case("retained", 1, 0, usize::MAX);
 }
+
+fn policy_case<'a>(schema: &'a str, directory: &'a str, socket: &'a str,
+    idle: Option<u64>, timer: u64, failure: u8, payload: &'a str, fields: bool)
+    requires fields == send_policy::maintenance_policy_fields(schema, directory, socket, idle, timer),
+{
+    let directory_check = |mut trace: Vec<(u8, &'a str)>, path: &'a str|
+        -> (out: (Vec<(u8, &'a str)>, Result<(), String>))
+        ensures out.0@ == trace@.push((0, path)),
+            if failure == 1 { match out.1 {
+                Err(error) => error@ == payload@, _ => false,
+            } } else { out.1 == Ok::<(), String>(()) },
+    {
+        trace.push((0, path));
+        (trace, if failure == 1 { Err(payload.to_string()) } else { Ok(()) })
+    };
+    let socket_check = |mut trace: Vec<(u8, &'a str)>, path: &'a str|
+        -> (out: (Vec<(u8, &'a str)>, Result<(), String>))
+        ensures out.0@ == trace@.push((1, path)),
+            if failure == 2 { match out.1 {
+                Err(error) => error@ == payload@, _ => false,
+            } } else { out.1 == Ok::<(), String>(()) },
+    {
+        trace.push((1, path));
+        (trace, if failure == 2 { Err(payload.to_string()) } else { Ok(()) })
+    };
+    let (trace, result) = send_policy::validate_policy(Vec::new(), schema, directory, socket,
+        idle, timer, directory_check, socket_check);
+    expect_hint(trace.len() == if failure == 1 { 1 } else { 2 });
+    expect_hint(trace[0].0 == 0);
+    expect_hint_text(trace[0].1, directory);
+    if failure != 1 {
+        expect_hint(trace[1].0 == 1);
+        expect_hint_text(trace[1].1, socket);
+    }
+    if failure == 1 || failure == 2 {
+        match result {
+            Err(error) => expect_hint(error == payload.to_string()),
+            Ok(()) => expect_hint(false),
+        }
+    } else if fields {
+        expect_hint(result.is_ok());
+    } else {
+        match result {
+            Err(error) => expect_hint(error == "invalid explicit maintenance policy".to_string()),
+            Ok(()) => expect_hint(false),
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn policy_checks_keep_path_order_and_the_first_complete_error() {
+    policy_case("bad", "原目录/λ\0\n", "原 socket/λ\0\n", Some(0), 0, 1,
+        "原错/λ\0\n", false);
+    policy_case("bad", "原目录/λ\0\n", "原 socket/λ\0\n", Some(0), 0, 2,
+        "原错/λ\0\n", false);
+    policy_case("bad", "", "", None, 0, 1, "", false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn policy_fields_keep_exact_schema_path_and_timer_boundaries() {
+    proof {
+        reveal(send_policy::maintenance_location);
+        reveal(send_policy::maintenance_policy_fields);
+        reveal_strlit("chrono-unified-maintenance/v1");
+        reveal_strlit("chrono-unified-maintenance/v1\n");
+        reveal_strlit("Chrono-unified-maintenance/v1");
+        reveal_strlit(".chrono-harness/state/");
+        reveal_strlit(".chrono-harness/state/m");
+        reveal_strlit(".chrono-harness/state/m/");
+        reveal_strlit(".chrono-harness/state/m.sock");
+        reveal_strlit(".chrono-harness/state2/m/");
+        reveal_strlit(".chrono-harness/state2/m");
+        reveal_strlit("");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(".chrono-harness/state/")
+            && vstd::string::is_ascii(".chrono-harness/state/m")
+            && vstd::string::is_ascii(".chrono-harness/state/m/")
+            && vstd::string::is_ascii(".chrono-harness/state/m.sock")
+            && vstd::string::is_ascii(".chrono-harness/state2/m/")
+            && vstd::string::is_ascii(".chrono-harness/state2/m")
+            && vstd::string::is_ascii(""));
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/m");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/m/");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/m.sock");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state2/m/");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state2/m");
+        vstd::string::is_ascii_spec_bytes("");
+        unicode_policy_path_bytes();
+        assert(".chrono-harness/state/".spec_bytes() =~= seq![46u8, 99, 104, 114, 111, 110, 111,
+            45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47]);
+        assert(".chrono-harness/state/m".spec_bytes() =~= seq![46u8, 99, 104, 114, 111, 110, 111,
+            45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 109]);
+        let prefix = ".chrono-harness/state/".spec_bytes();
+        assert(prefix.len() == 22);
+        assert(prefix.take(prefix.len() as int) =~= prefix);
+        assert(prefix.last() == 47u8);
+        assert("chrono-unified-maintenance/v1"@.len() == 29);
+        assert("chrono-unified-maintenance/v1\n"@.len() == 30);
+        assert("chrono-unified-maintenance/v1"@[0] == 'c');
+        assert("Chrono-unified-maintenance/v1"@[0] == 'C');
+        assert("chrono-unified-maintenance/v1\n"@ != "chrono-unified-maintenance/v1"@);
+        assert("Chrono-unified-maintenance/v1"@ != "chrono-unified-maintenance/v1"@);
+        assert("".spec_bytes().len() == 0);
+        assert(".chrono-harness/state/m/".spec_bytes().last() == 47u8);
+        assert(".chrono-harness/state/m.sock".spec_bytes().last() == 107u8);
+        assert(".chrono-harness/state2/m/".spec_bytes()[21] == 50u8);
+        assert(".chrono-harness/state2/m".spec_bytes()[21] == 50u8);
+        assert(".chrono-harness/state/m".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/m/".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/m.sock".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/λ//".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/λ".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/m".spec_bytes().last() == 109u8);
+        assert(".chrono-harness/state/λ//".spec_bytes().last() == 47u8);
+        assert(".chrono-harness/state/λ".spec_bytes().last() == 187u8);
+        assert(send_policy::maintenance_location(".chrono-harness/state/", true));
+        assert(send_policy::maintenance_location(".chrono-harness/state/m", false));
+        assert(send_policy::maintenance_location(".chrono-harness/state/λ//", true));
+        assert(send_policy::maintenance_location(".chrono-harness/state/λ", false));
+    }
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/", ".chrono-harness/state/m",
+        None, 1, 0, "", true);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/λ//", ".chrono-harness/state/λ",
+        Some(u64::MAX), u64::MAX, 0, "", true);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        Some(1), 1, 0, "", true);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        Some(0), 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        None, 0, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1\n", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        None, 1, 0, "", false);
+    policy_case("Chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        None, 1, 0, "", false);
+    policy_case("", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock", None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", "", ".chrono-harness/state/m", None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m", ".chrono-harness/state/m",
+        None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state2/m/", ".chrono-harness/state/m",
+        None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", "", None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/",
+        None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state2/m",
+        None, 1, 0, "", false);
+}
+
+proof fn unicode_policy_path_bytes()
+    ensures ".chrono-harness/state/λ//".spec_bytes() == seq![46u8, 99, 104, 114, 111, 110, 111,
+        45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 206, 187, 47, 47],
+        ".chrono-harness/state/λ".spec_bytes() == seq![46u8, 99, 104, 114, 111, 110, 111,
+            45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 206, 187],
+{
+    reveal_strlit(".chrono-harness/state/λ//");
+    reveal_strlit(".chrono-harness/state/λ");
+    reveal_strlit(".chrono-harness/state/");
+    reveal_strlit("λ"); reveal_strlit("λ//");
+    assert(vstd::string::is_ascii(".chrono-harness/state/"));
+    vstd::string::is_ascii_spec_bytes(".chrono-harness/state/");
+    assert(".chrono-harness/state/".spec_bytes() =~= seq![46u8, 99, 104, 114, 111, 110, 111,
+        45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47]);
+    assert('λ' as u32 == 955 && '/' as u32 == 47);
+    assert(vstd::utf8::encode_scalar(955) == seq![206u8, 187]) by (compute);
+    assert(vstd::utf8::encode_scalar(47) == seq![47u8]) by (compute);
+    reveal_with_fuel(vstd::utf8::encode_utf8, 4);
+    assert("λ".spec_bytes() =~= seq![206u8, 187]);
+    assert("λ//".spec_bytes() =~= seq![206u8, 187, 47, 47]);
+    assert(".chrono-harness/state/λ"@ =~= ".chrono-harness/state/"@ + "λ"@);
+    assert(".chrono-harness/state/λ//"@ =~= ".chrono-harness/state/"@ + "λ//"@);
+    send_policy::identifiers::encode_concat(".chrono-harness/state/"@, "λ"@);
+    send_policy::identifiers::encode_concat(".chrono-harness/state/"@, "λ//"@);
+}
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -140,7 +317,9 @@ use std::{fs, os::unix::net::UnixDatagram, time::Duration};
 
 #[cfg(not(verus_keep_ghost))]
 fn host() -> (tempfile::TempDir, std::path::PathBuf) {
-    let host = tempfile::tempdir().unwrap();
+    // Physical, short roots also satisfy the Darwin Unix socket path limit.
+    let temporary_root = fs::canonicalize("/tmp").unwrap();
+    let host = tempfile::tempdir_in(temporary_root).unwrap();
     let root = host.path();
     fs::create_dir_all(root.join(".chrono-harness/state/m")).unwrap();
     let policy = Policy {
@@ -261,4 +440,87 @@ fn maintenance_report_publication_does_not_wake_itself_or_suppress_other_threads
         signal::request_adopted(host.path(), "after-round")["accepted"],
         true
     );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn linked_retention_routes_only_its_own_hint_to_the_known_physical_owner() {
+    let (owner, owner_path) = host();
+    let (linked, linked_path) = host();
+    let (other, other_path) = host();
+    let owner_socket = UnixDatagram::bind(&owner_path).unwrap();
+    let linked_socket = UnixDatagram::bind(&linked_path).unwrap();
+    let other_socket = UnixDatagram::bind(&other_path).unwrap();
+    for socket in [&owner_socket, &linked_socket, &other_socket] {
+        socket.set_nonblocking(true).unwrap();
+    }
+    let context = signal::RequestContext::new(linked.path(), owner.path()).unwrap();
+    let encoded = serde_json::to_string(&context).unwrap();
+    let receipt = signal::request_with_context(linked.path(), "retention-release", Some(&encoded));
+    assert_eq!(receipt["accepted"], true);
+    assert_eq!(receipt["socket"], serde_json::json!(owner_path));
+    let mut bytes = [0; 64];
+    let n = owner_socket.recv(&mut bytes).unwrap();
+    assert_eq!(&bytes[..n], b"retention-release");
+    assert_eq!(
+        linked_socket.recv(&mut bytes).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+
+    let receipt = signal::request_with_context(other.path(), "other-owner", Some(&encoded));
+    assert_eq!(receipt["accepted"], true);
+    assert_eq!(receipt["socket"], serde_json::json!(other_path));
+    assert_eq!(other_socket.recv(&mut bytes).unwrap(), b"other-owner".len());
+    assert_eq!(
+        owner_socket.recv(&mut bytes).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn destination_context_rejects_invalid_input_and_preserves_the_original_responsibility() {
+    let (owner, owner_path) = host();
+    let (linked, linked_path) = host();
+    let owner_socket = UnixDatagram::bind(owner_path).unwrap();
+    owner_socket.set_nonblocking(true).unwrap();
+    let linked_socket = UnixDatagram::bind(linked_path).unwrap();
+    linked_socket.set_nonblocking(true).unwrap();
+    let original = linked.path().join(".chrono-harness/state/original.json");
+    fs::write(&original, b"unresolved responsibility").unwrap();
+    for input in [
+        "{}",
+        "null",
+        "{",
+        r#"{"source_root":"relative","owner_root":"/absolute"}"#,
+    ] {
+        let receipt = signal::request_with_context(linked.path(), "released", Some(input));
+        assert_eq!(receipt["status"], "wake-failed");
+        assert_eq!(receipt["accepted"], false);
+        assert_eq!(receipt["responsibility"], "existing-owner-state");
+        assert_eq!(fs::read(&original).unwrap(), b"unresolved responsibility");
+    }
+    let mut bytes = [0; 64];
+    assert_eq!(
+        owner_socket.recv(&mut bytes).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    assert_eq!(
+        linked_socket.recv(&mut bytes).unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn an_unrelated_route_does_not_require_the_enclosing_hosts_to_remain_present() {
+    let (other, path) = host();
+    let socket = UnixDatagram::bind(&path).unwrap();
+    socket.set_nonblocking(true).unwrap();
+    let context = r#"{"source_root":"/absent-source","owner_root":"/absent-owner"}"#;
+    let receipt = signal::request_with_context(other.path(), "independent-host", Some(context));
+    assert_eq!(receipt["accepted"], true);
+    assert_eq!(receipt["socket"], serde_json::json!(path));
+    let mut bytes = [0; 64];
+    assert_eq!(socket.recv(&mut bytes).unwrap(), b"independent-host".len());
 }

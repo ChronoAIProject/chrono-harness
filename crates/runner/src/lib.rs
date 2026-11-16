@@ -1,145 +1,94 @@
 //! Generic external judge transport. Host policy belongs to the registered judge.
-#![allow(unexpected_cfgs)]
-#[cfg(verus_keep_ghost)]
-use super::paths as admission_paths;
-#[cfg(not(verus_keep_ghost))]
-use crate::verified_paths as admission_paths;
-#[cfg(not(verus_keep_ghost))]
-pub use verus_builtin_macros::verus;
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-#[cfg(verus_keep_ghost)]
-use vstd::string::StringSliceAdditionalSpecFns;
-verus! {
-pub fn admit_relative_path(value: &str) -> (out: Result<(), &str>)
-    ensures match out {
-        Ok(()) => admission_paths::relative_path(value.spec_bytes()),
-        Err(invalid) => invalid@ == value@ && !admission_paths::relative_path(value.spec_bytes()),
-    },
-{
-    if admission_paths::valid_relative_path(value.as_bytes()) { Ok(()) }
-    else { Err(value) }
-}
-}
-
-#[cfg(not(verus_keep_ghost))]
 pub use chrono_diagnostics::runtime::cli as logged_main;
-#[cfg(not(verus_keep_ghost))]
 pub use chrono_diagnostics::runtime::cli_at as logged_main_at;
-#[cfg(not(verus_keep_ghost))]
 pub use chrono_diagnostics::runtime::diagnostic as log_cli_error;
-#[cfg(not(verus_keep_ghost))]
+pub use verified_status::admit_relative_path;
+pub use verus_builtin_macros::verus;
 pub mod artifact_disposal;
-#[cfg(not(verus_keep_ghost))]
 mod canonical_request;
-#[cfg(not(verus_keep_ghost))]
 mod checkout;
-#[cfg(not(verus_keep_ghost))]
 pub mod facts;
-#[cfg(not(verus_keep_ghost))]
 mod facts_binding;
-#[cfg(not(verus_keep_ghost))]
 mod facts_configs;
-#[cfg(not(verus_keep_ghost))]
 mod process_child;
 #[cfg(feature = "retention-test")]
 #[doc(hidden)]
-#[cfg(not(verus_keep_ghost))]
 pub use process_child::direct_child_status_probe_count;
 #[cfg(unix)]
-#[cfg(not(verus_keep_ghost))]
 mod process_ownership;
 /// Existing selector owner resolves a host policy for provider consumers.
-#[cfg(not(verus_keep_ghost))]
 pub fn load_selected_config(root: &Path, path: &str) -> Result<Value, String> {
     facts_configs::load(root, path).map(|(_, _, config, _)| config)
 }
-#[cfg(not(verus_keep_ghost))]
+/// Resolve the same selector using the consumer's original-input reader.
+pub fn load_selected_config_with(
+    path: &str,
+    mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<Value, String> {
+    let bytes = read(path)?;
+    facts_configs::resolve(path, bytes, read).map(|(_, _, config, _)| config)
+}
 mod facts_inputs;
+mod json_fields;
+pub mod nested_proof;
+// 严格证明使用工具库拥有的唯一合同；普通 Rust 从原源文件擦除 ghost 声明。
+#[cfg(verus_keep_ghost)]
+pub use vstd::json_value_specs;
 #[cfg(not(verus_keep_ghost))]
+pub mod json_value_specs;
+// 独立预期直接消费这些生产适配器；不复制实现或创建测试专用替身。
+#[doc(hidden)]
+pub use facts_binding::JsonBindingReferences;
+#[doc(hidden)]
+pub use facts_configs::{CapturedRegistry, JsonSelectorRows, JsonTargetRows, SeenSelectorText};
+#[doc(hidden)]
+pub use facts_inputs::JsonGuardReferences;
 pub mod full;
-#[cfg(not(verus_keep_ghost))]
 pub mod initial;
-#[cfg(not(verus_keep_ghost))]
 pub mod input_file;
-#[cfg(not(verus_keep_ghost))]
 pub mod maintenance_signal;
-#[cfg(not(verus_keep_ghost))]
 pub mod observation;
-#[cfg(not(verus_keep_ghost))]
 pub mod ownership;
-#[cfg(not(verus_keep_ghost))]
 pub mod prepared;
 #[cfg(unix)]
-#[cfg(not(verus_keep_ghost))]
 pub mod process_fds;
-#[cfg(not(verus_keep_ghost))]
 mod publication;
-#[cfg(not(verus_keep_ghost))]
 pub mod retained_artifacts;
-#[cfg(not(verus_keep_ghost))]
 pub mod scoped_report;
-#[cfg(not(verus_keep_ghost))]
 mod short_console;
-#[cfg(not(verus_keep_ghost))]
 pub mod units;
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_cli;
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_git_binding;
-#[cfg(not(verus_keep_ghost))]
 pub use chrono_identifiers as verified_identifiers;
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_limits;
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_paths;
 #[path = "retained_artifacts/verified_release.rs"]
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_release;
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_status;
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_verifier;
-#[cfg(not(verus_keep_ghost))]
 pub use verified_status::{CheckResult, Status};
-#[cfg(not(verus_keep_ghost))]
 pub mod wire;
-#[cfg(not(verus_keep_ghost))]
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]
-#[cfg(not(verus_keep_ghost))]
 pub use publication::NativeOutput;
-#[cfg(not(verus_keep_ghost))]
 pub use publication::{publish_native_output, publish_output, publish_output_to};
-#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
-#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
-#[cfg(not(verus_keep_ghost))]
 use sha2::{Digest, Sha256};
-#[cfg(not(verus_keep_ghost))]
 use std::collections::BTreeSet;
-#[cfg(not(verus_keep_ghost))]
 use std::fs;
-#[cfg(not(verus_keep_ghost))]
 use std::io::{Read, Write};
-#[cfg(not(verus_keep_ghost))]
 use std::path::{Component, Path, PathBuf};
-#[cfg(not(verus_keep_ghost))]
 use std::process::{Command, Stdio};
-#[cfg(not(verus_keep_ghost))]
 use std::sync::{
     Arc, Barrier,
     atomic::{AtomicBool, Ordering},
 };
-#[cfg(not(verus_keep_ghost))]
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-#[cfg(not(verus_keep_ghost))]
 pub const PROTOCOL: &str = "chrono-ci-judge/v1";
 
 /// 字符串入口共用无损 OS 参数边界；原生路径入口沿用 logged_main。
-#[cfg(not(verus_keep_ghost))]
 pub fn logged_text_main(producer: &str, work: impl FnOnce(&[String]) -> u8) -> u8 {
     logged_main(producer, || {
         let native: Vec<_> = std::env::args_os().collect();
@@ -178,7 +127,6 @@ pub fn logged_text_main(producer: &str, work: impl FnOnce(&[String]) -> u8) -> u
 }
 
 #[derive(Debug, PartialEq, Eq)]
-#[cfg(not(verus_keep_ghost))]
 pub struct CliOutput {
     pub exit_code: u8,
     pub stdout: String,
@@ -187,7 +135,6 @@ pub struct CliOutput {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct CommandSpec {
     pub program: String,
     #[serde(default)]
@@ -199,7 +146,6 @@ pub struct CommandSpec {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct CheckConfig {
     pub schema: String,
     pub judge: CommandSpec,
@@ -208,7 +154,6 @@ pub struct CheckConfig {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct Request {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scope: Option<units::Scope>,
@@ -225,7 +170,6 @@ pub struct Request {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct Response {
     pub protocol: String,
     pub request_id: String,
@@ -234,7 +178,6 @@ pub struct Response {
     pub evidence: Value,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg(not(verus_keep_ghost))]
 pub struct ProcessResult {
     pub argv: Vec<String>,
     pub cwd: PathBuf,
@@ -287,13 +230,11 @@ pub struct ProcessResult {
 /// A process setup failure retains its structured owner record while the
 /// public compatibility helpers continue returning the historical message.
 #[derive(Debug)]
-#[cfg(not(verus_keep_ghost))]
 pub(crate) struct ProcessFailure {
     pub(crate) message: String,
     pub(crate) error: Failure,
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl ProcessFailure {
     fn domain(code: impl Into<String>, message: impl Into<String>) -> Self {
         let message = message.into();
@@ -308,20 +249,17 @@ impl ProcessFailure {
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl From<String> for ProcessFailure {
     fn from(message: String) -> Self {
         Self::domain("E_PROCESS", message)
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl From<&str> for ProcessFailure {
     fn from(message: &str) -> Self {
         Self::from(message.to_string())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl From<std::io::Error> for ProcessFailure {
     fn from(source: std::io::Error) -> Self {
         Self::native("E_PROCESS_OWNERSHIP", source.to_string(), source)
@@ -329,27 +267,22 @@ impl From<std::io::Error> for ProcessFailure {
 }
 
 #[derive(Debug)]
-#[cfg(not(verus_keep_ghost))]
 pub(crate) struct SharedProcessFailure(pub(crate) Arc<ProcessFailure>);
-#[cfg(not(verus_keep_ghost))]
 impl std::fmt::Display for SharedProcessFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl std::error::Error for SharedProcessFailure {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(self.0.as_ref())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl chrono_diagnostics::error::RecordedError for SharedProcessFailure {
     fn error_node(&self) -> chrono_diagnostics::error::ErrorNode {
         self.0.error.record().error
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl ProcessFailure {
     fn shared(source: Arc<Self>) -> Self {
         Self {
@@ -363,31 +296,26 @@ impl ProcessFailure {
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl std::fmt::Display for ProcessFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.message)
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl std::error::Error for ProcessFailure {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         Some(&self.error)
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl chrono_diagnostics::error::RecordedError for ProcessFailure {
     fn error_node(&self) -> chrono_diagnostics::error::ErrorNode {
         self.error.record().error
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 pub fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 /// Transport bytes with bounded memory, returning their observed identity.
-#[cfg(not(verus_keep_ghost))]
 pub fn copy_hashed(input: impl Read, output: impl Write) -> Result<(String, u64), String> {
     verified_status::copy_hash_stream(
         (input, output, Sha256::new()),
@@ -408,7 +336,6 @@ pub fn copy_hashed(input: impl Read, output: impl Write) -> Result<(String, u64)
         |(_, _, hash)| format!("{:x}", hash.finalize()),
     )
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn file_identity(path: &Path) -> Result<(String, u64), String> {
     if !fs::metadata(path)
         .map_err(|e| format!("{}: {e}", path.display()))?
@@ -422,15 +349,12 @@ pub fn file_identity(path: &Path) -> Result<(String, u64), String> {
     }
     copy_hashed(file, std::io::sink())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn relative_path(value: &str) -> Result<(), String> {
     admit_relative_path(value).map_err(|invalid| format!("invalid relative path: {invalid:?}"))
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn no_symlink_parents(root: &Path, relative: &str) -> Result<PathBuf, String> {
     no_symlink_parents_detailed(root, relative).map_err(|error| error.message)
 }
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn no_symlink_parents_detailed(
     root: &Path,
     relative: &str,
@@ -468,7 +392,6 @@ pub(crate) fn no_symlink_parents_detailed(
 /// business or judge process is launched. Missing parent directories are part
 /// of publication preparation; existing files at the final address may be
 /// replaced, while symlinks and type-conflicting parents are rejected.
-#[cfg(not(verus_keep_ghost))]
 pub fn prepare_publication(root: &Path, relative: &str) -> Result<PathBuf, String> {
     relative_path(relative)?;
     let components: Vec<_> = Path::new(relative).components().collect();
@@ -506,7 +429,6 @@ pub fn prepare_publication(root: &Path, relative: &str) -> Result<PathBuf, Strin
     })
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn invocation_template(template: &[String], binding: &Value) -> Vec<String> {
     template
         .iter()
@@ -518,7 +440,6 @@ fn invocation_template(template: &[String], binding: &Value) -> Vec<String> {
         .collect()
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn invocation_path(index: usize, expected: &[String]) -> bool {
     index == 0 || index > 0 && matches!(expected[index - 1].as_str(), "--config" | "--context")
 }
@@ -526,7 +447,6 @@ fn invocation_path(index: usize, expected: &[String]) -> bool {
 /// Resolve the canonical path identities used by the live route validator.
 /// Raw argv/cwd remain in the entry; this value is an additional retained
 /// observation for portable offline comparison after the original root is gone.
-#[cfg(not(verus_keep_ghost))]
 pub fn resolve_invocation(
     root: &Path,
     entry: &Value,
@@ -577,7 +497,6 @@ pub fn resolve_invocation(
 /// Validate a retained entry's live path identities without touching the
 /// original checkout. The raw argv/cwd digest and non-path arguments remain
 /// checked, while path equality comes from the identities captured live.
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_invocation_observation(
     entry: &Value,
     template: &[String],
@@ -634,7 +553,6 @@ pub fn validate_invocation_observation(
 }
 /// Deserialize an opaque JSON value while rejecting duplicate members recursively.
 /// Typed consumers can apply this at dynamic fields without a second whole-document tree.
-#[cfg(not(verus_keep_ghost))]
 pub fn strict_json_value<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Value, D::Error> {
     struct Strict;
     impl<'de> serde::de::Visitor<'de> for Strict {
@@ -696,20 +614,21 @@ pub fn strict_json_value<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Value
     }
     d.deserialize_any(Strict)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn json(bytes: &[u8]) -> Result<Value, String> {
     let mut d = serde_json::Deserializer::from_slice(bytes);
     let v = strict_json_value(&mut d).map_err(|e| e.to_string())?;
     d.end().map_err(|e| e.to_string())?;
     Ok(v)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, String> {
     serde_json::from_value(json(bytes)?).map_err(|e| e.to_string())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn load_config(path: &Path) -> Result<CheckConfig, String> {
-    let c: CheckConfig = decode(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)?;
+    decode_check_config(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)
+}
+/// Decode and validate exactly the bytes already captured by a consumer.
+pub fn decode_check_config(bytes: &[u8]) -> Result<CheckConfig, String> {
+    let c: CheckConfig = decode(bytes)?;
     if !matches!(
         c.schema.as_str(),
         "chrono-ci-check/v1" | "chrono-ci-check/v2" | "chrono-ci-check/v3"
@@ -724,7 +643,6 @@ pub fn load_config(path: &Path) -> Result<CheckConfig, String> {
     units::reference_publication(&c)?;
     Ok(c)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_command(s: &CommandSpec) -> Result<(), String> {
     if s.program.is_empty()
         || s.program.contains('\0')
@@ -740,7 +658,6 @@ pub fn validate_command(s: &CommandSpec) -> Result<(), String> {
 }
 /// Ordered lexical candidates for live resolution and historical invocation verification.
 /// Passing a PATH override avoids consulting the collector's ambient PATH.
-#[cfg(not(verus_keep_ghost))]
 pub fn program_candidates(
     root: &Path,
     program: &str,
@@ -775,7 +692,6 @@ pub fn program_candidates(
     };
     Ok(paths)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn resolve_program(
     root: &Path,
     program: &str,
@@ -790,7 +706,6 @@ pub fn resolve_program(
     }
     Err(format!("executable not found: {program}"))
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<ProcessResult, String> {
     finish_process(
         run_process_inner(
@@ -804,7 +719,6 @@ pub fn run_process(root: &Path, s: &CommandSpec, input: &[u8]) -> Result<Process
         .map_err(|failure| failure.message)?,
     )
 }
-#[cfg(not(verus_keep_ghost))]
 fn finish_process(p: ProcessResult) -> Result<ProcessResult, String> {
     if let Some(error) = &p.failure {
         return Err(error.clone());
@@ -812,12 +726,10 @@ fn finish_process(p: ProcessResult) -> Result<ProcessResult, String> {
     Ok(p)
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn finish_detailed(p: Result<ProcessResult, ProcessFailure>) -> Result<ProcessResult, String> {
     p.map_err(|failure| failure.message)
 }
 /// Same engine, retaining partial output and true exit even when a process bound fires.
-#[cfg(not(verus_keep_ghost))]
 pub fn run_process_observed(
     root: &Path,
     s: &CommandSpec,
@@ -834,7 +746,6 @@ pub fn run_process_observed(
     ))
 }
 /// Preserve a caller's finer acquisition deadline through the same engine.
-#[cfg(not(verus_keep_ghost))]
 pub fn run_process_observed_for(
     root: &Path,
     s: &CommandSpec,
@@ -854,7 +765,6 @@ pub fn run_process_observed_for(
 
 /// Optional live consumers of the same bounded original stream readers.
 /// Writers must return from IO; a failed writer is detached while both pipes drain.
-#[cfg(not(verus_keep_ghost))]
 pub struct ProcessForward<'a> {
     pub stdout: &'a mut (dyn Write + Send),
     pub stderr: &'a mut (dyn Write + Send),
@@ -862,7 +772,6 @@ pub struct ProcessForward<'a> {
 
 /// Same owned process engine and acquisition deadline, with live output forwarding.
 /// A forwarding failure is retained alongside the actual child status.
-#[cfg(not(verus_keep_ghost))]
 pub fn run_process_observed_forwarded_for(
     root: &Path,
     s: &CommandSpec,
@@ -884,7 +793,6 @@ pub fn run_process_observed_forwarded_for(
 }
 
 /// Runner-owned wire callers use this variant to retain prelaunch causes.
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn run_process_observed_detailed(
     root: &Path,
     s: &CommandSpec,
@@ -903,7 +811,6 @@ pub(crate) fn run_process_observed_detailed(
 /// Explicit originals for a consumer that can be terminated by an enclosing owner.
 /// Stream files contain only bytes actually read, within the unchanged output bound.
 /// A launch record is not a terminal receipt; absent terminal evidence stays unknown.
-#[cfg(not(verus_keep_ghost))]
 pub struct ProcessEvidence<'a> {
     /// Explicit storage owner, independent of the command's working directory.
     pub root: &'a Path,
@@ -915,7 +822,6 @@ pub struct ProcessEvidence<'a> {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct LaunchEvidence {
     schema: String,
     launcher_pid: u32,
@@ -932,11 +838,9 @@ struct LaunchEvidence {
     output_limit_bytes: usize,
 }
 
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_launch_evidence(path: &Path, process: &ProcessResult) -> Result<(), String> {
     validate_launch_evidence_detailed(path, process).map_err(|failure| failure.message)
 }
-#[cfg(not(verus_keep_ghost))]
 fn validate_launch_evidence_detailed(
     path: &Path,
     process: &ProcessResult,
@@ -951,7 +855,6 @@ fn validate_launch_evidence_detailed(
     validate_launch_evidence_bytes(&bytes, process).map_err(ProcessFailure::from)
 }
 
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn validate_launch_evidence_bytes(
     bytes: &[u8],
     process: &ProcessResult,
@@ -1029,7 +932,6 @@ pub(crate) fn validate_launch_evidence_bytes(
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn run_process_observed_retained(
     root: &Path,
     s: &CommandSpec,
@@ -1048,7 +950,6 @@ pub fn run_process_observed_retained(
 }
 
 /// Retain live originals with the caller's exact acquisition deadline, using the same engine.
-#[cfg(not(verus_keep_ghost))]
 pub fn run_process_observed_retained_for(
     root: &Path,
     s: &CommandSpec,
@@ -1067,7 +968,6 @@ pub fn run_process_observed_retained_for(
     ))
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, ProcessFailure> {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
@@ -1136,7 +1036,6 @@ fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, Proce
     Ok(checked)
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn validate_process_evidence_paths(
     root: &Path,
     evidence: &ProcessEvidence<'_>,
@@ -1148,14 +1047,12 @@ fn validate_process_evidence_paths(
     ))
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn launch_descriptor(root: &Path, path: &Path) -> Option<Value> {
     let relative = path.strip_prefix(root).ok()?.to_str()?.to_owned();
     let digest = file_identity(path).ok()?.0;
     Some(serde_json::json!({"path": relative, "sha256": digest}))
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn cleanup_evidence_path(path: &Path) -> Result<(), ProcessFailure> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_symlink() => {
@@ -1178,27 +1075,23 @@ fn cleanup_evidence_path(path: &Path) -> Result<(), ProcessFailure> {
     }
 }
 // The existing process engine owns termination on errors and unwinding too.
-#[cfg(not(verus_keep_ghost))]
 struct OwnedProcess {
     child: process_child::DirectChild,
     #[cfg(unix)]
     ownership: process_ownership::Launch,
     joined: bool,
 }
-#[cfg(not(verus_keep_ghost))]
 impl std::ops::Deref for OwnedProcess {
     type Target = process_child::DirectChild;
     fn deref(&self) -> &Self::Target {
         &self.child
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl std::ops::DerefMut for OwnedProcess {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.child
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl Drop for OwnedProcess {
     fn drop(&mut self) {
         if self.joined {
@@ -1218,7 +1111,6 @@ impl Drop for OwnedProcess {
 /// Acquire explicitly bounded input data on stdout without increasing stderr's
 /// diagnostic bound. The caller owns input eligibility, size and identity checks.
 /// Original process bytes, hashes, exit status and failures use the same engine.
-#[cfg(not(verus_keep_ghost))]
 pub fn run_process_observed_data(
     root: &Path,
     s: &CommandSpec,
@@ -1237,7 +1129,6 @@ pub fn run_process_observed_data(
         None,
     ))
 }
-#[cfg(not(verus_keep_ghost))]
 fn run_process_inner(
     root: &Path,
     s: &CommandSpec,
@@ -1274,7 +1165,6 @@ fn run_process_inner(
         failure
     })
 }
-#[cfg(not(verus_keep_ghost))]
 fn run_process_inner_with_stdout(
     root: &Path,
     s: &CommandSpec,
@@ -2082,7 +1972,6 @@ fn run_process_inner_with_stdout(
     );
     Ok(process)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_response_protocol(
     r: &Response,
     id: &str,
@@ -2126,7 +2015,6 @@ pub fn validate_response_protocol(
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn root_for_config(
     path: &Path,
     canonical_host: Option<&Path>,
@@ -2187,7 +2075,6 @@ fn root_for_config(
     }
     Err("config must reside beneath .chrono-harness".into())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn dispatch(args: &[&str]) -> CliOutput {
     let mut argv = vec![std::env::args().next().unwrap_or_default()];
     argv.extend(args.iter().map(|s| s.to_string()));
@@ -2196,7 +2083,6 @@ pub fn dispatch(args: &[&str]) -> CliOutput {
         serde_json::json!({"argv":argv,"cwd":std::env::current_dir().ok()}),
     )
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     match args{
     []|["help"]|["--help"]|["-h"]=>CliOutput{exit_code:0,stdout:"chrono-harness check\nchrono-harness check --unit ID\nchrono-harness check --collect\nConfigured short checks read .chrono-harness/config.json and produce their inputs automatically. Legacy explicit spelling is accepted only by legacy registered contracts. Full independent scopes require registered execution_units.\nUse --initial without --base for a parentless candidate. Use --context P for chrono-judge/v1 external judges. Use an explicit chrono-initial-check/v1 profile for root registry inventory. Seven-judge governance NOT IMPLEMENTED.\n".into(),stderr:String::new()},
@@ -2206,7 +2092,6 @@ pub fn dispatch_observed(args: &[&str], entry: Value) -> CliOutput {
     _=>CliOutput{exit_code:2,stdout:String::new(),stderr:"E_USAGE: use --help\n".into()}
 }
 }
-#[cfg(not(verus_keep_ghost))]
 fn check(args: &[&str], entry: Value) -> Result<CliOutput, String> {
     if args.is_empty() || args == ["--collect"] || matches!(args, ["--unit", _]) {
         let root = fs::canonicalize(std::env::current_dir().map_err(|e| e.to_string())?)
@@ -2221,7 +2106,6 @@ fn check(args: &[&str], entry: Value) -> Result<CliOutput, String> {
         stderr: String::new(),
     })
 }
-#[cfg(not(verus_keep_ghost))]
 fn check_unmanaged(args: &[&str], entry: Value) -> Result<(u8, String), String> {
     if args.is_empty() || args == ["--collect"] || matches!(args, ["--unit", _]) {
         let root = fs::canonicalize(std::env::current_dir().map_err(|e| e.to_string())?)
@@ -2348,7 +2232,6 @@ fn check_unmanaged(args: &[&str], entry: Value) -> Result<(u8, String), String> 
     )
 }
 #[allow(clippy::too_many_arguments)]
-#[cfg(not(verus_keep_ghost))]
 fn execute_check(
     root: PathBuf,
     config_path: String,

@@ -1,5 +1,5 @@
 //! Finite candidate-owned decoders for explicitly named historical profiles.
-use crate::{Registrations, execution};
+use super::{Registrations, execution};
 use chrono_harness::{
     CommandSpec, facts, json,
     observation::{self, Tool},

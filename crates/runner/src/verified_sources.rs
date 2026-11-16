@@ -6,8 +6,10 @@ use vstd::prelude::*;
 
 use super::{append_bytes, equal_bytes};
 
+#[path = "verified_continuity.rs"]
+pub mod continuity;
+
 /// 只解码实际存在的布尔字段；缺失由 Serde 保留为 None，启用选择归 Verus。
-#[cfg(not(verus_keep_ghost))]
 fn deserialize_classification_policy<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -16,7 +18,6 @@ where
 }
 
 /// JSON 适配只保留原数组和可选布尔值，不选择是否启用分类。
-#[cfg(not(verus_keep_ghost))]
 #[derive(serde::Deserialize)]
 struct DecodedSourceRegistry {
     files: Vec<SourceFile>,
@@ -24,7 +25,6 @@ struct DecodedSourceRegistry {
     require_new_file_classification: Option<bool>,
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl From<DecodedSourceRegistry> for SourceRegistry {
     fn from(decoded: DecodedSourceRegistry) -> Self {
         source_registry(decoded.files, decoded.require_new_file_classification)
@@ -32,6 +32,38 @@ impl From<DecodedSourceRegistry> for SourceRegistry {
 }
 
 verus! {
+
+pub open spec fn source_plan_error(
+    registry: &SourceRegistry,
+    previous: Result<Option<&SourceRegistry>, &str>, nodes: Seq<String>,
+    methods: Seq<super::ProofInvocation>, scopes: Seq<SourceMethodScope>,
+    evidence: &continuity::Continuity,
+) -> Option<(Seq<char>, Seq<char>)> {
+    match registry_classification_error(registry, previous, evidence) {
+        Some(error) => Some(error),
+        None => selected_plan_error(registry.files.entries@, nodes, methods, scopes,
+            matches!(registry.files.require_new_file_classification, Some(true)), evidence, 0),
+    }
+}
+
+/// 库存先验，原错误优先；两个门使用同一固定库存、影响输入和连续性证据。
+pub fn validate_source_plan<'a>(
+    registry: &'a SourceRegistry,
+    previous: Result<Option<&SourceRegistry>, &'a str>, nodes: &Vec<String>,
+    methods: &Vec<super::ProofInvocation>, scopes: &Vec<SourceMethodScope>,
+    evidence: &continuity::Continuity,
+) -> (out: Result<(), CoverageError<'a>>)
+    ensures match out {
+        Ok(()) => source_plan_error(registry, previous, nodes@, methods@, scopes@, evidence).is_none(),
+        Err(error) => source_plan_error(registry, previous, nodes@, methods@, scopes@, evidence) == Some(error.view()),
+    },
+{
+    match validate_file_classifications(registry, previous, evidence) {
+        Err(error) => Err(error),
+        Ok(()) => validate_selected_roots(&registry.files, nodes, methods, scopes, evidence),
+    }
+}
+
 
 /// 仅获取指定路径的原字节；准入、路径选择和长度判断由下方实现负责。
 pub trait DependencyRead {
@@ -65,14 +97,18 @@ pub fn observe_dependency<I: DependencyRead>(
         },
 {
     if contract.is_none() { return None; }
-    if exit != 0 || process_failed || !super::canonical_verifier_arguments(args) {
+    if exit != 0 || process_failed {
         return Some(Err("E_VERUS_SOURCES: original compiler process was not successful".to_string()));
     }
+    let parsed = match super::parse_verifier_arguments(args) {
+        Some(parsed) => parsed,
+        None => { return Some(Err("E_VERUS_SOURCES: original compiler process was not successful".to_string())); },
+    };
     if limit == 0 || limit > 67_108_864 {
         return Some(Err("E_VERUS_SOURCES: invalid dependency observation bound".to_string()));
     }
     let mut path = Vec::new();
-    append_bytes(&mut path, args[10].as_str().as_bytes());
+    append_bytes(&mut path, args[parsed.output].as_str().as_bytes());
     append_bytes(&mut path, &[46u8, 100u8]);
     let read = io.read(path.as_slice(), limit as u64 + 1);
     match read {
@@ -577,14 +613,14 @@ pub struct SourceBinding {
     pub length: u64,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(from = "DecodedSourceRegistry"))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(from = "DecodedSourceRegistry")]
 pub struct SourceRegistry {
     pub files: SourceFiles,
 }
 
 /// 分类开关与它约束的库存一同交给证明计划，调用方不能只转交文件数组而丢失政策。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+#[derive(Debug)]
 pub struct SourceFiles {
     pub entries: Vec<SourceFile>,
     pub require_new_file_classification: Option<bool>,
@@ -596,31 +632,31 @@ pub fn source_registry(entries: Vec<SourceFile>, policy: Option<bool>) -> (regis
     SourceRegistry { files: SourceFiles { entries, require_new_file_classification: policy } }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[derive(Debug, serde::Deserialize)]
 pub struct SourceFile {
     pub path: String,
-    #[cfg_attr(not(verus_keep_ghost), serde(default))]
+    #[serde(default)]
     pub verification: Option<SourceVerification>,
 }
 
 /// 缺少声明仍是未知覆盖；数据声明不授予任何仓内函数受信例外。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum SourceRole {
     Program,
     Specification,
     Data,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceVerification {
     pub role: SourceRole,
     pub roots: Vec<SourceProofRoot>,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceProofRoot {
     pub path: String,
     pub operation: String,
@@ -731,7 +767,8 @@ pub fn validate_source_declaration(file: &SourceFile) -> (out: Result<(), String
 pub trait CandidateSourceRead {
     fn text(&self, path: &[u8]) -> Result<String, String>;
     fn mode(&self, path: &str) -> Option<String>;
-    fn blob(&self, path: &str) -> Result<Vec<u8>, String>;
+    /// 按输入顺序返回全部原字节；调用方独立核对数量及逐项摘要。
+    fn blobs(&self, paths: &Vec<String>) -> Result<Vec<Vec<u8>>, String>;
     fn digest(&self, bytes: &[u8]) -> Vec<u8>;
 }
 
@@ -769,10 +806,10 @@ pub open spec fn regular_mode(mode: Seq<char>) -> bool {
 pub open spec fn admission_matches(
     admission: &SourceAdmission, args: Seq<String>, dependency: Seq<u8>, files: Seq<SourceFile>,
 ) -> bool {
-    super::verifier_arguments(args)
+    super::source_only_invocation(args)
         && source_metadata_admitted(admission.compiled@, admission.candidate@,
-            vstd::utf8::encode_utf8(args[8]@))
-        && dependency_content_matches(dependency, vstd::utf8::encode_utf8(args[10]@), admission.compiled@)
+            vstd::utf8::encode_utf8(args[super::invocation_source(args)]@))
+        && dependency_content_matches(dependency, vstd::utf8::encode_utf8(args[super::invocation_output(args)]@), admission.compiled@)
         && admission.candidate.len() == admission.modes.len()
         && (forall|i: int| 0 <= i < admission.candidate.len() ==>
             registered_source(files, (#[trigger] admission.candidate[i]).path@)
@@ -796,8 +833,14 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
 {
     // 组合入口先核合同与观察的有无；此层不复制合同或按名称推断操作。
     if observed.is_none() { return Ok(None); }
-    if !super::canonical_verifier_arguments(args) {
-        return Err("E_VERUS_SOURCES: verifier arguments differ from the registered invocation".to_string());
+    let parsed = match super::parse_verifier_arguments(args) {
+        Some(parsed) => parsed,
+        None => { return Err("E_VERUS_SOURCES: verifier arguments differ from the registered invocation".to_string()); },
+    };
+    // 当前接口只有候选 blob 与 checksum；不能把库、宏、生成物或 VIR 当成源码。
+    match super::require_registered_input_evidence(args) {
+        Ok(()) => {},
+        Err(error) => { return Err(error); },
     }
     let bytes = match observed {
         Some(Ok(bytes)) => bytes,
@@ -807,20 +850,20 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         Ok(value) => value,
         Err(error) => { return Err(error.clone()); },
     };
-    let output = args[10].as_str();
+    let output = args[parsed.output].as_str();
     let paths = match compiler_dependency_paths(bytes.as_slice(), output.as_bytes()) {
         Some(paths) => paths,
         None => { return Err("E_VERUS_SOURCES: invalid compiler dependency target".to_string()); },
     };
-    let mut compiled: Vec<SourceBinding> = Vec::new();
-    let mut candidate: Vec<SourceBinding> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    let mut normalized_paths: Vec<Vec<u8>> = Vec::new();
     let mut modes: Vec<String> = Vec::new();
     let mut i = 0;
     while i < paths.len()
         invariant 0 <= i <= paths.len(),
-            compiled.len() == i, candidate.len() == i, modes.len() == i,
+            names.len() == i, normalized_paths.len() == i, modes.len() == i,
             forall|j: int| 0 <= j < i ==>
-                registered_source(registry.files.entries@, (#[trigger] candidate[j]).path@)
+                registered_source(registry.files.entries@, (#[trigger] normalized_paths[j])@)
                     && regular_mode(modes[j]@),
         decreases paths.len() - i,
     {
@@ -845,10 +888,35 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
             && !super::identifiers::equal_text(mode.as_str(), "100755") {
             return Err("E_VERUS_SOURCES: candidate source is not a regular file".to_string());
         }
-        let content = match io.blob(name.as_str()) {
-            Ok(content) => content,
-            Err(error) => { return Err(error); },
-        };
+        names.push(name);
+        normalized_paths.push(normalized);
+        modes.push(mode);
+        i += 1;
+    }
+    let contents = match io.blobs(&names) {
+        Ok(contents) => contents,
+        Err(error) => { return Err(error); },
+    };
+    if contents.len() != paths.len() {
+        return Err("E_VERUS_SOURCES: candidate source response count mismatch".to_string());
+    }
+    let mut compiled: Vec<SourceBinding> = Vec::new();
+    let mut candidate: Vec<SourceBinding> = Vec::new();
+    let mut i = 0;
+    while i < paths.len()
+        invariant 0 <= i <= paths.len(),
+            compiled.len() == i, candidate.len() == i,
+            names.len() == paths.len(), normalized_paths.len() == paths.len(),
+            modes.len() == paths.len(), contents.len() == paths.len(),
+            forall|j: int| 0 <= j < paths.len() ==>
+                registered_source(registry.files.entries@, (#[trigger] normalized_paths[j])@)
+                    && regular_mode(modes[j]@),
+            forall|j: int| 0 <= j < i ==> (#[trigger] candidate[j]).path@ == normalized_paths[j]@,
+        decreases paths.len() - i,
+    {
+        let content = &contents[i];
+        let path = &paths[i];
+        let normalized = copy_range(normalized_paths[i].as_slice(), 0, normalized_paths[i].len());
         let digest = io.digest(content.as_slice());
         if !super::identifiers::valid_digest(digest.as_slice()) {
             return Err("E_VERUS_SOURCES: invalid observed source digest".to_string());
@@ -858,10 +926,9 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         let raw_digest = copy_range(digest.as_slice(), 0, digest.len());
         compiled.push(SourceBinding { path: raw_path, sha256: raw_digest, length });
         candidate.push(SourceBinding { path: normalized, sha256: digest, length });
-        modes.push(mode);
         i += 1;
     }
-    if !admit_source_metadata(&compiled, &candidate, args[8].as_str().as_bytes())
+    if !admit_source_metadata(&compiled, &candidate, args[parsed.source].as_str().as_bytes())
         || !matches_dependency_content(bytes.as_slice(), output.as_bytes(), &compiled) {
         return Err("E_VERUS_SOURCES: fixed source metadata or compiler checksums differ".to_string());
     }
@@ -962,15 +1029,22 @@ fn classification_history(files: &Vec<SourceFile>, path: &str) -> (history: (boo
     (found, classified)
 }
 
+pub open spec fn history_path(file: &SourceFile, evidence: &continuity::Continuity) -> Seq<char> {
+    match evidence.origin_value(file.path@) { Some(path) => path, None => file.path@ }
+}
+
 pub open spec fn classification_file_error(
-    file: &SourceFile, previous: Seq<SourceFile>,
+    file: &SourceFile, previous: Seq<SourceFile>, evidence: &continuity::Continuity,
 ) -> Option<Seq<char>> {
-    if data_classification(file) && previously_proof_bearing(previous, file.path@) {
+    let origin = history_path(file, evidence);
+    if data_classification(file) && (previously_proof_bearing(previous, file.path@)
+        || previously_proof_bearing(previous, origin)) {
         Some("E_VERUS_COVERAGE: proof-bearing file was reclassified as data: "@)
     } else if file.verification.is_none() {
-        if !previous_file(previous, file.path@, previous.len() as int) {
+        if !previous_file(previous, file.path@, previous.len() as int) && !evidence.preserves(file.path@) {
             Some("E_VERUS_COVERAGE: new file lacks explicit verification classification: "@)
-        } else if previously_classified(previous, file.path@, previous.len() as int) {
+        } else if previously_classified(previous, file.path@, previous.len() as int)
+            || previously_classified(previous, origin, previous.len() as int) {
             Some("E_VERUS_COVERAGE: existing verification classification was removed: "@)
         } else { None }
     } else if !source_declaration_valid(file)
@@ -980,17 +1054,21 @@ pub open spec fn classification_file_error(
 }
 
 fn validate_file_classification<'a>(
-    file: &'a SourceFile, previous: &Vec<SourceFile>,
+    file: &'a SourceFile, previous: &Vec<SourceFile>, evidence: &continuity::Continuity,
 ) -> (out: Result<(), CoverageError<'a>>)
     ensures match out {
-        Ok(()) => classification_file_error(file, previous@).is_none(),
-        Err(error) => classification_file_error(file, previous@) == Some(error.message@)
+        Ok(()) => classification_file_error(file, previous@, evidence).is_none(),
+        Err(error) => classification_file_error(file, previous@, evidence) == Some(error.message@)
             && error.path@ == file.path@,
     },
 {
+    let origin = match evidence.origin(file.path.as_str()) {
+        Some(path) => path,
+        None => file.path.as_str(),
+    };
     if let Some(declaration) = &file.verification {
         if matches!(declaration.role, SourceRole::Data)
-            && had_proof_obligation(previous, file.path.as_str()) {
+            && (had_proof_obligation(previous, file.path.as_str()) || had_proof_obligation(previous, origin)) {
             return Err(CoverageError {
                 message: "E_VERUS_COVERAGE: proof-bearing file was reclassified as data: ",
                 path: file.path.as_str(),
@@ -999,12 +1077,13 @@ fn validate_file_classification<'a>(
     }
     if file.verification.is_some() && valid_source_declaration(file) { return Ok(()); }
     let history = classification_history(previous, file.path.as_str());
+    let prior = classification_history(previous, origin);
     if file.verification.is_none() {
-        if !history.0 {
+        if !history.0 && !evidence.preserved(file.path.as_str()) {
             return Err(CoverageError { message: "E_VERUS_COVERAGE: new file lacks explicit verification classification: ",
                 path: file.path.as_str() });
         }
-        if history.1 {
+        if history.1 || prior.1 {
             return Err(CoverageError { message: "E_VERUS_COVERAGE: existing verification classification was removed: ",
                 path: file.path.as_str() });
         }
@@ -1016,28 +1095,28 @@ fn validate_file_classification<'a>(
 }
 
 pub open spec fn classifications_error(
-    files: Seq<SourceFile>, previous: Seq<SourceFile>, index: int,
+    files: Seq<SourceFile>, previous: Seq<SourceFile>, evidence: &continuity::Continuity, index: int,
 ) -> Option<(Seq<char>, Seq<char>)>
     decreases files.len() - index,
 {
     if index < 0 || index >= files.len() { None }
     else {
-        match classification_file_error(&files[index], previous) {
+        match classification_file_error(&files[index], previous, evidence) {
             Some(message) => Some((message, files[index].path@)),
-            None => classifications_error(files, previous, index + 1),
+            None => classifications_error(files, previous, evidence, index + 1),
         }
     }
 }
 
 pub open spec fn registry_classification_error(
-    current: &SourceRegistry, previous: Result<Option<&SourceRegistry>, &str>,
+    current: &SourceRegistry, previous: Result<Option<&SourceRegistry>, &str>, evidence: &continuity::Continuity,
 ) -> Option<(Seq<char>, Seq<char>)> {
     let enabled = matches!(current.files.require_new_file_classification, Some(true));
     match previous {
         Err(message) => Some(("E_VERUS_COVERAGE: base file classifications unavailable: "@, message@)),
-        Ok(None) => if enabled { classifications_error(current.files.entries@, Seq::empty(), 0) } else { None },
+        Ok(None) => if enabled { classifications_error(current.files.entries@, Seq::empty(), evidence, 0) } else { None },
         Ok(Some(base)) => {
-            if enabled { classifications_error(current.files.entries@, base.files.entries@, 0) }
+            if enabled { classifications_error(current.files.entries@, base.files.entries@, evidence, 0) }
             else if matches!(base.files.require_new_file_classification, Some(true)) {
                 Some(("E_VERUS_COVERAGE: existing classification requirement cannot be disabled: "@,
                     "require_new_file_classification"@))
@@ -1049,11 +1128,11 @@ pub open spec fn registry_classification_error(
 /// 固定基线启用后，候选不得关闭分类检查；新行必须分类，已有分类不得退回未知。
 /// 未分类存量仍未知，完整生产调用对应继续由各自的证明与原结果负责。
 pub fn validate_file_classifications<'a>(
-    current: &'a SourceRegistry, previous: Result<Option<&SourceRegistry>, &'a str>,
+    current: &'a SourceRegistry, previous: Result<Option<&SourceRegistry>, &'a str>, evidence: &continuity::Continuity,
 ) -> (out: Result<(), CoverageError<'a>>)
     ensures match out {
-        Ok(()) => registry_classification_error(current, previous).is_none(),
-        Err(error) => registry_classification_error(current, previous) == Some(error.view()),
+        Ok(()) => registry_classification_error(current, previous, evidence).is_none(),
+        Err(error) => registry_classification_error(current, previous, evidence) == Some(error.view()),
     },
 {
     let empty = Vec::new();
@@ -1075,17 +1154,17 @@ pub fn validate_file_classifications<'a>(
         },
     };
     if !enabled { return Ok(()); }
-    assert(registry_classification_error(current, previous)
-        == classifications_error(current.files.entries@, base@, 0));
+    assert(registry_classification_error(current, previous, evidence)
+        == classifications_error(current.files.entries@, base@, evidence, 0));
     let mut i = 0;
     while i < current.files.entries.len()
         invariant 0 <= i <= current.files.entries.len(),
-            registry_classification_error(current, previous)
-                == classifications_error(current.files.entries@, base@, i as int),
+            registry_classification_error(current, previous, evidence)
+                == classifications_error(current.files.entries@, base@, evidence, i as int),
         decreases current.files.entries.len() - i,
     {
         reveal_with_fuel(classifications_error, 2);
-        match validate_file_classification(&current.files.entries[i], base) {
+        match validate_file_classification(&current.files.entries[i], base, evidence) {
             Ok(()) => {},
             Err(error) => { return Err(error); },
         }
@@ -1205,7 +1284,50 @@ pub open spec fn node_affected(prefix: Seq<char>, value: Seq<char>, nodes: Seq<S
         && (#[trigger] nodes[i])@ == prefix + value
 }
 
-/// 仅无现存阻碍的库存准备可执行计划；阻碍原文由调用方保留。
+pub open spec fn selected_paths(files: Seq<SourceFile>, nodes: Seq<String>, end: int)
+    -> Seq<Seq<char>>
+    decreases end,
+{
+    if end <= 0 || end > files.len() { Seq::empty() }
+    else {
+        let earlier = selected_paths(files, nodes, end - 1);
+        if file_affected(&files[end - 1], nodes) { earlier.push(files[end - 1].path@) }
+        else { earlier }
+    }
+}
+
+pub open spec fn path_values(paths: Seq<String>) -> Seq<Seq<char>> {
+    paths.map(|i: int, path: String| path@)
+}
+
+/// 完整保留原顺序和重复项，只收集实际受影响的原库存路径。
+pub fn continuity_paths(inventory: &SourceFiles, nodes: &Vec<String>) -> (out: Vec<String>)
+    ensures path_values(out@) == if matches!(inventory.require_new_file_classification, Some(true)) {
+        selected_paths(inventory.entries@, nodes@, inventory.entries.len() as int)
+    } else { Seq::<Seq<char>>::empty() },
+{
+    let mut out: Vec<String> = Vec::new();
+    assert(path_values(out@) =~= Seq::<Seq<char>>::empty());
+    if !matches!(inventory.require_new_file_classification, Some(true)) { return out; }
+    let files = &inventory.entries;
+    let mut i = 0;
+    while i < files.len()
+        invariant 0 <= i <= files.len(),
+            matches!(inventory.require_new_file_classification, Some(true)), files@ == inventory.entries@,
+            path_values(out@) == selected_paths(files@, nodes@, i as int),
+        decreases files.len() - i,
+    {
+        let ghost before = path_values(out@);
+        if affected_node("file:", files[i].path.as_str(), nodes) {
+            out.push(files[i].path.clone());
+            assert(path_values(out@) =~= before.push(files[i as int].path@));
+        }
+        reveal_with_fuel(selected_paths, 2);
+        i += 1;
+    }
+    out
+}
+
 pub fn can_validate_selected_plan(blocked: &Vec<String>) -> (ready: bool)
     ensures ready == (blocked.len() == 0),
 {
@@ -1319,7 +1441,7 @@ pub open spec fn root_planned(root: &SourceProofRoot, methods: Seq<super::ProofI
         && methods[i].output_contract.is_some()
         && super::valid_contract(methods[i].output_contract)
         && super::verifier_arguments(methods[i].argv@)
-        && methods[i].argv[8]@ == root.path@
+        && methods[i].argv[super::invocation_source(methods[i].argv@)]@ == root.path@
 }
 
 fn planned_root(root: &SourceProofRoot, methods: &Vec<super::ProofInvocation>) -> (planned: bool)
@@ -1335,25 +1457,28 @@ fn planned_root(root: &SourceProofRoot, methods: &Vec<super::ProofInvocation>) -
                 && methods[i].output_contract.is_some()
                 && super::valid_contract(methods[i].output_contract)
                 && super::verifier_arguments(methods[i].argv@)
-                && methods[i].argv[8]@ == root.path@;
+                && methods[i].argv[super::invocation_source(methods[i].argv@)]@ == root.path@;
             assert(witness == index as int);
         }
     }
     let method = &methods[index];
-    if method.output_contract.is_none() || super::validate_contract(method.output_contract).is_err()
-        || !super::canonical_verifier_arguments(method.argv) { return false; }
-    super::equal_text(method.argv[8].as_str(), root.path.as_str())
+    if method.output_contract.is_none() || super::validate_contract(method.output_contract).is_err() { return false; }
+    let parsed = match super::parse_verifier_arguments(method.argv) {
+        Some(parsed) => parsed,
+        None => { return false; },
+    };
+    super::equal_text(method.argv[parsed.source].as_str(), root.path.as_str())
 }
 
 pub open spec fn file_plan_error(
     file: &SourceFile, nodes: Seq<String>, methods: Seq<super::ProofInvocation>,
-    scopes: Seq<SourceMethodScope>, require_classification: bool, index: int,
+    scopes: Seq<SourceMethodScope>, require_classification: bool, evidence: &continuity::Continuity, index: int,
 ) -> Option<(Seq<char>, Seq<char>)>
     decreases match &file.verification { Some(value) => value.roots.len() - index, None => 0int },
 {
     if !file_plan_affected(file, nodes, scopes) { None }
     else if file.verification.is_none() {
-        if require_classification {
+        if require_classification && !evidence.preserves(file.path@) {
             Some(("E_VERUS_COVERAGE: affected file lacks explicit verification classification: "@, file.path@))
         } else { None }
     } else if !source_declaration_valid(file) {
@@ -1364,24 +1489,24 @@ pub open spec fn file_plan_error(
         else if (file_affected(file, nodes) || root_affected(&declaration.roots[index], nodes, scopes))
             && !root_planned(&declaration.roots[index], methods) {
             Some(("E_VERUS_COVERAGE: declared root lacks a unique strict Verus invocation in the selected plan: "@, file.path@))
-        } else { file_plan_error(file, nodes, methods, scopes, require_classification, index + 1) }
+        } else { file_plan_error(file, nodes, methods, scopes, require_classification, evidence, index + 1) }
     }
 }
 
 fn validate_file_plan<'a>(
     file: &'a SourceFile, nodes: &Vec<String>, methods: &Vec<super::ProofInvocation>,
-    scopes: &Vec<SourceMethodScope>, require_classification: bool,
+    scopes: &Vec<SourceMethodScope>, require_classification: bool, evidence: &continuity::Continuity,
 ) -> (out: Result<(), CoverageError<'a>>)
     ensures match out {
-        Ok(()) => file_plan_error(file, nodes@, methods@, scopes@, require_classification, 0).is_none(),
-        Err(error) => file_plan_error(file, nodes@, methods@, scopes@, require_classification, 0) == Some(error.view()),
+        Ok(()) => file_plan_error(file, nodes@, methods@, scopes@, require_classification, evidence, 0).is_none(),
+        Err(error) => file_plan_error(file, nodes@, methods@, scopes@, require_classification, evidence, 0) == Some(error.view()),
     },
 {
     reveal_with_fuel(file_plan_error, 2);
     if !affected_file_plan(file, nodes, scopes) { return Ok(()); }
     let declaration = match &file.verification {
         None => {
-            if !require_classification { return Ok(()); }
+            if !require_classification || evidence.preserved(file.path.as_str()) { return Ok(()); }
             return Err(CoverageError {
                 message: "E_VERUS_COVERAGE: affected file lacks explicit verification classification: ",
                 path: file.path.as_str(),
@@ -1398,8 +1523,8 @@ fn validate_file_plan<'a>(
         invariant 0 <= i <= declaration.roots.len(),
             file_plan_affected(file, nodes@, scopes@), source_declaration_valid(file),
             file.verification.is_some(), file.verification.unwrap() == *declaration,
-            file_plan_error(file, nodes@, methods@, scopes@, require_classification, 0)
-                == file_plan_error(file, nodes@, methods@, scopes@, require_classification, i as int),
+            file_plan_error(file, nodes@, methods@, scopes@, require_classification, evidence, 0)
+                == file_plan_error(file, nodes@, methods@, scopes@, require_classification, evidence, i as int),
         decreases declaration.roots.len() - i,
     {
         if (affected_node("file:", file.path.as_str(), nodes)
@@ -1415,15 +1540,15 @@ fn validate_file_plan<'a>(
 
 pub open spec fn selected_plan_error(
     files: Seq<SourceFile>, nodes: Seq<String>, methods: Seq<super::ProofInvocation>,
-    scopes: Seq<SourceMethodScope>, require_classification: bool, index: int,
+    scopes: Seq<SourceMethodScope>, require_classification: bool, evidence: &continuity::Continuity, index: int,
 ) -> Option<(Seq<char>, Seq<char>)>
     decreases files.len() - index,
 {
     if index < 0 || index >= files.len() { None }
     else {
-        match file_plan_error(&files[index], nodes, methods, scopes, require_classification, 0) {
+        match file_plan_error(&files[index], nodes, methods, scopes, require_classification, evidence, 0) {
             Some(error) => Some(error),
-            None => selected_plan_error(files, nodes, methods, scopes, require_classification, index + 1),
+            None => selected_plan_error(files, nodes, methods, scopes, require_classification, evidence, index + 1),
         }
     }
 }
@@ -1432,13 +1557,13 @@ pub open spec fn selected_plan_error(
 /// 宿主启用分类要求后，受影响文件必须显式分类；已有证明声明始终按计划核验。
 pub fn validate_selected_roots<'a>(
     inventory: &'a SourceFiles, nodes: &Vec<String>, methods: &Vec<super::ProofInvocation>,
-    scopes: &Vec<SourceMethodScope>,
+    scopes: &Vec<SourceMethodScope>, evidence: &continuity::Continuity,
 ) -> (out: Result<(), CoverageError<'a>>)
     ensures match out {
         Ok(()) => selected_plan_error(inventory.entries@, nodes@, methods@, scopes@,
-            matches!(inventory.require_new_file_classification, Some(true)), 0).is_none(),
+            matches!(inventory.require_new_file_classification, Some(true)), evidence, 0).is_none(),
         Err(error) => selected_plan_error(inventory.entries@, nodes@, methods@, scopes@,
-            matches!(inventory.require_new_file_classification, Some(true)), 0) == Some(error.view()),
+            matches!(inventory.require_new_file_classification, Some(true)), evidence, 0) == Some(error.view()),
     },
 {
     let files = &inventory.entries;
@@ -1448,12 +1573,12 @@ pub fn validate_selected_roots<'a>(
         invariant 0 <= i <= files.len(),
             files@ == inventory.entries@,
             require_classification == matches!(inventory.require_new_file_classification, Some(true)),
-            selected_plan_error(files@, nodes@, methods@, scopes@, require_classification, 0)
-                == selected_plan_error(files@, nodes@, methods@, scopes@, require_classification, i as int),
+            selected_plan_error(files@, nodes@, methods@, scopes@, require_classification, evidence, 0)
+                == selected_plan_error(files@, nodes@, methods@, scopes@, require_classification, evidence, i as int),
         decreases files.len() - i,
     {
         reveal_with_fuel(selected_plan_error, 2);
-        match validate_file_plan(&files[i], nodes, methods, scopes, require_classification) {
+        match validate_file_plan(&files[i], nodes, methods, scopes, require_classification, evidence) {
             Ok(()) => {},
             Err(error) => { return Err(error); },
         }

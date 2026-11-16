@@ -19,11 +19,75 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::std_specs::cmp::OrdSpec;
 #[cfg(verus_keep_ghost)]
+use vstd::std_specs::iter::IteratorSpec;
+#[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
 verus! {
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn fixed_source_read_selects_only_the_eligible_path_and_preserves_inputs() {
+    let batched = policy::select_fixed_source_read(
+        true, (7u8, 9u8),
+        |_input: (u8, u8)| -> (u8, u8) requires false, { panic!() },
+        |input: (u8, u8)| -> (out: (u8, u8)) ensures out == input, { input },
+    );
+    expect_status_true(batched.0 == 7 && batched.1 == 9);
+    let fallback = policy::select_fixed_source_read(
+        false, (3u8, 5u8),
+        |input: (u8, u8)| -> (out: (u8, u8)) ensures out == input, { input },
+        |_input: (u8, u8)| -> (u8, u8) requires false, { panic!() },
+    );
+    expect_status_true(fallback.0 == 3 && fallback.1 == 5);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn acquired_source_bytes_preserve_order_duplicates_empty_and_missing_paths()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        assert(vstd::laws_cmp::obeys_cmp_deep_eq::<String>());
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
+    let mut bytes: std::collections::BTreeMap<String, Vec<u8>> = std::collections::BTreeMap::new();
+    bytes.insert("root".to_string(), vec![0u8, 255u8, 10u8]);
+    bytes.insert("other".to_string(), Vec::new());
+    let paths = vec!["root".to_string(), "other".to_string(), "root".to_string()];
+    let rows = policy::ordered_acquired_blobs(paths.as_slice(), &bytes).unwrap();
+    expect_status_true(rows.len() == 3);
+    proof {
+        assert(bytes.deep_view().contains_key(paths@[0]@));
+        assert(bytes.deep_view().contains_key(paths@[1]@));
+        assert(rows@[0].0@ == paths@[0]@);
+        assert(rows@[1].0@ == paths@[1]@);
+        assert(bytes.deep_view()[paths@[0]@] =~= seq![0u8, 255u8, 10u8]);
+        assert(rows@[0].1@ =~= seq![0u8, 255u8, 10u8]);
+        assert(rows@[2].1@ =~= seq![0u8, 255u8, 10u8]);
+    }
+    expect_status_text(rows[0].0.as_str(), "root");
+    expect_status_text(rows[1].0.as_str(), "other");
+    expect_status_text(rows[2].0.as_str(), "root");
+    expect_status_true(scope_text::equal_bytes(rows[0].1.as_slice(), &[0u8, 255u8, 10u8]));
+    expect_status_true(rows[1].1.len() == 0);
+    expect_status_true(scope_text::equal_bytes(rows[2].1.as_slice(), &[0u8, 255u8, 10u8]));
+    let empty: Vec<String> = Vec::new();
+    let rows = policy::ordered_acquired_blobs(empty.as_slice(), &bytes).unwrap();
+    expect_status_true(rows.len() == 0);
+    let missing = vec!["missing".to_string()];
+    proof {
+        reveal_strlit("root"); reveal_strlit("other"); reveal_strlit("missing");
+        assert(bytes.deep_view().dom() =~= set!["root"@, "other"@]);
+        assert(!bytes.deep_view().contains_key(missing@[0]@));
+    }
+    let rejected = policy::ordered_acquired_blobs(missing.as_slice(), &bytes);
+    expect_status_true(rejected.is_none());
+}
 
 struct ExportFixture {
     trace: Vec<u8>,
@@ -1080,6 +1144,178 @@ proof fn export_fixture_regular_step<B, L, A, C, R, D, Y, W, G, O, F>(
     assert(export_fx_regular_effect(state, relative, previous, expected, out));
 }
 
+// 将实际三行库存的顺序和完整字段独立证明，避免路径排序定律进入全部 IO 分支。
+proof fn export_fixture_three_rows(rows: Seq<(&policy::TreePath, &policy::TreeEntry)>,
+    tree: Map<policy::TreePath, policy::TreeEntry>, middle_blob: bool)
+    requires exists|ka: policy::TreePath, km: policy::TreePath, kz: policy::TreePath|
+            export_fixture_tree_keys(tree, middle_blob, ka, km, kz),
+        policy::tree_rows_view(rows).to_set() == tree.kv_pairs(),
+        policy::tree_rows_ordered(rows),
+    ensures rows.len() == 3,
+        rows[0].0@ == "a/é"@, rows[1].0@ == "m"@, rows[2].0@ == "z\0\n"@,
+        policy::tree_entry_fields(rows[0].1) == ("100644"@, "a oid"@, "blob"@),
+        policy::tree_entry_fields(rows[1].1) == ("100644"@, "m oid"@,
+            if middle_blob { "blob"@ } else { "tree"@ }),
+        policy::tree_entry_fields(rows[2].1) == ("100644"@, "z oid"@, "blob"@),
+        export::blob_paths(rows, 3) == if middle_blob {
+            seq!["a/é"@, "m"@, "z\0\n"@]
+        } else { seq!["a/é"@, "z\0\n"@] },
+{
+    reveal(export_fixture_tree_keys);
+    policy::tree_path_obeys_cmp();
+    reveal_strlit("a/é"); reveal_strlit("m"); reveal_strlit("z\0\n");
+    reveal_strlit("blob"); reveal_strlit("tree");
+    assert("blob"@[0] != "tree"@[0]);
+    export_fixture_path_order("a/é", "m");
+    export_fixture_path_order("m", "z\0\n");
+    let (ka, km, kz) = choose|ka: policy::TreePath, km: policy::TreePath, kz: policy::TreePath|
+        export_fixture_tree_keys(tree, middle_blob, ka, km, kz);
+    let ra = (ka, tree[ka]);
+    let rm = (km, tree[km]);
+    let rz = (kz, tree[kz]);
+    assert(tree.kv_pairs() =~= set![ra, rm, rz]);
+    assert(ka.bytes() == "a/é".spec_bytes());
+    assert(km.bytes() == "m".spec_bytes());
+    assert(kz.bytes() == "z\0\n".spec_bytes());
+    export_rows_three(rows, ra, rm, rz);
+    assert(*rows[0].0 == ka && *rows[0].1 == tree[ka]);
+    assert(*rows[1].0 == km && *rows[1].1 == tree[km]);
+    assert(*rows[2].0 == kz && *rows[2].1 == tree[kz]);
+    reveal_with_fuel(export::blob_paths, 4);
+    assert(export::blob_paths(rows, 3) =~= if middle_blob {
+        seq!["a/é"@, "m"@, "z\0\n"@]
+    } else { seq!["a/é"@, "z\0\n"@] });
+}
+
+// 将三行文件执行与树排序、prefetch 选择分开证明，保留全部轨迹和失败载荷。
+proof fn export_fixture_multiple_files_result<B, L, A, C, R, D, Y, W, G, O, F>(
+    rows: Seq<(&policy::TreePath, &policy::TreeEntry)>, source: ExportFixture,
+    middle_blob: bool, empty_first: bool, limit: u64, failure: u8,
+    io: &export::SnapshotExportIo<B, L, A, C, R, D, Y, W, G, O, F>,
+    out: (ExportFixture, Result<(), String>))
+    where B: Fn(ExportFixture, &Vec<String>) -> (ExportFixture, Result<(), String>),
+    L: Fn(ExportFixture, &String) -> (ExportFixture, Result<String, String>),
+    A: Fn(ExportFixture, &String) -> (ExportFixture, Option<String>),
+    C: Fn(ExportFixture, String) -> (ExportFixture, Result<(), String>),
+    R: Fn(ExportFixture, &String) -> (ExportFixture, Result<Vec<u8>, String>),
+    D: Fn(ExportFixture, Vec<u8>) -> (ExportFixture, Result<String, String>),
+    Y: Fn(ExportFixture, &String, String) -> (ExportFixture, Result<(), String>),
+    W: Fn(ExportFixture, &String, Vec<u8>) -> (ExportFixture, Result<(), String>),
+    G: Fn(ExportFixture, &String) -> (ExportFixture, Result<bool, String>),
+    O: Fn(ExportFixture, bool, bool) -> (ExportFixture, bool),
+    F: Fn(ExportFixture, &String, bool) -> (ExportFixture, Result<(), String>)
+    requires export_fx_regular_io(io), rows.len() == 3,
+        rows[0].0@ == "a/é"@, rows[1].0@ == "m"@, rows[2].0@ == "z\0\n"@,
+        policy::tree_entry_fields(rows[0].1) == ("100644"@, "a oid"@, "blob"@),
+        policy::tree_entry_fields(rows[1].1) == ("100644"@, "m oid"@,
+            if middle_blob { "blob"@ } else { "tree"@ }),
+        policy::tree_entry_fields(rows[2].1) == ("100644"@, "z oid"@, "blob"@),
+        source.valid, source.trace@ == seq![11u8], source.paths@.len() == 0,
+        !source.empty, !source.symbolic, source.empty_first == empty_first,
+        source.failure == failure, source.later == (if failure == 4 { 8u8 } else { 0u8 }),
+        source.failure_file == (if middle_blob { 2usize } else { 0usize }),
+        if middle_blob { !empty_first && limit == 12 && (failure == 4 || failure == 8) }
+        else { failure == 0
+            && ((empty_first && limit == 4) || (!empty_first && (limit == 7 || limit == 8))) },
+        export::files_result(rows, source, limit, true, io, out),
+    ensures out.0.valid, out.0.paths@.len() == 2,
+        export_fx_texts(out.0.paths@) == if middle_blob {
+            seq!["a/é"@, "m"@]
+        } else { seq!["a/é"@, "z\0\n"@] },
+        export_fx_texts(out.0.prefetched@) == export_fx_texts(source.prefetched@),
+        out.0.prefetched@.len() == source.prefetched@.len(),
+        out.0.trace@ == if middle_blob && failure == 4 {
+            seq![11u8, 1, 2, 3, 4, 7, 8, 9, 10, 1, 2, 3, 4]
+        } else if middle_blob {
+            seq![11u8, 1, 2, 3, 4, 7, 8, 9, 10, 1, 2, 3, 4, 7, 8]
+        } else if limit == 7 {
+            seq![11u8, 1, 2, 3, 4, 7, 8, 9, 10, 1, 2, 3, 4]
+        } else { seq![11u8, 1, 2, 3, 4, 7, 8, 9, 10, 1, 2, 3, 4, 7, 8, 9, 10] },
+        match out.1 {
+            Ok(()) => !middle_blob && limit != 7,
+            Err(error) => (middle_blob || limit == 7) && error@ == if middle_blob {
+                source.error@
+            } else { "snapshot output byte capacity exceeded before writing"@ },
+        },
+{
+    hide(export_fx_regular_io);
+    hide(scope_text::byte_lt);
+    hide(export::file_result); hide(export::parent_result); hide(export::read_result);
+    hide(export::payload_result); hide(export::regular_result);
+    hide(export::symbolic_result); hide(export::counted);
+    hide(vstd::utf8::encode_utf8);
+    reveal(export_fx_regular_effect); reveal(export_fx_next_length);
+    reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
+    reveal(export_fx_failure); reveal(export_fx_empty);
+    reveal(export::files_result); reveal(export::prefix);
+    reveal_strlit("100644"); reveal_strlit("120000"); reveal_strlit("blob"); reveal_strlit("tree");
+    assert("100644"@[1] != "120000"@[1]);
+    assert("blob"@[0] != "tree"@[0]);
+    let states = choose|states: Seq<(ExportFixture, u64)>|
+        export::prefix(rows, states, source, limit, true, io)
+            && match out.1 {
+                Ok(()) => states.len() == 4 && out.0 == states.last().0,
+                Err(error) => states.len() <= 3
+                    && export::file_result(states.last().0, &rows[states.len() - 1].0.text,
+                        &rows[states.len() - 1].1.kind, &rows[states.len() - 1].1.mode,
+                        states.last().1, limit, true, io, (out.0, Err::<u64, String>(error))),
+            };
+    assert(states[0] == (source, 0u64));
+    assert(states.len() >= 2) by {
+        if states.len() == 1 {
+            assert(out.1 is Err);
+            export_fixture_regular_step(source, &rows[0].0.text, &rows[0].1.kind,
+                &rows[0].1.mode, 0, limit, io, 0, (out.0, Err::<u64, String>(out.1->Err_0)));
+            assert(false);
+        }
+    }
+    export_fixture_prefix_step(rows, states, source, limit, io, 0);
+    export_fixture_regular_step(source, &rows[0].0.text, &rows[0].1.kind,
+                &rows[0].1.mode, 0, limit, io, 0, (states[1].0, Ok::<u64, String>(states[1].1)));
+    assert(states[1].0.valid);
+    assert(states[1].0.trace@ =~= seq![11u8, 1, 2, 3, 4, 7, 8, 9, 10]);
+    assert(states[1].0.paths@.len() == 1);
+    assert(export_fx_texts(states[1].0.paths@) =~= seq!["a/é"@]);
+    assert(states[1].1 == (if empty_first { 0u64 } else { 4u64 }));
+    if middle_blob {
+        if states.len() > 2 {
+            export_fixture_prefix_step(rows, states, source, limit, io, 1);
+            export_fixture_regular_step(states[1].0, &rows[1].0.text, &rows[1].1.kind,
+                &rows[1].1.mode, states[1].1, limit, io, failure, (states[2].0, Ok::<u64, String>(states[2].1)));
+            assert(false);
+        }
+        assert(states.len() == 2);
+        assert(out.1 is Err);
+        export_fixture_regular_step(states[1].0, &rows[1].0.text, &rows[1].1.kind,
+                &rows[1].1.mode, states[1].1, limit, io, failure, (out.0, Err::<u64, String>(out.1->Err_0)));
+    } else {
+        assert(states.len() >= 3) by { reveal(export::file_result); }
+        export_fixture_prefix_step(rows, states, source, limit, io, 1);
+        assert(states[2] == states[1]) by { reveal(export::file_result); }
+        if states.len() == 4 {
+            export_fixture_prefix_step(rows, states, source, limit, io, 2);
+            export_fixture_regular_step(states[2].0, &rows[2].0.text, &rows[2].1.kind,
+                &rows[2].1.mode, states[2].1, limit, io, if limit == 7 { 12 } else { 0 }, (states[3].0, Ok::<u64, String>(states[3].1)));
+        }
+        if limit == 7 {
+            assert(states.len() == 3);
+            assert(out.1 is Err);
+            export_fixture_regular_step(states[2].0, &rows[2].0.text, &rows[2].1.kind,
+                &rows[2].1.mode, states[2].1, limit, io, 12, (out.0, Err::<u64, String>(out.1->Err_0)));
+        } else {
+            assert(out.1 is Ok) by {
+                if out.1 is Err {
+                    assert(states.len() == 3);
+                    export_fixture_regular_step(states[2].0, &rows[2].0.text, &rows[2].1.kind,
+                &rows[2].1.mode, states[2].1, limit, io, 0, (out.0, Err::<u64, String>(out.1->Err_0)));
+                    assert(false);
+                }
+            }
+            assert(states.len() == 4);
+        }
+    }
+}
+
 fn snapshot_multiple_files_case(middle_blob: bool, empty_first: bool, limit: u64,
     failure: u8, error: &str)
     requires if middle_blob { !empty_first && limit == 12 && (failure == 4 || failure == 8) }
@@ -1093,23 +1329,13 @@ fn snapshot_multiple_files_case(middle_blob: bool, empty_first: bool, limit: u64
     hide(export::symbolic_result); hide(export::counted);
     hide(vstd::utf8::encode_utf8);
     proof {
-        reveal(export_fx_regular_effect); reveal(export_fx_next_length);
-        reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
-        reveal(export_fx_failure); reveal(export_fx_empty);
-        reveal(export::rows_result); reveal(export::files_result); reveal(export::prefix);
-        reveal_with_fuel(export::blob_paths, 4);
-        policy::tree_path_obeys_cmp();
-        reveal_strlit("a/é"); reveal_strlit("m"); reveal_strlit("z\0\n");
-        reveal(export_fixture_tree_keys);
+        reveal(export_fx_fixed); reveal(export_fx_texts); reveal(export_fx_failure);
+        reveal(export::rows_result);
         reveal_strlit("100644"); reveal_strlit("120000"); reveal_strlit("blob"); reveal_strlit("tree");
         assert("100644"@[1] != "120000"@[1]);
         assert("blob"@[0] != "tree"@[0]);
-        export_fixture_path_order("a/é", "m");
-        export_fixture_path_order("m", "z\0\n");
     }
     let tree = export_fixture_tree(middle_blob);
-    let ghost (ka, km, kz) = choose|ka: policy::TreePath, km: policy::TreePath, kz: policy::TreePath|
-        export_fixture_tree_keys(tree@, middle_blob, ka, km, kz);
     let mut state = export_fx_initial(failure, if failure == 4 { 8 } else { 0 }, error, false, false);
     state.empty_first = empty_first;
     if middle_blob { state.failure_file = 2; }
@@ -1123,28 +1349,11 @@ fn snapshot_multiple_files_case(middle_blob: bool, empty_first: bool, limit: u64
     proof { assert(export_fx_regular_io(&io)) by { reveal(export_fx_regular_io); } }
     let out = export::snapshot(state, &tree, true, limit, true, &io);
     proof {
-        reveal(export_fixture_tree_keys);
         let rows = choose|rows: Seq<(&policy::TreePath, &policy::TreeEntry)>|
             policy::tree_rows_view(rows).to_set() == tree@.kv_pairs()
                 && policy::tree_rows_ordered(rows)
                 && export::rows_result(rows, initial, true, limit, true, &io, out);
-        let ra = (ka, tree@[ka]);
-        let rm = (km, tree@[km]);
-        let rz = (kz, tree@[kz]);
-        assert(tree@.kv_pairs() =~= set![ra, rm, rz]);
-        assert(ka.bytes() == "a/é".spec_bytes());
-        assert(km.bytes() == "m".spec_bytes());
-        assert(kz.bytes() == "z\0\n".spec_bytes());
-        export_rows_three(rows, ra, rm, rz);
-        assert(*rows[0].0 == ka && *rows[0].1 == tree@[ka]);
-        assert(*rows[1].0 == km && *rows[1].1 == tree@[km]);
-        assert(*rows[2].0 == kz && *rows[2].1 == tree@[kz]);
-        assert(rows[0].1.kind@ == "blob"@);
-        assert(rows[1].1.kind@ == if middle_blob { "blob"@ } else { "tree"@ });
-        assert(rows[2].1.kind@ == "blob"@);
-        assert(export::blob_paths(rows, 3) =~= if middle_blob {
-            seq!["a/é"@, "m"@, "z\0\n"@]
-        } else { seq!["a/é"@, "z\0\n"@] });
+        export_fixture_three_rows(rows, tree@, middle_blob);
         let (paths, prefetched) = choose|paths: Vec<String>, prefetched: (ExportFixture, Result<(), String>)|
             paths@.map(|i: int, path: String| path@) == export::blob_paths(rows, 3)
                 && io.prefetch.ensures((initial, &paths), prefetched)
@@ -1154,70 +1363,8 @@ fn snapshot_multiple_files_case(middle_blob: bool, empty_first: bool, limit: u64
                 };
         if failure != 11 {
             assert(prefetched.1 is Ok);
-            let source = prefetched.0;
-            let states = choose|states: Seq<(ExportFixture, u64)>|
-                export::prefix(rows, states, source, limit, true, &io)
-                    && match out.1 {
-                        Ok(()) => states.len() == 4 && out.0 == states.last().0,
-                        Err(error) => states.len() <= 3
-                            && export::file_result(states.last().0, &rows[states.len() - 1].0.text,
-                                &rows[states.len() - 1].1.kind, &rows[states.len() - 1].1.mode,
-                                states.last().1, limit, true, &io, (out.0, Err::<u64, String>(error))),
-                    };
-            assert(states[0] == (source, 0u64));
-            assert(states.len() >= 2) by {
-                if states.len() == 1 {
-                    assert(out.1 is Err);
-                    export_fixture_regular_step(source, &rows[0].0.text, &rows[0].1.kind,
-                        &rows[0].1.mode, 0, limit, &io, 0, (out.0, Err::<u64, String>(out.1->Err_0)));
-                    assert(false);
-                }
-            }
-            export_fixture_prefix_step(rows, states, source, limit, &io, 0);
-            export_fixture_regular_step(source, &rows[0].0.text, &rows[0].1.kind,
-                        &rows[0].1.mode, 0, limit, &io, 0, (states[1].0, Ok::<u64, String>(states[1].1)));
-            assert(states[1].0.valid);
-            assert(states[1].0.trace@ =~= seq![11u8, 1, 2, 3, 4, 7, 8, 9, 10]);
-            assert(states[1].0.paths@.len() == 1);
-            assert(export_fx_texts(states[1].0.paths@) =~= seq!["a/é"@]);
-            assert(states[1].1 == (if empty_first { 0u64 } else { 4u64 }));
-            if middle_blob {
-                if states.len() > 2 {
-                    export_fixture_prefix_step(rows, states, source, limit, &io, 1);
-                    export_fixture_regular_step(states[1].0, &rows[1].0.text, &rows[1].1.kind,
-                        &rows[1].1.mode, states[1].1, limit, &io, failure, (states[2].0, Ok::<u64, String>(states[2].1)));
-                    assert(false);
-                }
-                assert(states.len() == 2);
-                assert(out.1 is Err);
-                export_fixture_regular_step(states[1].0, &rows[1].0.text, &rows[1].1.kind,
-                        &rows[1].1.mode, states[1].1, limit, &io, failure, (out.0, Err::<u64, String>(out.1->Err_0)));
-            } else {
-                assert(states.len() >= 3) by { reveal(export::file_result); }
-                export_fixture_prefix_step(rows, states, source, limit, &io, 1);
-                assert(states[2] == states[1]) by { reveal(export::file_result); }
-                if states.len() == 4 {
-                    export_fixture_prefix_step(rows, states, source, limit, &io, 2);
-                    export_fixture_regular_step(states[2].0, &rows[2].0.text, &rows[2].1.kind,
-                        &rows[2].1.mode, states[2].1, limit, &io, if limit == 7 { 12 } else { 0 }, (states[3].0, Ok::<u64, String>(states[3].1)));
-                }
-                if limit == 7 {
-                    assert(states.len() == 3);
-                    assert(out.1 is Err);
-                    export_fixture_regular_step(states[2].0, &rows[2].0.text, &rows[2].1.kind,
-                        &rows[2].1.mode, states[2].1, limit, &io, 12, (out.0, Err::<u64, String>(out.1->Err_0)));
-                } else {
-                    assert(out.1 is Ok) by {
-                        if out.1 is Err {
-                            assert(states.len() == 3);
-                            export_fixture_regular_step(states[2].0, &rows[2].0.text, &rows[2].1.kind,
-                        &rows[2].1.mode, states[2].1, limit, &io, 0, (out.0, Err::<u64, String>(out.1->Err_0)));
-                            assert(false);
-                        }
-                    }
-                    assert(states.len() == 4);
-                }
-            }
+            export_fixture_multiple_files_result(rows, prefetched.0, middle_blob,
+                empty_first, limit, failure, &io, out);
         }
         assert(export_fx_texts(out.0.prefetched@) =~= export::blob_paths(rows, 3));
     }
@@ -2082,6 +2229,13 @@ fn registry_snapshot_completion_keeps_empty_documents_and_absent_selection()
 fn registry_snapshot_completion_keeps_complete_documents_and_identity()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = "a/entry\0\n".to_owned();
     let effective = "b/目标é\0\n".to_owned();
     proof {
@@ -2095,6 +2249,7 @@ fn registry_snapshot_completion_keeps_complete_documents_and_identity()
     bytes.insert(effective.clone(), vec![17u8, 0, 254]);
     values.insert(entry.clone(), u64::MAX);
     values.insert(effective.clone(), 0u64);
+    registry_fixture_maps(&bytes, &values);
     let out = policy::registry_snapshot_complete(
         entry.clone(), effective.clone(), Some(71u64), Ok((bytes, values)),
     );
@@ -2104,6 +2259,7 @@ fn registry_snapshot_completion_keeps_complete_documents_and_identity()
             expect_status_text(snapshot.entry_path.as_str(), entry.as_str());
             expect_status_text(snapshot.effective_path.as_str(), effective.as_str());
             expect_status_true(snapshot.bytes.len() == 2 && snapshot.values.len() == 2);
+            registry_fixture_maps(&snapshot.bytes, &snapshot.values);
             expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[0u8, 255, 10], u64::MAX);
             expect_registry_pair(&snapshot.bytes, &snapshot.values, &effective, &[17u8, 0, 254], 0u64);
             match snapshot.selection {
@@ -3086,8 +3242,16 @@ fn expect_tree_slot(
         policy::tree_entry_fields(&tree@[*path]) == (mode@, oid@, kind@),
 {
     proof { policy::tree_path_obeys_cmp(); }
+    policy::btree_map_compare_invariant(tree);
+    broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+    proof { reveal(vstd::laws_cmp::obeys_cmp_ord); }
     match tree.get(path) {
         Some(entry) => {
+            proof {
+                let stored = choose|stored: policy::TreePath| tree@.contains_key(stored)
+                    && path.cmp_spec(&stored) is Equal && tree@[stored] == *entry;
+                assert(stored == *path);
+            }
             expect_status_text(entry.mode.as_str(), mode);
             expect_status_text(entry.oid.as_str(), oid);
             expect_status_text(entry.kind.as_str(), kind);
@@ -3136,6 +3300,12 @@ fn git_tree_insert_preserves_other_paths_and_rejects_every_duplicate(a: &str, b:
 
     // 重新构造及 clone 都有独立存储；重复按全文判断，不按地址或条目字段判断。
     let same_path = policy::TreePath::from_text(a);
+    proof {
+        assert(tree@.contains_key(first));
+        assert(first@ == same_path@);
+        assert(exists|stored: policy::TreePath| (#[trigger] tree@.contains_key(stored))
+            && stored@ == same_path@);
+    }
     let out = policy::insert_git_tree_entry(&mut tree, same_path, "100755", "第二\0", "commit");
     expect_tree_duplicate(out);
     expect_status_true(tree.len() == 2);
@@ -3391,7 +3561,15 @@ fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
 {
     proof { policy::tree_path_obeys_cmp(); }
     let mut iterator = tree.iter();
-    let ghost all = iterator@.1;
+    let ghost references = iterator.remaining();
+    let ghost all = references.unref();
+    proof {
+        assert(references.map_values(|row: (&policy::TreePath, &policy::TreeEntry)| *row.0)
+            =~= all.map_values(|row: (policy::TreePath, policy::TreeEntry)| row.0));
+        assert(all.map_values(|row: (policy::TreePath, policy::TreeEntry)| row.0)
+            =~= all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0));
+    }
+    let ghost consumed: int = 0;
     let ghost expected = choose|key: policy::TreePath| tree@.contains_key(key)
         && key@ == path@ && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
             "0000000000000000000000000000000000000001"@, "blob"@);
@@ -3404,30 +3582,34 @@ fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
     let mut found = false;
     loop
         invariant
-            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            iterator.remaining() == references.subrange(consumed, references.len() as int),
+            all == references.unref(), 0 <= consumed <= all.len(), all.len() == tree@.len(),
+            vstd::laws_cmp::obeys_cmp::<policy::TreePath>(),
             all.to_set() == tree@.kv_pairs(),
             0 <= expected_index < all.len(), all[expected_index].0@ == path@,
             policy::tree_entry_fields(&all[expected_index].1) == ("100644"@,
                 "0000000000000000000000000000000000000001"@, "blob"@),
             vstd::std_specs::btree::increasing_seq(all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0)),
-            found == (exists|i: int| 0 <= i < iterator@.0 && (#[trigger] all[i]).0@ == path@),
-        decreases all.len() - iterator@.0,
+            found == (exists|i: int| 0 <= i < consumed && (#[trigger] all[i]).0@ == path@),
+        decreases tree.len() - consumed,
     {
+        let ghost at = consumed;
         match iterator.next() {
             None => {
                 proof {
-                    assert(0 <= expected_index < iterator@.0);
-                    assert(exists|i: int| 0 <= i < iterator@.0 && (#[trigger] all[i]).0@ == path@);
+                    assert(0 <= expected_index < consumed);
+                    assert(exists|i: int| 0 <= i < consumed && (#[trigger] all[i]).0@ == path@);
                 }
                 expect_status_true(found); return;
             },
             Some((key, entry)) => {
+                proof { consumed = at + 1; }
                 if scope_text::equal_text(key.as_str(), path) {
                     // 所有同路径键属于实际唯一键；预期完整字段独立写在此处。
                     proof {
                         policy::tree_path_obeys_cmp();
                         let j = expected_index;
-                        let k = iterator@.0 - 1;
+                        let k = at;
                         let keys = all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0);
                         vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
                         if j < k { assert(keys[j].cmp_spec(&keys[k]) is Less); }
@@ -3487,12 +3669,17 @@ proof fn tree_fixture_literal_rows(a: &str, b: &str)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
+    // 成员展开由专属引理负责，不在整个解析消费者中展开前缀和逐字段关系。
+    hide(policy::git_tree_prefix_map);
+    hide(policy::git_tree_entry_matches);
+    hide(policy::git_tree_row_spec);
     let a = "100644 blob 0000000000000000000000000000000000000001\ta";
     let b = "100644 blob 0000000000000000000000000000000000000001\ta//./b/";
     proof { policy::tree_path_obeys_cmp(); tree_fixture_literal_rows(a, b); }
     let rows = [b, a];
     match policy::parse_git_tree_rows(&rows) {
         Ok(tree) => {
+            assert(tree@.len() == 2) by { reveal(policy::git_tree_prefix_map); }
             expect_status_true(tree.len() == 2);
             proof {
                 assert forall|i: int| #![trigger policy::git_tree_row_at(rows@, i)]
@@ -3513,7 +3700,10 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
         Err(_) => { panic!(); },
     }
     match policy::parse_git_tree_rows(&[]) {
-        Ok(tree) => expect_status_true(tree.len() == 0),
+        Ok(tree) => {
+            assert(tree@.len() == 0) by { reveal(policy::git_tree_prefix_map); }
+            expect_status_true(tree.len() == 0);
+        },
         Err(_) => { panic!(); },
     }
 }
@@ -3706,16 +3896,17 @@ spec fn fixture_tree(tree: Map<policy::TreePath, policy::TreeEntry>,
 fn insert_tree_fixture(tree: &mut policy::Tree, path: &str, mode: &str, oid: &str, kind: &str)
     ensures forall|entries: Map<Seq<char>, policy::TreeEntryFields>|
         fixture_tree(old(tree)@, entries) && !entries.contains_key(path@)
-            ==> #[trigger] fixture_tree(tree@, entries.insert(path@, (mode@, oid@, kind@))),
+            ==> #[trigger] fixture_tree(final(tree)@, entries.insert(path@, (mode@, oid@, kind@))),
 {
     proof { policy::tree_path_obeys_cmp(); }
     let key = policy::TreePath::from_text(path);
     let ghost inserted = key;
-    tree.insert(key, tree_entry(mode, oid, kind));
+    let result = policy::insert_git_tree_entry(tree, key, mode, oid, kind);
     proof {
         assert forall|entries: Map<Seq<char>, policy::TreeEntryFields>|
             fixture_tree(old(tree)@, entries) && !entries.contains_key(path@)
                 implies #[trigger] fixture_tree(tree@, entries.insert(path@, (mode@, oid@, kind@))) by {
+            assert(result.is_ok());
             let expected = entries.insert(path@, (mode@, oid@, kind@));
             assert forall|key: policy::TreePath| tree@.contains_key(key) implies
                 expected.contains_key(key@) && policy::tree_entry_fields(&tree@[key]) == expected[key@] by {
@@ -4584,6 +4775,7 @@ fn checkout_physical_plan_marks_missing_stage_zero_without_a_file_probe() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_physical_plan_preserves_probe_order_and_complete_entry_fields() {
     proof {
+        policy::tree_path_obeys_cmp();
         reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("0");
         broadcast use vstd::string::is_ascii_spec_bytes;
         assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("b"));
@@ -4601,6 +4793,11 @@ fn checkout_physical_plan_preserves_probe_order_and_complete_entry_fields() {
     let ghost ka = key_a;
     expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree,
         key_a, "a-mode", "a-oid", "a-kind"));
+    proof {
+        assert(ka@ == "a"@ && kb@ == "b"@);
+        assert(ka != kb);
+        assert(tree@.dom() =~= set![ka, kb]);
+    }
     let mut stages = policy::GitIndexStages::new();
     expect_status_true(policy::record_git_index_stage(&mut stages, "b", "0").is_ok());
     expect_status_true(policy::record_git_index_stage(&mut stages, "a", "0").is_ok());
@@ -4610,6 +4807,20 @@ fn checkout_physical_plan_preserves_probe_order_and_complete_entry_fields() {
     proof {
         let a = (ka, tree@[ka]);
         let b = (kb, tree@[kb]);
+        assert forall|row: (policy::TreePath, policy::TreeEntry)|
+            tree@.kv_pairs().contains(row) <==> set![a, b].contains(row) by {
+            if tree@.kv_pairs().contains(row) {
+                assert(row.0 == ka || row.0 == kb);
+                assert(row.1 == tree@[row.0]);
+                assert(row == a || row == b);
+            }
+            if set![a, b].contains(row) {
+                assert(row == a || row == b);
+                assert(tree@.contains_key(row.0));
+                assert(row.1 == tree@[row.0]);
+                assert(tree@.kv_pairs().contains(row));
+            }
+        }
         assert(tree@.kv_pairs() =~= set![a, b]);
         assert(stages@.contains_key(policy::GitIndexStage { path: "a", stage: "0" }));
         assert(stages@.contains_key(policy::GitIndexStage { path: "b", stage: "0" }));
@@ -4697,6 +4908,9 @@ fn expect_index_stage_slot<'a>(stages: &policy::GitIndexStages<'a>, path: &'a st
     requires stages@.contains_key(policy::GitIndexStage { path, stage }),
 {
     proof { policy::git_index_stage_obeys_cmp(); }
+    policy::btree_map_compare_invariant(stages);
+    broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+    proof { reveal(vstd::laws_cmp::obeys_cmp_ord); }
     expect_status_true(stages.contains_key(&policy::GitIndexStage { path, stage }));
 }
 
@@ -4840,10 +5054,15 @@ fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
         policy::git_index_stage_obeys_cmp();
         vstd::utf8::encode_utf8_decode_utf8(a@);
         vstd::utf8::encode_utf8_decode_utf8(b@);
+        assert(a.spec_bytes() != b.spec_bytes());
         reveal_strlit("0"); reveal_strlit("1"); reveal_strlit("2"); reveal_strlit("3");
         broadcast use vstd::string::is_ascii_spec_bytes;
         assert(vstd::string::is_ascii("0") && vstd::string::is_ascii("1")
             && vstd::string::is_ascii("2") && vstd::string::is_ascii("3"));
+        assert("0".spec_bytes() =~= seq![48u8]);
+        assert("1".spec_bytes() =~= seq![49u8]);
+        assert("2".spec_bytes() =~= seq![50u8]);
+        assert("3".spec_bytes() =~= seq![51u8]);
     }
     let copied_a = a.to_owned();
     let copied_b = b.to_owned();
@@ -4851,12 +5070,62 @@ fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
     expect_status_true(stages.is_empty());
     let out = policy::record_git_index_stage(&mut stages, a, "0");
     expect_tree_insert_ok(out);
+    proof {
+        assert(stages@.dom() =~= set![policy::GitIndexStage { path: a, stage: "0" }]);
+        assert forall|key: policy::GitIndexStage| #[trigger] stages@.contains_key(key)
+            implies key.stage.spec_bytes() != "1".spec_bytes() by {
+            assert(key == policy::GitIndexStage { path: a, stage: "0" });
+            assert(key.stage@ != "1"@);
+            vstd::utf8::encode_utf8_decode_utf8(key.stage@);
+            vstd::utf8::encode_utf8_decode_utf8("1"@);
+        }
+    }
     let out = policy::record_git_index_stage(&mut stages, a, "1");
     expect_tree_insert_ok(out);
+    proof {
+        assert(stages@.dom() =~= set![policy::GitIndexStage { path: a, stage: "0" },
+            policy::GitIndexStage { path: a, stage: "1" }]);
+        assert forall|key: policy::GitIndexStage| #[trigger] stages@.contains_key(key)
+            implies key.stage.spec_bytes() != "2".spec_bytes() by {
+            assert(key == policy::GitIndexStage { path: a, stage: "0" }
+                || key == policy::GitIndexStage { path: a, stage: "1" });
+            assert(key.stage@ != "2"@);
+            vstd::utf8::encode_utf8_decode_utf8(key.stage@);
+            vstd::utf8::encode_utf8_decode_utf8("2"@);
+        }
+    }
     let out = policy::record_git_index_stage(&mut stages, a, "2");
     expect_tree_insert_ok(out);
+    proof {
+        assert(stages@.dom() =~= set![policy::GitIndexStage { path: a, stage: "0" },
+            policy::GitIndexStage { path: a, stage: "1" },
+            policy::GitIndexStage { path: a, stage: "2" }]);
+        assert forall|key: policy::GitIndexStage| #[trigger] stages@.contains_key(key)
+            implies key.path.spec_bytes() == a.spec_bytes()
+                && key.stage.spec_bytes() != "3".spec_bytes() by {
+            assert(key == policy::GitIndexStage { path: a, stage: "0" }
+                || key == policy::GitIndexStage { path: a, stage: "1" }
+                || key == policy::GitIndexStage { path: a, stage: "2" });
+            assert(key.stage@ != "3"@);
+            vstd::utf8::encode_utf8_decode_utf8(key.stage@);
+            vstd::utf8::encode_utf8_decode_utf8("3"@);
+        }
+    }
     let out = policy::record_git_index_stage(&mut stages, a, "3");
     expect_tree_insert_ok(out);
+    proof {
+        assert(stages@.dom() =~= set![policy::GitIndexStage { path: a, stage: "0" },
+            policy::GitIndexStage { path: a, stage: "1" },
+            policy::GitIndexStage { path: a, stage: "2" },
+            policy::GitIndexStage { path: a, stage: "3" }]);
+        assert forall|key: policy::GitIndexStage| #[trigger] stages@.contains_key(key)
+            implies key.path.spec_bytes() == a.spec_bytes() by {
+            assert(key == policy::GitIndexStage { path: a, stage: "0" }
+                || key == policy::GitIndexStage { path: a, stage: "1" }
+                || key == policy::GitIndexStage { path: a, stage: "2" }
+                || key == policy::GitIndexStage { path: a, stage: "3" });
+        }
+    }
     let out = policy::record_git_index_stage(&mut stages, b, "0");
     expect_tree_insert_ok(out);
     expect_status_true(stages.len() == 5);
@@ -4890,6 +5159,12 @@ fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
     let out = policy::record_git_index_stage(&mut stages, copied_path, "0");
     expect_index_stage_duplicate(out);
     assert(stages@ == before);
+    proof {
+        assert(stages@.contains_key(policy::GitIndexStage { path: a, stage: "3" }));
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == a.spec_bytes()
+            && key.stage.spec_bytes() == "3".spec_bytes());
+    }
     let out = policy::record_git_index_stage(&mut stages, a, "3");
     expect_index_stage_duplicate(out);
     assert(stages@ == before);
@@ -7400,13 +7675,14 @@ fn registry_fixture_batch<P>(
             decode.requires((raw,)) && decode.ensures((raw,), result)
             ==> policy::registry_decoded_view(result) == registry_decode_model(raw@),
     ensures policy::registry_batch_view(out) == policy::registry_batch_spec(
-        expected@, originals@, bytes@, values@, |raw: Seq<u8>| registry_decode_model(raw)),
+        expected@, originals@, policy::registry_map(bytes@), policy::registry_map(values@),
+        |raw: Seq<u8>| registry_decode_model(raw)),
 {
     #[cfg(verus_keep_ghost)]
-    let out = policy::registry_parse_batch(expected, originals, bytes, values, decode,
+    let out = policy::registry_parse_batch_with_model(expected, originals, bytes, values, decode,
         Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
     #[cfg(not(verus_keep_ghost))]
-    let out = policy::registry_parse_batch(expected, originals, bytes, values, decode);
+    let out = policy::registry_parse_batch_with_model(expected, originals, bytes, values, decode);
     out
 }
 
@@ -7422,22 +7698,130 @@ fn expect_registry_batch_error(
     }
 }
 
+proof fn registry_fixture_map_get<V>(map: &std::collections::BTreeMap<String, V>,
+    key: &String, actual: Option<&V>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        vstd::std_specs::btree::btree_map_inv(map),
+        vstd::std_specs::btree::btree_map_get_ensures(map, key, actual),
+    ensures match actual {
+        Some(value) => policy::registry_map(map@).contains_key(key@)
+            && policy::registry_map(map@)[key@] == *value,
+        None => !policy::registry_map(map@).contains_key(key@),
+    },
+{
+    broadcast use {vstd::laws_cmp::lemma_ref_obeys_cmp_spec, Set::lemma_map_contains};
+    policy::registry_map_ordered(*map);
+    reveal(vstd::laws_cmp::obeys_cmp_ord);
+    reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+    match actual {
+        Some(value) => {
+            let stored = choose|stored: String| map@.contains_key(stored)
+                && key.cmp_spec(&stored) is Equal && map@[stored] == *value;
+            assert(stored@ == key@);
+            policy::registry_map_value(map@, stored);
+        },
+        None => {
+            if policy::registry_map(map@).contains_key(key@) {
+                let stored = choose|stored: String| map@.contains_key(stored) && stored@ == key@;
+                assert(key.cmp_spec(&stored) is Equal);
+            }
+        },
+    }
+}
+
+// 文字键投影与标准库深视图保留同一键域及完整值；不把不同 String 存储当成不同路径。
+proof fn registry_fixture_deep_map<V: DeepView>(map: std::collections::BTreeMap<String, V>)
+    requires policy::registry_map_unique(map@),
+    ensures map.deep_view() == Map::new(policy::registry_map(map@).dom(),
+        |text: Seq<char>| policy::registry_map(map@)[text].deep_view()),
+{
+    reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+    broadcast use Set::lemma_map_contains;
+    assert(map.deep_view().dom() =~= policy::registry_map(map@).dom());
+    assert forall|text: Seq<char>| #[trigger] policy::registry_map(map@).contains_key(text)
+        implies map.deep_view()[text] == policy::registry_map(map@)[text].deep_view() by {
+        let key = choose|key: String| map@.contains_key(key) && key@ == text;
+        policy::registry_map_value(map@, key);
+        let stored = choose|stored: String| map@.contains_key(stored) && stored.deep_view() == text;
+        assert(stored == key);
+    }
+    assert(map.deep_view() =~= Map::new(policy::registry_map(map@).dom(),
+        |text: Seq<char>| policy::registry_map(map@)[text].deep_view()));
+}
+
+proof fn registry_fixture_byte_view(raw: Vec<u8>)
+    ensures raw.deep_view() == raw@,
+{
+    assert(raw.deep_view() =~= raw@);
+}
+
+fn registry_fixture_maps(bytes: &std::collections::BTreeMap<String, Vec<u8>>,
+    values: &std::collections::BTreeMap<String, u64>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures vstd::std_specs::btree::btree_map_inv(bytes),
+        vstd::std_specs::btree::btree_map_inv(values),
+        policy::registry_map_unique(bytes@), policy::registry_map_unique(values@),
+        policy::registry_map(bytes@).len() == bytes@.len(),
+        policy::registry_map(values@).len() == values@.len(),
+        registry_sequence_bytes(policy::registry_map(bytes@)) == bytes.deep_view(),
+        policy::registry_map(values@) == values.deep_view(),
+        forall|key: String| #[trigger] bytes@.contains_key(key) ==>
+            policy::registry_map(bytes@).contains_key(key@)
+                && policy::registry_map(bytes@)[key@] == bytes@[key],
+        forall|key: String| #[trigger] values@.contains_key(key) ==>
+            policy::registry_map(values@).contains_key(key@)
+                && policy::registry_map(values@)[key@] == values@[key],
+{
+    policy::btree_map_compare_invariant(bytes);
+    policy::btree_map_compare_invariant(values);
+    proof {
+        policy::registry_map_ordered(*bytes); policy::registry_map_ordered(*values);
+        registry_fixture_deep_map(*bytes); registry_fixture_deep_map(*values);
+        assert forall|text: Seq<char>| #[trigger] policy::registry_map(bytes@).contains_key(text)
+            implies policy::registry_map(bytes@)[text].deep_view() == policy::registry_map(bytes@)[text]@ by {
+            registry_fixture_byte_view(policy::registry_map(bytes@)[text]);
+        }
+        assert(registry_sequence_bytes(policy::registry_map(bytes@)) =~= bytes.deep_view());
+        assert(policy::registry_map(values@) =~= values.deep_view());
+        assert forall|key: String| #[trigger] bytes@.contains_key(key) implies
+            policy::registry_map(bytes@).contains_key(key@)
+                && policy::registry_map(bytes@)[key@] == bytes@[key] by {
+            policy::registry_map_value(bytes@, key);
+        }
+        assert forall|key: String| #[trigger] values@.contains_key(key) implies
+            policy::registry_map(values@).contains_key(key@)
+                && policy::registry_map(values@)[key@] == values@[key] by {
+            policy::registry_map_value(values@, key);
+        }
+    }
+}
+
+proof fn registry_fixture_empty_map<V>()
+    ensures policy::registry_map(Map::<String, V>::empty()) == Map::<Seq<char>, V>::empty(),
+{
+    broadcast use Set::lemma_map_contains;
+    assert(policy::registry_map(Map::<String, V>::empty()) =~= Map::<Seq<char>, V>::empty());
+}
+
 fn expect_registry_pair(
     bytes: &std::collections::BTreeMap<String, Vec<u8>>,
     values: &std::collections::BTreeMap<String, u64>,
     key: &String, original: &[u8], value: u64,
 )
     requires vstd::laws_cmp::obeys_cmp::<String>(),
-        bytes@.contains_key(*key), bytes@[*key]@ == original@,
-        values@.contains_key(*key), values@[*key] == value,
+        policy::registry_map(bytes@).contains_key(key@), policy::registry_map(bytes@)[key@]@ == original@,
+        policy::registry_map(values@).contains_key(key@), policy::registry_map(values@)[key@] == value,
 {
-    broadcast use {vstd::std_specs::btree::axiom_maps_deref_key_to_value,
-        vstd::std_specs::btree::axiom_contains_deref_key};
-    match bytes.get(key) {
+    registry_fixture_maps(bytes, values);
+    let actual = bytes.get(key);
+    proof { registry_fixture_map_get(bytes, key, actual); }
+    match actual {
         Some(actual) => { expect_status_true(scope_text::equal_bytes(actual.as_slice(), original)); },
         None => { panic!(); },
     }
-    match values.get(key) {
+    let actual = values.get(key);
+    proof { registry_fixture_map_get(values, key, actual); }
+    match actual {
         Some(actual) => { expect_status_true(*actual == value); },
         None => { panic!(); },
     }
@@ -7447,15 +7831,33 @@ fn expect_registry_pair(
 fn registry_parse_batch_empty_preserves_both_existing_maps()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let key = "已有/é\0\n".to_owned();
     let mut bytes = std::collections::BTreeMap::new();
     let mut values = std::collections::BTreeMap::new();
     bytes.insert(key.clone(), vec![0u8, 255, 10]);
     values.insert(key.clone(), u64::MAX);
-    let result = registry_fixture_batch(&[], Vec::new(), bytes, values,
+    let expected: Vec<String> = Vec::new();
+    let originals: Vec<(String, Vec<u8>)> = Vec::new();
+    proof {
+        let model = |raw: Seq<u8>| registry_decode_model(raw);
+        assert(policy::registry_decoder_admissible(expected@,
+            originals@, never_decode_registry, model));
+        assert(exists|model: spec_fn(Seq<u8>) -> Result<u64, Seq<char>>|
+            policy::registry_decoder_admissible(expected@, originals@, never_decode_registry, model));
+    }
+    registry_fixture_maps(&bytes, &values);
+    let result = policy::registry_parse_batch(&expected, originals, bytes, values,
         never_decode_registry);
     match result {
         Ok((bytes, values)) => {
+            registry_fixture_maps(&bytes, &values);
             expect_status_true(bytes.len() == 1 && values.len() == 1);
             expect_registry_pair(&bytes, &values, &key, &[0u8, 255, 10], u64::MAX);
         },
@@ -7468,7 +7870,12 @@ fn registry_parse_batch_missing_rows_rejects_before_decoding()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     let expected = vec!["a".to_owned()];
-    let result = registry_fixture_batch(&expected, Vec::new(),
+    proof {
+        assert(policy::registry_decoder_admissible(expected@,
+            Seq::<(String, Vec<u8>)>::empty(), never_decode_registry,
+            |raw: Seq<u8>| registry_decode_model(raw)));
+    }
+    let result = policy::registry_parse_batch(&expected, Vec::new(),
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
         never_decode_registry);
     expect_registry_batch_error(result, "registry acquisition count mismatch");
@@ -7478,8 +7885,16 @@ fn registry_parse_batch_missing_rows_rejects_before_decoding()
 fn registry_parse_batch_extra_rows_rejects_before_path_or_decode()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    let expected: Vec<String> = Vec::new();
     let originals = vec![("unexpected".to_owned(), Vec::new())];
-    let result = registry_fixture_batch(&[], originals,
+    proof {
+        let model = |raw: Seq<u8>| registry_decode_model(raw);
+        assert(policy::registry_decoder_admissible(expected@,
+            originals@, never_decode_registry, model));
+        assert(exists|model: spec_fn(Seq<u8>) -> Result<u64, Seq<char>>|
+            policy::registry_decoder_admissible(expected@, originals@, never_decode_registry, model));
+    }
+    let result = policy::registry_parse_batch(&expected, originals,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
         never_decode_registry);
     expect_registry_batch_error(result, "registry acquisition count mismatch");
@@ -7550,6 +7965,13 @@ fn registry_parse_batch_success_preserves_full_bytes_and_unrelated_entries()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
+    proof {
         reveal_strlit("entry"); reveal_strlit("../目录/é\0\n");
         assert("entry"@.len() != "../目录/é\0\n"@.len());
         reveal_with_fuel(policy::registry_batch_fold, 3);
@@ -7562,10 +7984,12 @@ fn registry_parse_batch_success_preserves_full_bytes_and_unrelated_entries()
     values.insert(old.clone(), u64::MAX);
     let expected = vec![key.clone()];
     let originals = vec![(key.clone(), vec![0u8, 255, 10, 13, 254])];
+    registry_fixture_maps(&bytes, &values);
     let result = registry_fixture_batch(&expected, originals, bytes, values,
         decode_registry_fixture);
     match result {
         Ok((bytes, values)) => {
+            registry_fixture_maps(&bytes, &values);
             expect_status_true(bytes.len() == 2 && values.len() == 2);
             expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);
             expect_registry_pair(&bytes, &values, &key, &[0u8, 255, 10, 13, 254], 0);
@@ -7578,6 +8002,13 @@ fn registry_parse_batch_success_preserves_full_bytes_and_unrelated_entries()
 fn registry_parse_batch_duplicate_keys_replace_both_maps_in_order()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     proof { reveal_with_fuel(policy::registry_batch_fold, 4); }
     let key = "same".to_owned();
     let mut bytes = std::collections::BTreeMap::new();
@@ -7586,10 +8017,12 @@ fn registry_parse_batch_duplicate_keys_replace_both_maps_in_order()
     values.insert(key.clone(), 3);
     let expected = vec![key.clone(), key.clone()];
     let originals = vec![(key.clone(), vec![4u8, 0]), (key.clone(), vec![254u8, 255, 0])];
+    registry_fixture_maps(&bytes, &values);
     let result = registry_fixture_batch(&expected, originals, bytes, values,
         decode_registry_fixture);
     match result {
         Ok((bytes, values)) => {
+            registry_fixture_maps(&bytes, &values);
             expect_status_true(bytes.len() == 1 && values.len() == 1);
             expect_registry_pair(&bytes, &values, &key, &[254u8, 255, 0], 254);
         },
@@ -7623,24 +8056,24 @@ fn registry_sequence_read(state: u8, path: &str) -> (out: (u8, Result<Vec<u8>, S
     else { (next, Ok(vec![2u8, 255, 0])) }
 }
 
-spec fn registry_sequence_bytes(bytes: Map<String, Vec<u8>>) -> Map<String, Seq<u8>> {
-    Map::new(|key: String| bytes.contains_key(key), |key: String| bytes[key]@)
+spec fn registry_sequence_bytes(bytes: Map<Seq<char>, Vec<u8>>) -> Map<Seq<char>, Seq<u8>> {
+    Map::new(bytes.dom(), |key: Seq<char>| bytes[key]@)
 }
 
 spec fn registry_sequence_view(out: (u8, Result<(std::collections::BTreeMap<String, Vec<u8>>,
     std::collections::BTreeMap<String, u64>), String>))
-    -> (u8, Result<(Map<String, Seq<u8>>, Map<String, u64>), Seq<char>>)
+    -> (u8, Result<(Map<Seq<char>, Seq<u8>>, Map<Seq<char>, u64>), Seq<char>>)
 {
     (out.0, match out.1 {
-        Ok((bytes, values)) => Ok((registry_sequence_bytes(bytes@), values@)),
+        Ok((bytes, values)) => Ok((registry_sequence_bytes(policy::registry_map(bytes@)), policy::registry_map(values@))),
         Err(error) => Err(error@),
     })
 }
 
 // 独立读取器和解析器的参考结果；具体用例另外断言完整错误、读取次数和两个 map。
 spec fn registry_sequence_expected(paths: Seq<String>, at: int,
-    bytes: Map<String, Seq<u8>>, values: Map<String, u64>)
-    -> (u8, Result<(Map<String, Seq<u8>>, Map<String, u64>), Seq<char>>)
+    bytes: Map<Seq<char>, Seq<u8>>, values: Map<Seq<char>, u64>)
+    -> (u8, Result<(Map<Seq<char>, Seq<u8>>, Map<Seq<char>, u64>), Seq<char>>)
     recommends 0 <= at <= paths.len() <= 3,
     decreases paths.len() - at,
 {
@@ -7651,13 +8084,13 @@ spec fn registry_sequence_expected(paths: Seq<String>, at: int,
             Ok(raw) => match registry_decode_model(raw) {
                 Err(error) => ((at + 1) as u8, Err(error)),
                 Ok(value) => registry_sequence_expected(paths, at + 1,
-                    bytes.insert(paths[at], raw), values.insert(paths[at], value)),
+                    bytes.insert(paths[at]@, raw), values.insert(paths[at]@, value)),
             },
         }
     }
 }
 
-proof fn registry_sequence_bytes_insert(bytes: Map<String, Vec<u8>>, key: String, raw: Vec<u8>)
+proof fn registry_sequence_bytes_insert(bytes: Map<Seq<char>, Vec<u8>>, key: Seq<char>, raw: Vec<u8>)
     ensures registry_sequence_bytes(bytes.insert(key, raw))
         == registry_sequence_bytes(bytes).insert(key, raw@),
 {
@@ -7665,17 +8098,17 @@ proof fn registry_sequence_bytes_insert(bytes: Map<String, Vec<u8>>, key: String
         =~= registry_sequence_bytes(bytes).insert(key, raw@));
 }
 
-proof fn registry_sequence_bytes_facts(bytes: Map<String, Vec<u8>>)
+proof fn registry_sequence_bytes_facts(bytes: Map<Seq<char>, Vec<u8>>)
     ensures registry_sequence_bytes(bytes).dom() == bytes.dom(),
-        forall|key: String| #[trigger] bytes.contains_key(key)
+        forall|key: Seq<char>| #[trigger] bytes.contains_key(key)
             ==> registry_sequence_bytes(bytes)[key] == bytes[key]@,
 {
     assert(registry_sequence_bytes(bytes).dom() =~= bytes.dom());
 }
 
 proof fn registry_sequence_fixture_step(paths: Seq<String>,
-    before: (u8, Map<String, Vec<u8>>, Map<String, u64>),
-    after: (u8, Map<String, Vec<u8>>, Map<String, u64>))
+    before: (u8, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, u64>),
+    after: (u8, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, u64>))
     requires before.0 < paths.len() <= 3,
         policy::registry_read_sequence_step(before, after, paths[before.0 as int],
             registry_sequence_read, decode_registry_fixture),
@@ -7688,15 +8121,15 @@ proof fn registry_sequence_fixture_step(paths: Seq<String>,
         path@ == paths[before.0 as int]@ && input@ == raw@
         && registry_sequence_read.ensures((before.0, path), (after.0, Ok::<Vec<u8>, String>(raw)))
         && decode_registry_fixture.ensures((input,), Ok::<u64, String>(value))
-        && after.1 == before.1.insert(paths[before.0 as int], raw)
-        && after.2 == before.2.insert(paths[before.0 as int], value);
-    registry_sequence_bytes_insert(before.1, paths[before.0 as int], raw);
+        && after.1 == before.1.insert(paths[before.0 as int]@, raw)
+        && after.2 == before.2.insert(paths[before.0 as int]@, value);
+    registry_sequence_bytes_insert(before.1, paths[before.0 as int]@, raw);
     reveal_with_fuel(registry_sequence_expected, 1);
 }
 
 proof fn registry_sequence_fixture_prefix(paths: Seq<String>,
-    states: Seq<(u8, Map<String, Vec<u8>>, Map<String, u64>)>,
-    initial: (u8, Map<String, Vec<u8>>, Map<String, u64>), at: int)
+    states: Seq<(u8, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, u64>)>,
+    initial: (u8, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, u64>), at: int)
     requires initial.0 == 0, paths.len() <= 3, 0 <= at < states.len(),
         policy::registry_read_sequence_prefix(states, initial, paths,
             registry_sequence_read, decode_registry_fixture),
@@ -7714,7 +8147,7 @@ proof fn registry_sequence_fixture_prefix(paths: Seq<String>,
 }
 
 proof fn registry_sequence_fixture_result(paths: Seq<String>,
-    bytes: Map<String, Vec<u8>>, values: Map<String, u64>,
+    bytes: Map<Seq<char>, Vec<u8>>, values: Map<Seq<char>, u64>,
     out: (u8, Result<(std::collections::BTreeMap<String, Vec<u8>>,
         std::collections::BTreeMap<String, u64>), String>))
     requires paths.len() <= 3,
@@ -7724,7 +8157,7 @@ proof fn registry_sequence_fixture_result(paths: Seq<String>,
         == registry_sequence_expected(paths, 0, registry_sequence_bytes(bytes), values),
 {
     let initial = (0u8, bytes, values);
-    let states = choose|states: Seq<(u8, Map<String, Vec<u8>>, Map<String, u64>)>|
+    let states = choose|states: Seq<(u8, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, u64>)>|
         policy::registry_read_sequence_prefix(states, initial, paths,
             registry_sequence_read, decode_registry_fixture)
         && policy::registry_read_sequence_terminal(states.last(), states.len() - 1, paths,
@@ -7774,18 +8207,27 @@ proof fn registry_sequence_fixture_texts()
 fn registry_read_sequence_empty_keeps_initial_maps_and_reader()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let key = "旧/é".to_owned();
     let mut bytes = std::collections::BTreeMap::new();
     let mut values = std::collections::BTreeMap::new();
     bytes.insert(key.clone(), vec![255u8, 0, 10]);
     values.insert(key.clone(), u64::MAX);
-    let ghost initial = (bytes@, values@);
+    registry_fixture_maps(&bytes, &values);
+    let ghost initial = (policy::registry_map(bytes@), policy::registry_map(values@));
     let out = policy::registry_read_sequence(Vec::new(), 0u8, bytes, values,
         registry_sequence_read, decode_registry_fixture);
     proof { registry_sequence_fixture_result(Seq::empty(), initial.0, initial.1, out); }
     expect_status_true(out.0 == 0);
     match out.1 {
         Ok((bytes, values)) => {
+            registry_fixture_maps(&bytes, &values);
             expect_status_true(bytes.len() == 1 && values.len() == 1);
             expect_registry_pair(&bytes, &values, &key, &[255u8, 0, 10], u64::MAX);
         },
@@ -7796,15 +8238,21 @@ fn registry_read_sequence_empty_keeps_initial_maps_and_reader()
 fn expect_registry_sequence_fixture_error(paths: Vec<String>, count: u8, expected: &str)
     requires vstd::laws_cmp::obeys_cmp::<String>(), paths.len() <= 3,
         registry_sequence_expected(paths@, 0, Map::empty(), Map::empty())
-            == (count, Err::<(Map<String, Seq<u8>>, Map<String, u64>), Seq<char>>(expected@)),
+            == (count, Err::<(Map<Seq<char>, Seq<u8>>, Map<Seq<char>, u64>), Seq<char>>(expected@)),
 {
+    proof {
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use Set::lemma_map_contains;
     let ghost requested = paths@;
     let out = policy::registry_read_sequence(paths, 0u8,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
         registry_sequence_read, decode_registry_fixture);
     proof {
-        assert(registry_sequence_bytes(Map::<String, Vec<u8>>::empty())
-            =~= Map::<String, Seq<u8>>::empty());
+        assert(registry_sequence_bytes(Map::<Seq<char>, Vec<u8>>::empty())
+            =~= Map::<Seq<char>, Seq<u8>>::empty());
         registry_sequence_fixture_result(requested, Map::empty(), Map::empty(), out);
     }
     expect_status_true(out.0 == count);
@@ -7860,6 +8308,13 @@ fn registry_read_sequence_decode_error_after_success_discards_partial_maps()
 fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
     let old = "旧/é".to_owned();
     let key = "../目录/é\0\n".to_owned();
@@ -7868,30 +8323,32 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
     bytes.insert(old.clone(), vec![9u8]);
     values.insert(old.clone(), u64::MAX);
     let paths = vec![key.clone()];
-    let ghost initial = (paths@, bytes@, values@);
+    registry_fixture_maps(&bytes, &values);
+    let ghost initial = (paths@, policy::registry_map(bytes@), policy::registry_map(values@));
     let out = policy::registry_read_sequence(paths, 0u8, bytes, values,
         registry_sequence_read, decode_registry_fixture);
     proof { registry_sequence_fixture_result(initial.0, initial.1, initial.2, out); }
     expect_status_true(out.0 == 1);
     match out.1 {
         Ok((bytes, values)) => {
+            registry_fixture_maps(&bytes, &values);
             proof {
                 registry_sequence_bytes_facts(initial.1);
-                registry_sequence_bytes_facts(bytes@);
-                assert(registry_sequence_bytes(bytes@)[old] == seq![9u8]);
-                assert(bytes@[old]@ =~= seq![9u8]);
+                registry_sequence_bytes_facts(policy::registry_map(bytes@));
+                assert(registry_sequence_bytes(policy::registry_map(bytes@))[old@] == seq![9u8]);
+                assert(policy::registry_map(bytes@)[old@]@ =~= seq![9u8]);
             }
             expect_status_true(bytes.len() == 2 && values.len() == 2);
             let old_original = [9u8];
             proof {
-                assert(registry_sequence_bytes(bytes@)[old] == seq![9u8]);
-                assert(bytes@[old]@ =~= old_original@);
+                assert(registry_sequence_bytes(policy::registry_map(bytes@))[old@] == seq![9u8]);
+                assert(policy::registry_map(bytes@)[old@]@ =~= old_original@);
             }
             expect_registry_pair(&bytes, &values, &old, &old_original, u64::MAX);
             let original = [1u8, 0, 255];
             proof {
-                assert(registry_sequence_bytes(bytes@)[key] == seq![1u8, 0, 255]);
-                assert(bytes@[key]@ =~= original@);
+                assert(registry_sequence_bytes(policy::registry_map(bytes@))[key@] == seq![1u8, 0, 255]);
+                assert(policy::registry_map(bytes@)[key@]@ =~= original@);
             }
             expect_registry_pair(&bytes, &values, &key, &original, 1);
         },
@@ -7903,6 +8360,12 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
 fn registry_read_sequence_duplicate_keys_replace_both_maps_in_order()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use Set::lemma_map_contains;
     proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
     let key = "same".to_owned();
     let paths = vec![key.clone(), key.clone()];
@@ -7911,19 +8374,20 @@ fn registry_read_sequence_duplicate_keys_replace_both_maps_in_order()
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
         registry_sequence_read, decode_registry_fixture);
     proof {
-        assert(registry_sequence_bytes(Map::<String, Vec<u8>>::empty())
-            =~= Map::<String, Seq<u8>>::empty());
+        assert(registry_sequence_bytes(Map::<Seq<char>, Vec<u8>>::empty())
+            =~= Map::<Seq<char>, Seq<u8>>::empty());
         registry_sequence_fixture_result(requested, Map::empty(), Map::empty(), out);
     }
     expect_status_true(out.0 == 2);
     match out.1 {
         Ok((bytes, values)) => {
-            proof { registry_sequence_bytes_facts(bytes@); }
+            registry_fixture_maps(&bytes, &values);
+            proof { registry_sequence_bytes_facts(policy::registry_map(bytes@)); }
             expect_status_true(bytes.len() == 1 && values.len() == 1);
             let original = [2u8, 255, 0];
             proof {
-                assert(registry_sequence_bytes(bytes@)[key] == seq![2u8, 255, 0]);
-                assert(bytes@[key]@ =~= original@);
+                assert(registry_sequence_bytes(policy::registry_map(bytes@))[key@] == seq![2u8, 255, 0]);
+                assert(policy::registry_map(bytes@)[key@]@ =~= original@);
             }
             expect_registry_pair(&bytes, &values, &key, &original, 2);
         },
@@ -8471,15 +8935,29 @@ fn entry_match_digest_prefix_never_matches_full_oid() {
 fn registry_snapshot_initial_same_path_keeps_entry_document()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = ".chrono-harness/入口é\0\n.json".to_owned();
     let same_text = ".chrono-harness/入口é\0\n.json".to_owned();
+    let inserted_entry = entry.clone();
+    let ghost entry_key = inserted_entry;
     let snapshot = policy::registry_snapshot_initial(
-        entry.clone(), vec![0u8, 255, 10], 11u64,
+        inserted_entry, vec![0u8, 255, 10], 11u64,
         same_text, vec![99u8], 22u64, None,
     );
     expect_status_text(snapshot.entry_path.as_str(), entry.as_str());
     expect_status_text(snapshot.effective_path.as_str(), entry.as_str());
     expect_status_true(snapshot.bytes.len() == 1 && snapshot.values.len() == 1);
+    registry_fixture_maps(&snapshot.bytes, &snapshot.values);
+    proof {
+        policy::registry_map_value(snapshot.bytes@, entry_key);
+        policy::registry_map_value(snapshot.values@, entry_key);
+    }
     expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[0u8, 255, 10], 11u64);
     expect_status_true(snapshot.selection.is_none());
 }
@@ -8488,6 +8966,13 @@ fn registry_snapshot_initial_same_path_keeps_entry_document()
 fn registry_snapshot_initial_distinct_paths_keep_both_complete_documents()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = ".chrono-harness/入口\0\n".to_owned();
     let effective = ".chrono-harness/目标é\0\n".to_owned();
     proof {
@@ -8496,13 +8981,24 @@ fn registry_snapshot_initial_distinct_paths_keep_both_complete_documents()
         assert(entry@.len() != effective@.len());
         assert(entry != effective);
     }
+    let inserted_entry = entry.clone();
+    let ghost entry_key = inserted_entry;
+    let inserted_effective = effective.clone();
+    let ghost effective_key = inserted_effective;
     let snapshot = policy::registry_snapshot_initial(
-        entry.clone(), vec![0u8, 255, 10], u64::MAX,
-        effective.clone(), vec![17u8, 0, 254], 0u64, Some(71u64),
+        inserted_entry, vec![0u8, 255, 10], u64::MAX,
+        inserted_effective, vec![17u8, 0, 254], 0u64, Some(71u64),
     );
     expect_status_text(snapshot.entry_path.as_str(), entry.as_str());
     expect_status_text(snapshot.effective_path.as_str(), effective.as_str());
     expect_status_true(snapshot.bytes.len() == 2 && snapshot.values.len() == 2);
+    registry_fixture_maps(&snapshot.bytes, &snapshot.values);
+    proof {
+        policy::registry_map_value(snapshot.bytes@, entry_key);
+        policy::registry_map_value(snapshot.values@, entry_key);
+        policy::registry_map_value(snapshot.bytes@, effective_key);
+        policy::registry_map_value(snapshot.values@, effective_key);
+    }
     expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[0u8, 255, 10], u64::MAX);
     expect_registry_pair(&snapshot.bytes, &snapshot.values, &effective, &[17u8, 0, 254], 0u64);
     match snapshot.selection {
@@ -8515,17 +9011,31 @@ fn registry_snapshot_initial_distinct_paths_keep_both_complete_documents()
 fn registry_snapshot_initial_empty_identity_preserves_entry_and_selection()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = "".to_owned();
     let original = Vec::new();
     let expected: &[u8] = &[];
     proof { assert(original@ =~= expected@); }
+    let inserted_entry = entry.clone();
+    let ghost entry_key = inserted_entry;
     let snapshot = policy::registry_snapshot_initial(
-        entry.clone(), original, 0u64,
+        inserted_entry, original, 0u64,
         "".to_owned(), vec![255u8], u64::MAX, Some(u64::MAX),
     );
     expect_status_text(snapshot.entry_path.as_str(), "");
     expect_status_text(snapshot.effective_path.as_str(), "");
     expect_status_true(snapshot.bytes.len() == 1 && snapshot.values.len() == 1);
+    registry_fixture_maps(&snapshot.bytes, &snapshot.values);
+    proof {
+        policy::registry_map_value(snapshot.bytes@, entry_key);
+        policy::registry_map_value(snapshot.values@, entry_key);
+    }
     expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, expected, 0u64);
     match snapshot.selection {
         Some(value) => { expect_status_true(value == u64::MAX); },
@@ -8537,6 +9047,13 @@ fn registry_snapshot_initial_empty_identity_preserves_entry_and_selection()
 fn registry_snapshot_initial_paths_remain_literal_and_case_sensitive()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
+    }
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = "../A/é\0\n".to_owned();
     let effective = "../a/é\0\n".to_owned();
     let original = Vec::new();
@@ -8550,13 +9067,24 @@ fn registry_snapshot_initial_paths_remain_literal_and_case_sensitive()
         assert(original@ =~= expected@);
         assert(effective_bytes@ =~= expected@);
     }
+    let inserted_entry = entry.clone();
+    let ghost entry_key = inserted_entry;
+    let inserted_effective = effective.clone();
+    let ghost effective_key = inserted_effective;
     let snapshot = policy::registry_snapshot_initial(
-        entry.clone(), original, 13u64,
-        effective.clone(), effective_bytes, 17u64, None,
+        inserted_entry, original, 13u64,
+        inserted_effective, effective_bytes, 17u64, None,
     );
     expect_status_text(snapshot.entry_path.as_str(), "../A/é\0\n");
     expect_status_text(snapshot.effective_path.as_str(), "../a/é\0\n");
     expect_status_true(snapshot.bytes.len() == 2 && snapshot.values.len() == 2);
+    registry_fixture_maps(&snapshot.bytes, &snapshot.values);
+    proof {
+        policy::registry_map_value(snapshot.bytes@, entry_key);
+        policy::registry_map_value(snapshot.values@, entry_key);
+        policy::registry_map_value(snapshot.bytes@, effective_key);
+        policy::registry_map_value(snapshot.values@, effective_key);
+    }
     expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, expected, 13u64);
     expect_registry_pair(&snapshot.bytes, &snapshot.values, &effective, expected, 17u64);
     expect_status_true(snapshot.selection.is_none());

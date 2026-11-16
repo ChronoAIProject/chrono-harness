@@ -1,0 +1,100 @@
+[package]
+name = "chrono-host-bootstrap-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[package.metadata.verus]
+verify = true
+
+[[test]]
+name = "download"
+path = "tests/download.rs"
+
+[[test]]
+name = "verified_cargo"
+path = "tests/verified_cargo.rs"
+
+[[test]]
+name = "proved_build"
+path = "tests/proved_build.rs"
+
+[[bin]]
+name = "chrono-test-proved-cargo"
+path = "tests/support/proved_cargo.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-bootstrap-download"
+path = "tests/support/download.rs"
+test = false
+bench = false
+
+[dependencies]
+chrono-harness = { path = "../runner" }
+chrono-host-bootstrap = { path = "../host-bootstrap" }
+serde_json = "1"
+tempfile = "3"
+
+[[test]]
+name = "bindings"
+path = "tests/bindings.rs"
+
+[[test]]
+name = "environment"
+path = "tests/environment.rs"
+
+[[bin]]
+name = "chrono-test-bootstrap-tool"
+path = "tests/support/tool.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-bootstrap-operation"
+path = "../judge-projects-tests/tests/support/execution_child.rs"
+test = false
+bench = false
+
+[[test]]
+name = "execution"
+path = "tests/execution.rs"
+
+[[test]]
+name = "source"
+path = "tests/source.rs"
+
+[[test]]
+name = "profile"
+path = "tests/profile.rs"
+
+[[test]]
+name = "construction"
+path = "tests/construction.rs"
+
+[[test]]
+name = "original"
+path = "tests/original.rs"
+
+[[test]]
+name = "owner"
+path = "tests/owner.rs"
+
+[[test]]
+name = "shared"
+path = "tests/shared.rs"
+
+[[bin]]
+name = "chrono-test-bootstrap-native"
+path = "../host-bootstrap/src/main.rs"
+test = false
+bench = false
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[profile.dev.package.sha2]
+opt-level = 3

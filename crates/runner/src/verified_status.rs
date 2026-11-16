@@ -8,6 +8,8 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::std_specs::cmp::OrdSpec;
 #[cfg(verus_keep_ghost)]
+use vstd::std_specs::iter::IteratorSpec;
+#[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 
 #[cfg(verus_keep_ghost)]
@@ -28,16 +30,121 @@ pub mod scopes;
 #[path = "verified_export.rs"]
 pub mod snapshot_export;
 
-#[cfg(not(verus_keep_ghost))]
-pub use crate::admit_relative_path;
-#[cfg(verus_keep_ghost)]
-#[path = "lib.rs"]
-#[rustfmt::skip]
-mod path_admission_owner;
-#[cfg(verus_keep_ghost)]
-pub use path_admission_owner::admit_relative_path;
+#[path = "verified_collections.rs"]
+pub mod collections;
+pub use collections::btree_map_compare_invariant;
 
 verus! {
+
+/// 只按实际端点资格选择一条读取路径，完整输入和原结果保持对应。
+pub fn select_fixed_source_read<S, R, F, B>(reusable: bool, inputs: S, fallback: F, batch: B)
+    -> (out: R)
+    where F: FnOnce(S) -> R, B: FnOnce(S) -> R,
+    requires reusable ==> batch.requires((inputs,)),
+        !reusable ==> fallback.requires((inputs,)),
+    ensures if reusable { batch.ensures((inputs,), out) }
+        else { fallback.ensures((inputs,), out) },
+{
+    if reusable { batch(inputs) } else { fallback(inputs) }
+}
+
+pub open spec fn acquired_rows_prefix(
+    paths: Seq<String>, bytes: Map<Seq<char>, Seq<u8>>, rows: Seq<(String, Vec<u8>)>, count: int,
+) -> bool {
+    0 <= count <= paths.len() && rows.len() == count
+        && (forall|j: int| 0 <= j < count ==>
+            #[trigger] bytes.contains_key(paths[j]@)
+            && rows[j].0@ == paths[j]@
+            && rows[j].1@ == bytes[paths[j]@])
+}
+
+proof fn acquired_rows_append(
+    paths: Seq<String>, bytes: Map<Seq<char>, Seq<u8>>, rows: Seq<(String, Vec<u8>)>,
+    count: int, row: (String, Vec<u8>),
+)
+    requires acquired_rows_prefix(paths, bytes, rows, count), count < paths.len(),
+        bytes.contains_key(paths[count]@), row.0@ == paths[count]@,
+        row.1@ == bytes[paths[count]@],
+    ensures acquired_rows_prefix(paths, bytes, rows.push(row), count + 1),
+{
+    let next = rows.push(row);
+    assert(0 <= count + 1 <= paths.len());
+    assert(next.len() == count + 1);
+    assert forall|j: int| 0 <= j < count + 1 implies
+        #[trigger] bytes.contains_key(paths[j]@)
+        && next[j].0@ == paths[j]@
+        && next[j].1@ == bytes[paths[j]@] by {
+        if j < count { assert(next[j] == rows[j]); }
+        else { assert(j == count); }
+    }
+    assert(acquired_rows_prefix(paths, bytes, next, count + 1));
+}
+
+/// 按原请求顺序重建实际取得的字节，保留重复路径；缺少任一条时拒绝。
+pub fn ordered_acquired_blobs(paths: &[String], bytes: &BTreeMap<String, Vec<u8>>)
+    -> (out: Option<Vec<(String, Vec<u8>)>>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures match out {
+        Some(rows) => acquired_rows_prefix(paths@, bytes.deep_view(), rows@, paths.len() as int),
+        None => exists|i: int| 0 <= i < paths.len() && !bytes.deep_view().contains_key(paths@[i]@),
+    },
+{
+    broadcast use vstd::std_specs::btree::group_btree_axioms;
+    btree_map_compare_invariant(bytes);
+    proof {
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        assert(vstd::laws_cmp::obeys_cmp_deep_eq::<String>());
+    }
+    let mut rows: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut i = 0;
+    while i < paths.len()
+        invariant vstd::laws_cmp::obeys_cmp::<String>(),
+            vstd::std_specs::btree::btree_map_inv(bytes),
+            vstd::laws_cmp::obeys_cmp_deep_eq::<String>(),
+            0 <= i <= paths.len(), acquired_rows_prefix(paths@, bytes.deep_view(), rows@, i as int),
+        decreases paths.len() - i,
+    {
+        let path = &paths[i];
+        let content = match bytes.get::<String>(path) {
+            Some(content) => {
+                proof {
+                    vstd::std_specs::btree::lemma_btree_map_get_ensures_if_obeys_cmp_deep_eq(
+                        bytes, path, Some(content));
+                    assert(bytes.deep_view().contains_key(paths@[i as int]@));
+                    assert(content@ == bytes.deep_view()[paths@[i as int]@]);
+                }
+                content
+            },
+            None => {
+                proof {
+                    vstd::std_specs::btree::lemma_btree_map_get_ensures_if_obeys_cmp_deep_eq(
+                        bytes, path, None);
+                    assert(!bytes.deep_view().contains_key(paths@[i as int]@));
+                }
+                return None;
+            },
+        };
+        let name = paths[i].clone();
+        let copied = content.clone();
+        let ghost before = rows@;
+        proof { acquired_rows_append(paths@, bytes.deep_view(), before, i as int, (name, copied)); }
+        rows.push((name, copied));
+        i += 1;
+    }
+    Some(rows)
+}
+
+
+pub fn admit_relative_path(value: &str) -> (out: Result<(), &str>)
+    ensures match out {
+        Ok(()) => paths::relative_path(value.spec_bytes()),
+        Err(invalid) => invalid@ == value@ && !paths::relative_path(value.spec_bytes()),
+    },
+{
+    if paths::valid_relative_path(value.as_bytes()) { Ok(()) }
+    else { Err(value) }
+}
 
 /// Only the synchronous owner releases a local directory operation on return.
 pub fn release_local_directory(local: bool, owner_pid: u32, current_pid: u32) -> (out: bool)
@@ -243,10 +350,18 @@ pub fn registry_snapshot_initial<V>(
             Map::empty().insert(entry_path, config).insert(effective_path, effective_config)
         },
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_insert_ensures);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        assert(vstd::laws_cmp::obeys_cmp_deep_eq::<String>());
+    }
     let mut bytes = BTreeMap::new();
     let mut values = BTreeMap::new();
     bytes.insert(entry_path.clone(), original);
     values.insert(entry_path.clone(), config);
+    assert(bytes@ == Map::empty().insert(entry_path, original));
+    assert(values@ == Map::empty().insert(entry_path, config));
     if !identifiers::equal_text(entry_path.as_str(), effective_path.as_str()) {
         bytes.insert(effective_path.clone(), effective_bytes);
         values.insert(effective_path.clone(), effective_config);
@@ -455,16 +570,18 @@ pub fn pending_registry_paths(paths: Vec<String>, entry: &str, effective: &str) 
     let ghost all = paths@;
     let ghost text = all.map_values(|p: String| p@);
     let mut iterator = paths.into_iter();
+    let ghost consumed: int = 0;
     let mut pending: Vec<String> = Vec::new();
     loop
         invariant
             all == paths@, text == all.map_values(|p: String| p@),
-            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            0 <= consumed <= all.len(),
+            iterator.remaining() == all.subrange(consumed, all.len() as int),
             pending@.map_values(|p: String| p@)
-                == registry_pending_prefix(text, iterator@.0, entry@, effective@),
-        decreases all.len() - iterator@.0,
+                == registry_pending_prefix(text, consumed, entry@, effective@),
+        decreases all.len() - consumed,
     {
-        let ghost at = iterator@.0;
+        let ghost at = consumed;
         match iterator.next() {
             None => { return pending; },
             Some(path) => {
@@ -478,6 +595,7 @@ pub fn pending_registry_paths(paths: Vec<String>, entry: &str, effective: &str) 
                     pending.push(path);
                     assert(pending@.map_values(|p: String| p@) =~= previous.push(original));
                 }
+                proof { consumed = at + 1; }
             },
         }
     }
@@ -526,10 +644,117 @@ pub open spec fn registry_decoded_view<V>(decoded: Result<V, String>) -> Result<
     match decoded { Ok(value) => Ok(value), Err(message) => Err(message@) }
 }
 
+/// 仅投影键的完整文字；原字节和任意值保持原实体，不要求值实现 DeepView。
+pub open spec fn registry_map<V>(map: Map<String, V>) -> Map<Seq<char>, V> {
+    Map::new(
+        map.dom().map(|key: String| key@),
+        |text: Seq<char>| map[choose|key: String| map.contains_key(key) && key@ == text],
+    )
+}
+
+pub open spec fn registry_map_unique<V>(map: Map<String, V>) -> bool {
+    forall|a: String, b: String| #![trigger map.contains_key(a), map.contains_key(b)]
+        map.contains_key(a) && map.contains_key(b) && a@ == b@ ==> a == b
+}
+
+pub proof fn registry_map_value<V>(map: Map<String, V>, key: String)
+    requires registry_map_unique(map), map.contains_key(key),
+    ensures registry_map(map).contains_key(key@), registry_map(map)[key@] == map[key],
+{
+    broadcast use Set::lemma_map_contains;
+    assert(map.dom().contains(key));
+    map.dom().lemma_map_contains(|stored: String| stored@, key@);
+    assert(map.dom().map(|stored: String| stored@).contains(key@));
+    let stored = choose|stored: String| map.contains_key(stored) && stored@ == key@;
+    assert(stored == key);
+}
+
+pub proof fn registry_map_ordered<V>(map: BTreeMap<String, V>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        vstd::std_specs::btree::btree_map_inv(&map),
+    ensures registry_map_unique(map@), registry_map(map@).len() == map@.len(),
+{
+    reveal(vstd::laws_cmp::obeys_cmp_ord);
+    reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+    assert(vstd::laws_cmp::obeys_cmp_deep_eq::<String>());
+    assert forall|a: String, b: String| #![trigger map@.contains_key(a), map@.contains_key(b)]
+        map@.contains_key(a) && map@.contains_key(b) && a@ == b@ implies a == b by {
+        assert(a.cmp_spec(&b) is Equal);
+    }
+    vstd::set_lib::lemma_map_size(map@.dom(), registry_map(map@).dom(), |key: String| key@);
+}
+
+proof fn registry_map_insert<V>(map: Map<String, V>, key: String, value: V)
+    requires registry_map_unique(map),
+        forall|stored: String| #[trigger] map.contains_key(stored) && stored@ == key@ ==> stored == key,
+    ensures registry_map(map.insert(key, value)) == registry_map(map).insert(key@, value),
+{
+    broadcast use Set::lemma_map_contains;
+    let next = map.insert(key, value);
+    assert(registry_map_unique(next));
+    assert forall|text: Seq<char>| registry_map(next).contains_key(text)
+        implies registry_map(map).insert(key@, value).contains_key(text) by {
+        let stored = choose|stored: String| next.contains_key(stored) && stored@ == text;
+        if stored != key { assert(map.contains_key(stored)); }
+    }
+    assert forall|text: Seq<char>| registry_map(map).insert(key@, value).contains_key(text)
+        implies registry_map(next).contains_key(text) by {
+        if text == key@ { registry_map_value(next, key); }
+        else {
+            let stored = choose|stored: String| map.contains_key(stored) && stored@ == text;
+            registry_map_value(next, stored);
+        }
+    }
+    assert forall|text: Seq<char>| #[trigger] registry_map(next).contains_key(text)
+        implies registry_map(next)[text] == registry_map(map).insert(key@, value)[text] by {
+        if text == key@ { registry_map_value(next, key); }
+        else {
+            let stored = choose|stored: String| next.contains_key(stored) && stored@ == text;
+            assert(stored != key);
+            registry_map_value(map, stored);
+            registry_map_value(next, stored);
+        }
+    }
+    assert(registry_map(next) =~= registry_map(map).insert(key@, value));
+}
+
+/// 消费标准 insert 的原合同：重复文字保留原键，文字模型仍精确替换同一项。
+proof fn registry_map_insert_ensures<V>(before: BTreeMap<String, V>, after: BTreeMap<String, V>,
+    key: String, value: V, previous: Option<V>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        vstd::std_specs::btree::btree_map_inv(&before),
+        vstd::std_specs::btree::btree_map_insert_ensures(&before, &after, key, value, previous),
+    ensures vstd::std_specs::btree::btree_map_inv(&after),
+        registry_map(after@) == registry_map(before@).insert(key@, value),
+{
+    registry_map_ordered(before);
+    reveal(vstd::laws_cmp::obeys_cmp_ord);
+    reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+    match previous {
+        Some(old_value) => {
+            let stored = choose|stored: String| before@.contains_key(stored)
+                && key.cmp_spec(&stored) is Equal && old_value == before@[stored]
+                && after@ == before@.insert(stored, value);
+            assert(stored@ == key@);
+            registry_map_insert(before@, stored, value);
+        },
+        None => {
+            assert forall|stored: String| #[trigger] before@.contains_key(stored)
+                && stored@ == key@ implies stored == key by {
+                assert(key.cmp_spec(&stored) is Equal);
+            }
+            registry_map_insert(before@, key, value);
+        },
+    }
+}
+
 pub open spec fn registry_batch_view<V>(
     result: Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>,
-) -> Result<(Map<String, Vec<u8>>, Map<String, V>), Seq<char>> {
-    match result { Ok((bytes, values)) => Ok((bytes@, values@)), Err(message) => Err(message@) }
+) -> Result<(Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), Seq<char>> {
+    match result {
+        Ok((bytes, values)) => Ok((registry_map(bytes@), registry_map(values@))),
+        Err(message) => Err(message@),
+    }
 }
 
 /// 原顺序中此前所有路径与解析都已成功，才会到达当前项。
@@ -545,9 +770,9 @@ pub open spec fn registry_batch_prefix<V>(
 /// 双 map 只在当前路径和解析均成功后一起更新，重复键采用最后一项。
 pub open spec fn registry_batch_fold<V>(
     expected: Seq<String>, rows: Seq<(String, Vec<u8>)>, at: int,
-    bytes: Map<String, Vec<u8>>, values: Map<String, V>,
+    bytes: Map<Seq<char>, Vec<u8>>, values: Map<Seq<char>, V>,
     model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>,
-) -> Result<(Map<String, Vec<u8>>, Map<String, V>), Seq<char>>
+) -> Result<(Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), Seq<char>>
     recommends expected.len() == rows.len(), 0 <= at <= rows.len(),
     decreases rows.len() - at,
 {
@@ -557,22 +782,70 @@ pub open spec fn registry_batch_fold<V>(
         match model(rows[at].1@) {
             Err(message) => Err(message),
             Ok(value) => registry_batch_fold(expected, rows, at + 1,
-                bytes.insert(rows[at].0, rows[at].1), values.insert(rows[at].0, value), model),
+                bytes.insert(rows[at].0@, rows[at].1), values.insert(rows[at].0@, value), model),
         }
     }
 }
 
 pub open spec fn registry_batch_spec<V>(
     expected: Seq<String>, rows: Seq<(String, Vec<u8>)>,
-    bytes: Map<String, Vec<u8>>, values: Map<String, V>,
+    bytes: Map<Seq<char>, Vec<u8>>, values: Map<Seq<char>, V>,
     model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>,
-) -> Result<(Map<String, Vec<u8>>, Map<String, V>), Seq<char>> {
+) -> Result<(Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), Seq<char>> {
     if expected.len() != rows.len() { Err("registry acquisition count mismatch"@) }
     else { registry_batch_fold(expected, rows, 0, bytes, values, model) }
 }
 
-/// 固定批量观察的完整校验、首错及双 map 组装；失败不发布部分状态。
+/// 回调的原完整合同；模型只描述实际可调用前缀及解码结果，不赋予回调证明。
+pub open spec fn registry_decoder_admissible<V, P>(
+    expected: Seq<String>, originals: Seq<(String, Vec<u8>)>, decode: P,
+    model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>,
+) -> bool
+    where P: Fn(&[u8]) -> Result<V, String>,
+{
+    (forall|i: int, raw: &[u8]| 0 <= i < originals.len()
+        && registry_batch_prefix(expected, originals, model, i)
+        && expected[i]@ == originals[i].0@ && raw@ == originals[i].1@
+        ==> decode.requires((raw,)))
+    && (forall|raw: &[u8], result: Result<V, String>|
+        decode.requires((raw,)) && decode.ensures((raw,), result)
+        ==> registry_decoded_view(result) == model(raw@))
+}
+
+pub open spec fn registry_parser_model<V, P>(
+    expected: Seq<String>, originals: Seq<(String, Vec<u8>)>, decode: P,
+) -> spec_fn(Seq<u8>) -> Result<V, Seq<char>>
+    where P: Fn(&[u8]) -> Result<V, String>,
+{
+    choose|model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>|
+        registry_decoder_admissible(expected, originals, decode, model)
+}
+
+/// 实际调用不携带证明 ABI。存在原模型是调用前提，不能由选择见证凭空取得。
 pub fn registry_parse_batch<V, P>(
+    expected: &[String], originals: Vec<(String, Vec<u8>)>,
+    bytes: BTreeMap<String, Vec<u8>>, values: BTreeMap<String, V>, decode: P,
+) -> (out: Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>)
+    where P: Fn(&[u8]) -> Result<V, String>,
+    requires
+        vstd::laws_cmp::obeys_cmp::<String>(),
+        exists|model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>|
+            registry_decoder_admissible(expected@, originals@, decode, model),
+    ensures registry_batch_view(out) == registry_batch_spec(
+        expected@, originals@, registry_map(bytes@), registry_map(values@),
+        registry_parser_model(expected@, originals@, decode)),
+{
+    let ghost model = registry_parser_model(expected@, originals@, decode);
+    #[cfg(verus_keep_ghost)]
+    let out = registry_parse_batch_with_model(expected, originals, bytes, values, decode, Ghost(model));
+    #[cfg(not(verus_keep_ghost))]
+    let out = registry_parse_batch_with_model(expected, originals, bytes, values, decode);
+    out
+}
+
+/// 固定批量观察的完整校验、首错及双 map 组装；失败不发布部分状态。
+/// 独立预期显式提供同一合同的模型，生产入口只转交原五个运行时参数。
+pub fn registry_parse_batch_with_model<V, P>(
     expected: &[String], originals: Vec<(String, Vec<u8>)>,
     bytes: BTreeMap<String, Vec<u8>>, values: BTreeMap<String, V>, decode: P,
     #[cfg(verus_keep_ghost)] Ghost(model): Ghost<spec_fn(Seq<u8>) -> Result<V, Seq<char>>>,
@@ -580,36 +853,36 @@ pub fn registry_parse_batch<V, P>(
     where P: Fn(&[u8]) -> Result<V, String>,
     requires
         vstd::laws_cmp::obeys_cmp::<String>(),
-        forall|i: int, raw: &[u8]| 0 <= i < originals.len()
-            && registry_batch_prefix(expected@, originals@, model, i)
-            && expected@[i]@ == originals@[i].0@ && raw@ == originals@[i].1@
-            ==> decode.requires((raw,)),
-        forall|raw: &[u8], result: Result<V, String>|
-            decode.requires((raw,)) && decode.ensures((raw,), result)
-            ==> registry_decoded_view(result) == model(raw@),
+        registry_decoder_admissible(expected@, originals@, decode, model),
     ensures registry_batch_view(out)
-        == registry_batch_spec(expected@, originals@, bytes@, values@, model),
+        == registry_batch_spec(expected@, originals@, registry_map(bytes@), registry_map(values@), model),
 {
     let ghost all = originals@;
-    let ghost initial_bytes = bytes@;
-    let ghost initial_values = values@;
+    let ghost initial_bytes = registry_map(bytes@);
+    let ghost initial_values = registry_map(values@);
     let mut collected_bytes = bytes;
     let mut collected_values = values;
     match registry_acquisition_count(expected.len(), originals.len()) {
         Err(error) => { return Err(error); },
         Ok(()) => {},
     }
+    btree_map_compare_invariant(&collected_bytes);
+    btree_map_compare_invariant(&collected_values);
     let mut remaining = originals.into_iter();
     let mut index = 0usize;
     loop
         invariant
             vstd::laws_cmp::obeys_cmp::<String>(),
             all == originals@, all.len() == expected.len(),
-            initial_bytes == bytes@, initial_values == values@,
-            remaining@.1 == all, 0 <= remaining@.0 <= all.len(), index as int == remaining@.0,
-            registry_batch_prefix(expected@, all, model, remaining@.0),
+            initial_bytes == registry_map(bytes@), initial_values == registry_map(values@),
+            vstd::std_specs::btree::btree_map_inv(&collected_bytes),
+            vstd::std_specs::btree::btree_map_inv(&collected_values),
+            0 <= index <= all.len(),
+            remaining.remaining() == all.subrange(index as int, all.len() as int),
+            registry_batch_prefix(expected@, all, model, index as int),
             registry_batch_spec(expected@, all, initial_bytes, initial_values, model)
-                == registry_batch_fold(expected@, all, remaining@.0, collected_bytes@, collected_values@, model),
+                == registry_batch_fold(expected@, all, index as int,
+                    registry_map(collected_bytes@), registry_map(collected_values@), model),
             forall|i: int, raw: &[u8]| 0 <= i < all.len()
                 && registry_batch_prefix(expected@, all, model, i)
                 && expected@[i]@ == all[i].0@ && raw@ == all[i].1@
@@ -617,16 +890,16 @@ pub fn registry_parse_batch<V, P>(
             forall|raw: &[u8], result: Result<V, String>|
                 decode.requires((raw,)) && decode.ensures((raw,), result)
                 ==> registry_decoded_view(result) == model(raw@),
-        decreases all.len() - remaining@.0,
+        decreases all.len() - index,
     {
-        let ghost at = remaining@.0;
+        let ghost at = index as int;
         proof { reveal_with_fuel(registry_batch_fold, 1); }
         let (path, original) = match remaining.next() {
             None => { return Ok((collected_bytes, collected_values)); },
             Some(row) => row,
         };
-        let ghost before_bytes = collected_bytes@;
-        let ghost before_values = collected_values@;
+        let ghost before_bytes = collected_bytes;
+        let ghost before_values = collected_values;
         match registry_acquisition_path(expected[index].as_str(), path.as_str()) {
             Err(error) => { return Err(error); },
             Ok(()) => {},
@@ -639,10 +912,21 @@ pub fn registry_parse_batch<V, P>(
             Err(error) => { return Err(error); },
             Ok(value) => value,
         };
-        collected_bytes.insert(path.clone(), original);
-        collected_values.insert(path, value);
-        assert(registry_batch_fold(expected@, all, at, before_bytes, before_values, model)
-            == registry_batch_fold(expected@, all, at + 1, collected_bytes@, collected_values@, model));
+        let key_copy = path.clone();
+        let ghost key = path;
+        let ghost copied_key = key_copy;
+        let ghost raw = original;
+        let ghost parsed = value;
+        let old_bytes = collected_bytes.insert(key_copy, original);
+        let old_value = collected_values.insert(path, value);
+        proof {
+            registry_map_insert_ensures(before_bytes, collected_bytes, copied_key, raw, old_bytes);
+            registry_map_insert_ensures(before_values, collected_values, key, parsed, old_value);
+        }
+        assert(registry_batch_fold(expected@, all, at,
+            registry_map(before_bytes@), registry_map(before_values@), model)
+            == registry_batch_fold(expected@, all, at + 1,
+                registry_map(collected_bytes@), registry_map(collected_values@), model));
         index += 1;
         assert(registry_batch_prefix(expected@, all, model, at + 1)) by {
             assert forall|i: int| 0 <= i < at + 1 implies
@@ -654,8 +938,8 @@ pub fn registry_parse_batch<V, P>(
 }
 
 pub open spec fn registry_read_sequence_step<S, V, R, P>(
-    before: (S, Map<String, Vec<u8>>, Map<String, V>),
-    after: (S, Map<String, Vec<u8>>, Map<String, V>), path: String, read: R, decode: P,
+    before: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>),
+    after: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), path: String, read: R, decode: P,
 ) -> bool
     where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
 {
@@ -663,13 +947,13 @@ pub open spec fn registry_read_sequence_step<S, V, R, P>(
         argument@ == path@ && input@ == raw@
         && read.ensures((before.0, argument), (after.0, Ok::<Vec<u8>, String>(raw)))
         && decode.ensures((input,), Ok::<V, String>(value))
-        && after.1 == before.1.insert(path, raw)
-        && after.2 == before.2.insert(path, value)
+        && after.1 == before.1.insert(path@, raw)
+        && after.2 == before.2.insert(path@, value)
 }
 
 pub open spec fn registry_read_sequence_prefix<S, V, R, P>(
-    states: Seq<(S, Map<String, Vec<u8>>, Map<String, V>)>,
-    initial: (S, Map<String, Vec<u8>>, Map<String, V>), paths: Seq<String>, read: R, decode: P,
+    states: Seq<(S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>)>,
+    initial: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), paths: Seq<String>, read: R, decode: P,
 ) -> bool
     where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
 {
@@ -679,7 +963,7 @@ pub open spec fn registry_read_sequence_prefix<S, V, R, P>(
 }
 
 pub open spec fn registry_read_sequence_terminal<S, V, R, P>(
-    before: (S, Map<String, Vec<u8>>, Map<String, V>), at: int, paths: Seq<String>,
+    before: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), at: int, paths: Seq<String>,
     read: R, decode: P,
     out: (S, Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>),
 ) -> bool
@@ -687,7 +971,7 @@ pub open spec fn registry_read_sequence_terminal<S, V, R, P>(
 {
     match out.1 {
         Ok((bytes, values)) => at == paths.len() && out.0 == before.0
-            && bytes@ == before.1 && values@ == before.2,
+            && registry_map(bytes@) == before.1 && registry_map(values@) == before.2,
         Err(error) => 0 <= at < paths.len()
             && exists|argument: &str, observation: (S, Result<Vec<u8>, String>)|
                 argument@ == paths[at]@
@@ -702,12 +986,12 @@ pub open spec fn registry_read_sequence_terminal<S, V, R, P>(
 }
 
 pub open spec fn registry_read_sequence_result<S, V, R, P>(
-    initial: (S, Map<String, Vec<u8>>, Map<String, V>), paths: Seq<String>, read: R, decode: P,
+    initial: (S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>), paths: Seq<String>, read: R, decode: P,
     out: (S, Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>),
 ) -> bool
     where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
 {
-    exists|states: Seq<(S, Map<String, Vec<u8>>, Map<String, V>)>|
+    exists|states: Seq<(S, Map<Seq<char>, Vec<u8>>, Map<Seq<char>, V>)>|
         registry_read_sequence_prefix(states, initial, paths, read, decode)
         && registry_read_sequence_terminal(states.last(), states.len() - 1, paths, read, decode, out)
 }
@@ -721,27 +1005,31 @@ pub fn registry_read_sequence<S, V, R, P>(
     requires vstd::laws_cmp::obeys_cmp::<String>(),
         paths.len() > 0 ==> (forall|source: S, path: &str| #[trigger] read.requires((source, path))),
         paths.len() > 0 ==> (forall|raw: &[u8]| #[trigger] decode.requires((raw,))),
-    ensures registry_read_sequence_result((input_source, bytes@, values@), paths@, read, decode, out),
+    ensures registry_read_sequence_result((input_source, registry_map(bytes@), registry_map(values@)), paths@, read, decode, out),
 {
     let ghost all = paths@;
-    let ghost initial = (input_source, bytes@, values@);
+    let ghost initial = (input_source, registry_map(bytes@), registry_map(values@));
     let ghost states = seq![initial];
     let mut source = input_source;
     let mut collected_bytes = bytes;
     let mut collected_values = values;
+    btree_map_compare_invariant(&collected_bytes);
+    btree_map_compare_invariant(&collected_values);
     let mut remaining = paths.into_iter();
     loop
         invariant vstd::laws_cmp::obeys_cmp::<String>(),
-            all == paths@, initial == (input_source, bytes@, values@),
-            remaining@.1 == all, 0 <= remaining@.0 <= all.len(),
-            states.len() == remaining@.0 + 1,
-            states.last() == (source, collected_bytes@, collected_values@),
+            all == paths@, initial == (input_source, registry_map(bytes@), registry_map(values@)),
+            1 <= states.len() <= all.len() + 1,
+            remaining.remaining() == all.subrange(states.len() - 1, all.len() as int),
+            states.last() == (source, registry_map(collected_bytes@), registry_map(collected_values@)),
+            vstd::std_specs::btree::btree_map_inv(&collected_bytes),
+            vstd::std_specs::btree::btree_map_inv(&collected_values),
             registry_read_sequence_prefix(states, initial, all, read, decode),
             all.len() > 0 ==> (forall|source: S, path: &str| #[trigger] read.requires((source, path))),
             all.len() > 0 ==> (forall|raw: &[u8]| #[trigger] decode.requires((raw,))),
-        decreases all.len() - remaining@.0,
+        decreases all.len() + 1 - states.len(),
     {
-        let ghost at = remaining@.0;
+        let ghost at = states.len() - 1;
         let ghost before = states.last();
         let path = match remaining.next() {
             None => {
@@ -782,9 +1070,17 @@ pub fn registry_read_sequence<S, V, R, P>(
         let ghost key = path;
         let ghost raw = original;
         let ghost parsed = value;
-        collected_bytes.insert(path.clone(), original);
-        collected_values.insert(path, value);
-        let ghost after = (source, collected_bytes@, collected_values@);
+        let ghost before_bytes = collected_bytes;
+        let ghost before_values = collected_values;
+        let key_copy = path.clone();
+        let ghost copied_key = key_copy;
+        let old_bytes = collected_bytes.insert(key_copy, original);
+        let old_value = collected_values.insert(path, value);
+        proof {
+            registry_map_insert_ensures(before_bytes, collected_bytes, copied_key, raw, old_bytes);
+            registry_map_insert_ensures(before_values, collected_values, key, parsed, old_value);
+        }
+        let ghost after = (source, registry_map(collected_bytes@), registry_map(collected_values@));
         assert(read.ensures((before.0, argument), (after.0, Ok::<Vec<u8>, String>(raw))));
         assert(decode.ensures((input,), Ok::<V, String>(parsed)));
         assert(registry_read_sequence_step(before, after, key, read, decode)) by {
@@ -803,8 +1099,8 @@ pub fn registry_read_sequence<S, V, R, P>(
     }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IndexFlag {
     pub path: String,
     pub tag: String,
@@ -836,8 +1132,8 @@ impl PartialEq for IndexFlag {
 }
 impl Eq for IndexFlag {}
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Checkout {
     pub head: String,
     pub r#tracked: Vec<String>,
@@ -1354,15 +1650,15 @@ pub fn parse_git_text_rows(decoded: Vec<Option<String>>) -> (out: Result<Vec<Str
     let mut paths: Vec<String> = Vec::new();
     loop
         invariant all == decoded@,
-            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
-            paths.len() == iterator@.0,
+            paths.len() <= all.len(),
+            iterator.remaining() == all.subrange(paths.len() as int, all.len() as int),
             forall|i: int| 0 <= i < paths.len() ==> match (#[trigger] all[i]) {
                 Some(text) => text@ == paths@[i]@,
                 None => false,
             },
-        decreases all.len() - iterator@.0,
+        decreases all.len() - paths.len(),
     {
-        let ghost at = iterator@.0;
+        let ghost at = paths.len() as int;
         match iterator.next() {
             None => { return Ok(paths); },
             Some(row) => {
@@ -1385,8 +1681,8 @@ pub fn parse_git_text_rows(decoded: Vec<Option<String>>) -> (out: Result<Vec<Str
     }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Status {
     Passed,
     Failed,
@@ -1394,8 +1690,8 @@ pub enum Status {
     Blocked,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "lowercase"))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum WireStatus {
     Pass,
     Warn,
@@ -1518,7 +1814,7 @@ impl PartialOrd for WireStatus {
 }
 
 /// 实际树键按完整 UTF-8 内容比较；不归一化路径。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+#[derive(Debug)]
 pub struct TreePath {
     pub text: String,
 }
@@ -1568,13 +1864,27 @@ impl std::ops::Deref for TreePath {
 impl std::borrow::Borrow<str> for TreePath {
     fn borrow(&self) -> (out: &str)
         ensures ({ let text: &str = out; text@ == self@ && text.spec_bytes() == self.bytes() }),
-    { self.as_str() }
+    { <String as std::borrow::Borrow<str>>::borrow(&self.text) }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::borrow::BorrowSpecImpl<str> for TreePath {
+    open spec fn obeys_borrow_spec() -> bool { true }
+    open spec fn borrow_spec(&self) -> &str {
+        <String as vstd::std_specs::borrow::BorrowSpec<str>>::borrow_spec(&self.text)
+    }
 }
 
 impl std::borrow::Borrow<String> for TreePath {
     fn borrow(&self) -> (out: &String)
         ensures ({ let text: &String = out; *text == self.text }),
     { &self.text }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::borrow::BorrowSpecImpl<String> for TreePath {
+    open spec fn obeys_borrow_spec() -> bool { true }
+    open spec fn borrow_spec(&self) -> &String { &self.text }
 }
 
 #[cfg(verus_keep_ghost)]
@@ -1690,30 +2000,31 @@ fn tree_rows(tree: &Tree) -> (rows: Vec<(&TreePath, &TreeEntry)>)
 {
     proof { tree_path_obeys_cmp(); }
     let mut iterator = tree.iter();
-    let ghost all = iterator@.1;
+    let ghost all = iterator.remaining();
     let mut rows: Vec<(&TreePath, &TreeEntry)> = Vec::new();
     loop
         invariant
-            iterator@.1 == all,
-            iterator@.0 == rows.len(),
-            0 <= iterator@.0 <= all.len(),
-            tree_rows_view(rows@) == all.take(iterator@.0),
-            all.to_set() == tree@.kv_pairs(),
-            vstd::std_specs::btree::increasing_seq(all.map(|i: int, row: (TreePath, TreeEntry)| row.0)),
-        decreases all.len() - rows.len(),
+            rows.len() <= all.len(),
+            all.len() == tree@.len(),
+            iterator.remaining() == all.subrange(rows.len() as int, all.len() as int),
+            rows@ == all.take(rows.len() as int),
+            all.unref().to_set() == tree@.kv_pairs(),
+            vstd::std_specs::btree::increasing_seq(all.map_values(|row: (&TreePath, &TreeEntry)| *row.0)),
+        decreases tree@.len() - rows.len(),
     {
         match iterator.next() {
             None => {
                 proof {
                     tree_path_obeys_cmp();
-                    let keys = all.map(|i: int, row: (TreePath, TreeEntry)| row.0);
+                    let keys = all.map_values(|row: (&TreePath, &TreeEntry)| *row.0);
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
-                    assert(tree_rows_view(rows@) == all);
+                    assert(rows@ == all);
+                    assert(tree_rows_view(rows@) =~= all.unref());
                     assert forall|i: int, j: int| 0 <= i < j < rows.len()
                         implies identifiers::byte_lt((#[trigger] rows@[i]).0.bytes(),
                             (#[trigger] rows@[j]).0.bytes()) by {
-                        assert(keys[i] == all[i].0);
-                        assert(keys[j] == all[j].0);
+                        assert(keys[i] == *all[i].0);
+                        assert(keys[j] == *all[j].0);
                         assert(keys[i].cmp_spec(&keys[j]) is Less);
                         assert(all[i].0.order_spec(&all[j].0) is Less);
                         identifiers::byte_lt_strict(all[i].0.bytes(), all[j].0.bytes());
@@ -1723,13 +2034,13 @@ fn tree_rows(tree: &Tree) -> (rows: Vec<(&TreePath, &TreeEntry)>)
             }
             Some((key, value)) => {
                 rows.push((key, value));
-                proof { assert(tree_rows_view(rows@) =~= all.take(iterator@.0)); }
+                proof { assert(rows@ =~= all.take(rows.len() as int)); }
             }
         }
     }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[derive(Debug)]
 pub struct TreeEntry {
     pub mode: String,
     pub oid: String,
@@ -1792,8 +2103,8 @@ pub open spec fn entry_mode(entry: Option<&TreeEntry>) -> Option<Seq<char>> {
     match entry { None => None, Some(entry) => Some(entry.mode@) }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Delta {
     pub kind: String,
     pub path: String,
@@ -1869,46 +2180,19 @@ pub open spec fn tree_entry_fields(entry: &TreeEntry) -> TreeEntryFields {
     (entry.mode@, entry.oid@, entry.kind@)
 }
 
-/// 标准迭代器的完整、严格有序库存连接实际 map 键与全文身份。
-/// 只创建迭代器，不遍历或复制库存。
-fn tree_keys_have_unique_text<V>(tree: &BTreeMap<TreePath, V>)
-    ensures forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
-        tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@ ==> a == b,
-{
-    proof { tree_path_obeys_cmp(); }
-    let iterator = tree.iter();
-    proof {
-        let rows = iterator@.1;
-        let keys = rows.map(|i: int, row: (TreePath, V)| row.0);
-        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
-        assert forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
-            tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@
-                implies a == b by {
-            assert(rows.to_set().contains((a, tree@[a])));
-            assert(rows.to_set().contains((b, tree@[b])));
-            let i = choose|i: int| 0 <= i < rows.len() && rows[i] == (a, tree@[a]);
-            let j = choose|j: int| 0 <= j < rows.len() && rows[j] == (b, tree@[b]);
-            if i < j {
-                assert(keys[i].cmp_spec(&keys[j]) is Less);
-                assert(a.order_spec(&b) is Less);
-            } else if j < i {
-                assert(keys[j].cmp_spec(&keys[i]) is Less);
-                assert(b.order_spec(&a) is Less);
-            }
-        }
-    }
-}
-
 /// Git tree 的实际插入状态：完整构造条目，原路径已存在时保留原重复诊断。
 /// 沿用原 insert 的更新顺序；失败时该路径也已替换，调用方丢弃整棵候选树。
 pub fn insert_git_tree_entry(
     tree: &mut Tree, path: TreePath, mode: &str, oid: &str, kind: &str,
 ) -> (out: Result<(), String>)
     ensures
-        tree@.contains_key(path),
-        tree@ == old(tree)@.insert(path, tree@[path]),
-        tree_entry_fields(&tree@[path]) == (mode@, oid@, kind@),
-        out.is_ok() == !old(tree)@.contains_key(path),
+        out.is_ok() ==> final(tree)@.contains_key(path)
+            && final(tree)@ == old(tree)@.insert(path, final(tree)@[path])
+            && tree_entry_fields(&final(tree)@[path]) == (mode@, oid@, kind@),
+        out.is_err() ==> exists|stored: TreePath| (#[trigger] old(tree)@.contains_key(stored))
+            && stored@ == path@ && final(tree)@.contains_key(stored)
+            && final(tree)@ == old(tree)@.insert(stored, final(tree)@[stored])
+            && tree_entry_fields(&final(tree)@[stored]) == (mode@, oid@, kind@),
         out.is_ok() == !(exists|key: TreePath| (#[trigger] old(tree)@.contains_key(key)) && key@ == path@),
         match out {
             Ok(()) => true,
@@ -1916,29 +2200,31 @@ pub fn insert_git_tree_entry(
         },
 {
     proof { tree_path_obeys_cmp(); }
+    btree_map_compare_invariant(tree);
     let ghost before = tree@;
     let entry = TreeEntry {
         mode: mode.to_owned(), oid: oid.to_owned(), kind: kind.to_owned(),
     };
     let previous = tree.insert(path, entry);
-    tree_keys_have_unique_text(tree);
-    proof {
-        if exists|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@ {
-            let key = choose|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@;
-            assert(tree@.contains_key(key));
-            assert(tree@.contains_key(path));
-            assert(key == path);
-            assert(before.contains_key(path));
-        }
-        if before.contains_key(path) {
-            assert(exists|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@);
-        }
-        assert(before.contains_key(path) ==
-            (exists|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@));
-    }
     match previous {
-        Some(_) => Err("duplicate Git tree path".to_owned()),
-        None => Ok(()),
+        Some(old_entry) => {
+            proof {
+                let stored = choose|stored: TreePath| (#[trigger] before.contains_key(stored))
+                    && path.cmp_spec(&stored) is Equal && old_entry == before[stored]
+                    && tree@ == before.insert(stored, entry);
+                tree_path_same_text(&path, &stored);
+                assert(stored@ == path@);
+            }
+            Err("duplicate Git tree path".to_owned())
+        },
+        None => {
+            proof {
+                assert forall|key: TreePath| (#[trigger] before.contains_key(key)) implies key@ != path@ by {
+                    assert(!(path.cmp_spec(&key) is Equal));
+                }
+            }
+            Ok(())
+        },
     }
 }
 
@@ -2186,64 +2472,48 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
 {
     proof { git_index_stage_obeys_cmp(); }
     let mut iterator = stages.keys();
-    let ghost all = iterator@.1;
-    proof { all.unique_seq_to_set(); }
+    let ghost all = iterator.remaining();
+    proof {
+        broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+        assert(vstd::laws_cmp::obeys_cmp::<&GitIndexStage>());
+        vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
+        all.unref().unique_seq_to_set();
+        assert forall|i: int, j: int| #![trigger all[i].order_spec(all[j])]
+            0 <= i < j < all.len() implies all[i].order_spec(all[j]) == Ordering::Less by {
+            assert(<&GitIndexStage as OrdSpec>::cmp_spec(&all[i], &all[j]) is Less);
+        }
+    }
     let mut keys: Vec<GitIndexStage<'a>> = Vec::new();
     loop
         invariant
-            iterator@.1 == all, iterator@.0 == keys.len(),
-            0 <= iterator@.0 <= all.len(), keys@ == all.take(iterator@.0),
-            all.to_set() == stages@.dom(), all.len() == stages@.len(),
+            keys.len() <= all.len(),
+            iterator.remaining() == all.subrange(keys.len() as int, all.len() as int),
+            keys@ == all.take(keys.len() as int).unref(),
+            all.unref().to_set() == stages@.dom(), all.len() == stages@.len(),
             vstd::std_specs::btree::increasing_seq(all),
-        decreases all.len() - keys.len(),
+            forall|i: int, j: int| #![trigger all[i].order_spec(all[j])]
+                0 <= i < j < all.len() ==> all[i].order_spec(all[j]) == Ordering::Less,
+        decreases stages@.len() - keys.len(),
     {
         match iterator.next() {
             None => {
                 proof {
                     git_index_stage_obeys_cmp();
+                    broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+                    assert(vstd::laws_cmp::obeys_cmp::<&GitIndexStage>());
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
-                    assert(keys@ == all);
+                    assert(keys@ == all.unref());
                     assert forall|i: int, j: int| 0 <= i < j < keys.len()
                         implies #[trigger] keys@[i].order_spec(&keys@[j]) == Ordering::Less by {
-                        assert(all[i].cmp_spec(&all[j]) == Ordering::Less);
+                        assert(all[i].order_spec(all[j]) == Ordering::Less);
                     }
                 }
                 return GitIndexStageLookup { keys };
             },
             Some(key) => {
                 keys.push(GitIndexStage { path: key.path, stage: key.stage });
-                proof { assert(keys@ =~= all.take(iterator@.0)); }
+                proof { assert(keys@ =~= all.take(keys.len() as int).unref()); }
             },
-        }
-    }
-}
-
-fn git_index_stage_keys_have_unique_text(stages: &GitIndexStages)
-    ensures forall|a: GitIndexStage, b: GitIndexStage|
-        #![trigger stages@.contains_key(a), stages@.contains_key(b)]
-        stages@.contains_key(a) && stages@.contains_key(b) && a.same(&b) ==> a == b,
-{
-    proof { git_index_stage_obeys_cmp(); }
-    let iterator = stages.iter();
-    proof {
-        let rows = iterator@.1;
-        let keys = rows.map(|i: int, row: (GitIndexStage, ())| row.0);
-        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
-        assert forall|a: GitIndexStage, b: GitIndexStage|
-            #![trigger stages@.contains_key(a), stages@.contains_key(b)]
-            stages@.contains_key(a) && stages@.contains_key(b) && a.same(&b)
-                implies a == b by {
-            assert(rows.to_set().contains((a, ())));
-            assert(rows.to_set().contains((b, ())));
-            let i = choose|i: int| 0 <= i < rows.len() && rows[i] == (a, ());
-            let j = choose|j: int| 0 <= j < rows.len() && rows[j] == (b, ());
-            if i < j {
-                assert(keys[i].cmp_spec(&keys[j]) is Less);
-                assert(a.order_spec(&b) is Less);
-            } else if j < i {
-                assert(keys[j].cmp_spec(&keys[i]) is Less);
-                assert(b.order_spec(&a) is Less);
-            }
         }
     }
 }
@@ -2252,35 +2522,29 @@ fn git_index_stage_keys_have_unique_text(stages: &GitIndexStages)
 pub fn record_git_index_stage<'a>(stages: &mut GitIndexStages<'a>, path: &'a str, stage: &'a str)
     -> (out: Result<(), String>)
     ensures
-        stages@ == old(stages)@.insert(GitIndexStage { path, stage }, ()),
-        out.is_ok() == !old(stages)@.contains_key(GitIndexStage { path, stage }),
+        out.is_ok() ==> final(stages)@ == old(stages)@.insert(GitIndexStage { path, stage }, ()),
         out.is_ok() == !(exists|key: GitIndexStage| (#[trigger] old(stages)@.contains_key(key))
             && key.path.spec_bytes() == path.spec_bytes()
             && key.stage.spec_bytes() == stage.spec_bytes()),
-        out.is_err() ==> stages@ == old(stages)@,
+        out.is_err() ==> final(stages)@ == old(stages)@,
         match out { Ok(()) => true, Err(message) => message@ == "duplicate Git index stage"@ },
 {
     proof { git_index_stage_obeys_cmp(); }
+    btree_map_compare_invariant(stages);
     let key = GitIndexStage { path, stage };
     let ghost before = stages@;
     let previous = stages.insert(key, ());
-    git_index_stage_keys_have_unique_text(stages);
-    proof {
-        if exists|old_key: GitIndexStage| (#[trigger] before.contains_key(old_key))
-            && old_key.same(&key) {
-            let old_key = choose|old_key: GitIndexStage| (#[trigger] before.contains_key(old_key))
-                && old_key.same(&key);
-            assert(stages@.contains_key(old_key));
-            assert(stages@.contains_key(key));
-            assert(old_key == key);
-            assert(before.contains_key(key));
-        }
-        if before.contains_key(key) {
-            assert(exists|old_key: GitIndexStage| (#[trigger] before.contains_key(old_key))
-                && old_key.same(&key));
-        }
+    match previous {
+        None => { Ok(()) },
+        Some(()) => {
+            proof {
+                let stored = choose|stored: GitIndexStage| (#[trigger] before.contains_key(stored))
+                    && key.cmp_spec(&stored) is Equal && stages@ == before.insert(stored, ());
+                assert(before.insert(stored, ()) =~= before);
+            }
+            Err("duplicate Git index stage".to_owned())
+        },
     }
-    match previous { None => Ok(()), Some(()) => Err("duplicate Git index stage".to_owned()) }
 }
 
 #[cfg(verus_keep_ghost)]
@@ -2609,6 +2873,7 @@ pub fn parse_git_index_rows<'a>(rows: &[&'a str]) -> (out: Result<GitIndexInvent
             git_index_prefix_valid(rows@, i as int),
             git_index_prefix_rows(parsed@, rows@, i as int),
             git_index_inventory_stages(stages@, parsed@),
+            stages@.dom().finite(),
         decreases rows.len() - i,
     {
         let row = match parse_git_index_row(rows[i]) {
@@ -2619,7 +2884,6 @@ pub fn parse_git_index_rows<'a>(rows: &[&'a str]) -> (out: Result<GitIndexInvent
             },
         };
         let ghost before = stages@;
-        proof { vstd::std_specs::btree::axiom_btree_map_view_finite_dom(stages); }
         match record_git_index_stage(&mut stages, row.path, row.stage) {
             Err(message) => {
                 proof { git_index_duplicate_error(before, parsed@, rows@, i as int, row.bytes()); }
@@ -2682,45 +2946,58 @@ pub open spec fn checkout_index_prefix_changed(
 
 /// 只保存完整路径；重复标记不增加成员，原有路径始终保留。
 pub fn record_checkout_owned_change(changes: &mut CheckoutChanges, path: String)
-    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(final(changes)@, text)
         == (checkout_change_has_path(old(changes)@, text) || text == path@),
-        changes@.len() == old(changes)@.len()
+        final(changes)@.len() == old(changes)@.len()
             + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
 {
     proof { tree_path_obeys_cmp(); }
+    btree_map_compare_invariant(changes);
     let key = TreePath::from_owned(path);
     let ghost before = changes@;
-    changes.insert(key, ());
-    tree_keys_have_unique_text(changes);
+    let previous = changes.insert(key, ());
+    match previous {
+        Some(()) => {
+            proof {
+                let stored = choose|stored: TreePath| (#[trigger] before.contains_key(stored))
+                    && key.cmp_spec(&stored) is Equal && changes@ == before.insert(stored, ());
+                tree_path_same_text(&key, &stored);
+                assert(stored@ == path@);
+                assert(changes@ =~= before);
+                assert(checkout_change_has_path(before, path@));
+            }
+        },
+        None => {
+            proof {
+                assert forall|stored: TreePath| (#[trigger] before.contains_key(stored)) implies stored@ != path@ by {
+                    assert(!(key.cmp_spec(&stored) is Equal));
+                }
+                assert(!checkout_change_has_path(before, path@));
+            }
+        },
+    }
     proof {
-        if checkout_change_has_path(before, path@) {
-            let found = choose|found: TreePath| (#[trigger] before.contains_key(found)) && found@ == path@;
-            assert(changes@.contains_key(found));
-            assert(changes@.contains_key(key));
-            assert(found == key);
-            assert(before.contains_key(key));
-        }
-        if before.contains_key(key) { assert(checkout_change_has_path(before, path@)); }
-        assert(before.contains_key(key) == checkout_change_has_path(before, path@));
         assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
             == (checkout_change_has_path(before, text) || text == path@) by {
-            if checkout_change_has_path(changes@, text) {
-                let found = choose|found: TreePath| (#[trigger] changes@.contains_key(found)) && found@ == text;
-                if found != key { assert(before.contains_key(found)); }
+            if previous.is_none() {
+                if checkout_change_has_path(changes@, text) {
+                    let found = choose|found: TreePath| (#[trigger] changes@.contains_key(found)) && found@ == text;
+                    if found != key { assert(before.contains_key(found)); }
+                }
+                if checkout_change_has_path(before, text) {
+                    let found = choose|found: TreePath| (#[trigger] before.contains_key(found)) && found@ == text;
+                    assert(changes@.contains_key(found));
+                }
+                if text == path@ { assert(changes@.contains_key(key)); }
             }
-            if checkout_change_has_path(before, text) {
-                let found = choose|found: TreePath| (#[trigger] before.contains_key(found)) && found@ == text;
-                assert(changes@.contains_key(found));
-            }
-            if text == path@ { assert(changes@.contains_key(key)); }
         }
     }
 }
 
 pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
-    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(final(changes)@, text)
         == (checkout_change_has_path(old(changes)@, text) || text == path@),
-        changes@.len() == old(changes)@.len()
+        final(changes)@.len() == old(changes)@.len()
             + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
 {
     record_checkout_owned_change(changes, path.to_owned());
@@ -2745,19 +3022,21 @@ pub fn normalize_checkout_paths(first: Vec<String>, second: Vec<String>) -> (out
     let mut additional = second;
     pending.append(&mut additional);
     let mut iterator = pending.into_iter();
+    let ghost consumed: int = 0;
     let mut changes = CheckoutChanges::new();
     loop
         invariant all == first@ + second@,
-            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
-            changes@.len() <= iterator@.0,
+            0 <= consumed <= all.len(),
+            iterator.remaining() == all.subrange(consumed, all.len() as int),
+            changes@.len() <= consumed,
             forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
-                == checkout_path_prefix(all, iterator@.0, path),
-        decreases all.len() - iterator@.0,
+                == checkout_path_prefix(all, consumed, path),
+        decreases all.len() - consumed,
     {
-        let ghost at = iterator@.0;
+        let ghost at = consumed;
         match iterator.next() {
             None => {
-                assert(iterator@.0 == all.len());
+                assert(consumed == all.len());
                 let out = checkout_changed_paths(&changes);
                 proof {
                     assert forall|text: Seq<char>|
@@ -2772,8 +3051,9 @@ pub fn normalize_checkout_paths(first: Vec<String>, second: Vec<String>) -> (out
             Some(path) => {
                 record_checkout_owned_change(&mut changes, path);
                 proof {
+                    consumed = at + 1;
                     assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
-                        == checkout_path_prefix(all, iterator@.0, text) by {
+                        == checkout_path_prefix(all, consumed, text) by {
                         assert(checkout_path_prefix(all, at + 1, text)
                             == (checkout_path_prefix(all, at, text) || all[at]@ == text));
                     }
@@ -2795,43 +3075,59 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
 {
     proof { tree_path_obeys_cmp(); }
     let mut iterator = changes.keys();
-    let ghost all = iterator@.1;
-    proof { all.unique_seq_to_set(); }
+    let ghost all = iterator.remaining();
+    proof {
+        broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+        assert(vstd::laws_cmp::obeys_cmp::<&TreePath>());
+        vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
+        all.unref().unique_seq_to_set();
+        assert forall|i: int, j: int| #![trigger all[i].order_spec(all[j])]
+            0 <= i < j < all.len() implies all[i].order_spec(all[j]) == Ordering::Less by {
+            assert(<&TreePath as OrdSpec>::cmp_spec(&all[i], &all[j]) is Less);
+        }
+    }
     let mut paths: Vec<String> = Vec::new();
     loop
         invariant
-            iterator@.1 == all, iterator@.0 == paths.len(),
-            0 <= iterator@.0 <= all.len(), all.to_set() == changes@.dom(),
+            paths.len() <= all.len(),
+            iterator.remaining() == all.subrange(paths.len() as int, all.len() as int),
+            all.unref().to_set() == changes@.dom(),
             all.len() == changes@.len(),
             vstd::std_specs::btree::increasing_seq(all),
+            forall|i: int, j: int| #![trigger all[i].order_spec(all[j])]
+                0 <= i < j < all.len() ==> all[i].order_spec(all[j]) == Ordering::Less,
             forall|i: int| 0 <= i < paths.len() ==> (#[trigger] paths@[i])@ == all[i]@,
-        decreases all.len() - paths.len(),
+        decreases changes@.len() - paths.len(),
     {
         match iterator.next() {
             Some(key) => { paths.push(key.text.clone()); },
             None => {
                 proof {
                     tree_path_obeys_cmp();
+                    broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+                    assert(vstd::laws_cmp::obeys_cmp::<&TreePath>());
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
+                    assert(paths.len() == all.len());
                     assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
                         == (exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text) by {
                         if checkout_change_has_path(changes@, text) {
                             let key = choose|key: TreePath| (#[trigger] changes@.contains_key(key)) && key@ == text;
-                            assert(all.contains(key));
-                            let i = all.lemma_contains_to_index(key);
+                            assert(all.unref().contains(key));
+                            let i = all.unref().lemma_contains_to_index(key);
                             assert(paths@[i]@ == text);
                         }
                         if exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text {
                             let i = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text;
-                            assert(all.to_set().contains(all[i]));
-                            assert(changes@.contains_key(all[i]));
+                            assert(all.unref()[i] == *all[i]);
+                            assert(all.unref().contains(*all[i]));
+                            assert(all.unref().to_set().contains(*all[i]));
+                            assert(changes@.contains_key(*all[i]));
                         }
                     }
                     assert forall|i: int, j: int| 0 <= i < j < paths.len()
                         implies identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] paths@[i])@),
                             vstd::utf8::encode_utf8((#[trigger] paths@[j])@)) by {
-                        assert(all[i].cmp_spec(&all[j]) is Less);
-                        assert(all[i].order_spec(&all[j]) is Less);
+                        assert(all[i].order_spec(all[j]) is Less);
                     }
                 }
                 return paths;
@@ -2969,7 +3265,7 @@ pub fn checkout_physical_targets<'a>(
         targets.len() == tree_rows_view(targets@).to_set().len(),
         tree_rows_view(targets@).to_set() == tree@.kv_pairs().filter(
             |row: (TreePath, TreeEntry)| checkout_stage_zero(stages@, row.0.bytes())),
-        forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+        forall|path: Seq<char>| #[trigger] checkout_change_has_path(final(changes)@, path)
             == (checkout_change_has_path(old(changes)@, path)
                 || exists|row: (TreePath, TreeEntry)| (#[trigger] tree@.kv_pairs().contains(row))
                     && row.0@ == path && !checkout_stage_zero(stages@, row.0.bytes())),
@@ -3093,7 +3389,7 @@ pub open spec fn checkout_failed_physical_prefix(
 pub fn record_checkout_physical_observations(
     changes: &mut CheckoutChanges, observations: &[CheckoutPhysicalObservation],
 )
-    ensures forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+    ensures forall|path: Seq<char>| #[trigger] checkout_change_has_path(final(changes)@, path)
         == (checkout_change_has_path(old(changes)@, path)
             || checkout_failed_physical_prefix(observations@, observations.len() as int, path)),
 {
@@ -4378,6 +4674,7 @@ pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitInvent
             0 <= i <= rows.len(),
             git_tree_prefix_valid(rows@, i as int),
             git_tree_prefix_map(tree@, rows@, i as int),
+            tree@.dom().finite(),
         decreases rows.len() - i,
     {
         let row = match parse_git_tree_row(rows[i]) {
@@ -4390,7 +4687,6 @@ pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitInvent
         let key = TreePath::from_text(row.path);
         let ghost inserted = key;
         let ghost before = tree@;
-        proof { vstd::std_specs::btree::axiom_btree_map_view_finite_dom(tree); }
         let result = insert_git_tree_entry(&mut tree, key, row.mode, row.oid, row.kind);
         match result {
             Err(message) => {
@@ -4513,6 +4809,31 @@ proof fn entry_delta_projection(selected_path: Seq<char>, old_entry: Option<&Tre
     reveal_with_fuel(Seq::filter, 2);
 }
 
+proof fn delta_at_path_append(first: Seq<DeltaFields>, second: Seq<DeltaFields>, path: Seq<char>)
+    ensures delta_at_path(first + second, path)
+        == delta_at_path(first, path) + delta_at_path(second, path),
+{
+    Seq::<DeltaFields>::filter_distributes_over_add(first, second, delta_path_predicate(path));
+}
+
+/// 单侧只前进零或一项；将尾部有序性留在本引理，不向双树递归暴露量词。
+proof fn rows_entry_advance_projection(rows: Seq<(&TreePath, &TreeEntry)>,
+    start: int, next: int, key: &TreePath, entry: Option<&TreeEntry>, path: Seq<char>)
+    requires tree_rows_ordered(rows), 0 <= start <= next <= rows.len(), next <= start + 1,
+        next == start ==> entry.is_none(),
+        next > start ==> entry == Some(rows[start].1) && rows[start].0@ == key@,
+        next == rows.len() || identifiers::byte_lt(key.bytes(), rows[next].0.bytes()),
+    ensures if path == key@ {
+        rows_entry(rows, start, path) == optional_entry_fields(entry)
+            && rows_entry(rows, next, path).is_none()
+    } else { rows_entry(rows, start, path) == rows_entry(rows, next, path) },
+{
+    if path == key@ {
+        rows_entry_before_head(rows, next, key);
+    }
+    reveal_with_fuel(rows_entry, 1);
+}
+
 pub open spec fn tree_merge_fields(a: Seq<(&TreePath, &TreeEntry)>,
     b: Seq<(&TreePath, &TreeEntry)>, i: int, j: int) -> Seq<DeltaFields>
     decreases a.len() - i + b.len() - j,
@@ -4566,17 +4887,9 @@ proof fn tree_merge_path_projection(a: Seq<(&TreePath, &TreeEntry)>,
     let rest = tree_merge_fields(a, b, ni, nj);
     assert(tree_merge_fields(a, b, i, j) == head + rest);
     entry_delta_projection(key@, old_entry, new_entry, path);
-    Seq::<DeltaFields>::filter_distributes_over_add(head, rest,
-        delta_path_predicate(path));
-    if path == key@ {
-        rows_entry_before_head(a, ni, key);
-        rows_entry_before_head(b, nj, key);
-        assert(rows_entry(a, i, path) == optional_entry_fields(old_entry));
-        assert(rows_entry(b, j, path) == optional_entry_fields(new_entry));
-    } else {
-        assert(rows_entry(a, i, path) == rows_entry(a, ni, path));
-        assert(rows_entry(b, j, path) == rows_entry(b, nj, path));
-    }
+    delta_at_path_append(head, rest, path);
+    rows_entry_advance_projection(a, i, ni, key, old_entry, path);
+    rows_entry_advance_projection(b, j, nj, key, new_entry, path);
 }
 
 proof fn tree_merge_sources(a: Seq<(&TreePath, &TreeEntry)>,
@@ -4663,7 +4976,7 @@ proof fn tree_merge_ordered(a: Seq<(&TreePath, &TreeEntry)>,
 
 fn push_tree_change(out: &mut Vec<Delta>, path: &str,
     old_entry: Option<&TreeEntry>, new_entry: Option<&TreeEntry>)
-    ensures delta_records_view(out@) == delta_records_view(old(out)@)
+    ensures delta_records_view(final(out)@) == delta_records_view(old(out)@)
         + entry_delta_fields(path@, old_entry, new_entry),
 {
     match delta_for_entry(path, old_entry, new_entry) {
@@ -4866,8 +5179,8 @@ impl PartialEq for Delta {
 
 impl Eq for Delta {}
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Finding {
     pub code: String,
     pub level: String,
@@ -4881,8 +5194,8 @@ pub fn append_finding(
     status: &mut WireStatus, findings: &mut Vec<Finding>, severity: WireStatus, finding: Finding,
 )
     ensures
-        *status == (if old(status).rank_spec() >= severity.rank_spec() { *old(status) } else { severity }),
-        findings@ == old(findings)@.push(finding),
+        *final(status) == (if old(status).rank_spec() >= severity.rank_spec() { *old(status) } else { severity }),
+        final(findings)@ == old(findings)@.push(finding),
 {
     *status = status.clone().maximum(severity);
     findings.push(finding);
@@ -4981,8 +5294,8 @@ pub fn valid_finding_references(finding: &Finding, delta: Option<&[Delta]>) -> (
     true
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Evidence {
     pub path: String,
     pub sha256: String,
@@ -5496,8 +5809,8 @@ impl PartialEq for Status {
 
 impl Eq for Status {}
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CheckResult {
     pub id: String,
     pub status: Status,

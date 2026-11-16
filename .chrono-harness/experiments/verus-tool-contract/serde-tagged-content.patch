@@ -1,0 +1,200 @@
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -684,6 +684,28 @@
+
+ #[verifier::external_type_specification]
+ pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
++
++#[verifier::external_type_specification]
++pub struct ExContent<'de>(serde::__private229::de::Content<'de>);
++
++#[verifier::external_type_specification]
++#[verifier::external_body]
++#[verifier::reject_recursive_types(T)]
++pub struct ExTaggedContentVisitor<T>(serde::__private229::de::TaggedContentVisitor<T>);
++
++#[verifier::external_type_specification]
++#[verifier::external_body]
++#[verifier::reject_recursive_types(E)]
++pub struct ExContentDeserializer<'de, E>(serde::__private229::de::ContentDeserializer<'de, E>);
++
++pub assume_specification<T>[serde::__private229::de::TaggedContentVisitor::<T>::new](
++    name: &'static str,
++    expecting: &'static str,
++) -> serde::__private229::de::TaggedContentVisitor<T>;
++
++pub assume_specification<'de, E>[serde::__private229::de::ContentDeserializer::<'de, E>::new](
++    content: serde::__private229::de::Content<'de>,
++) -> serde::__private229::de::ContentDeserializer<'de, E>;
+
+ #[verifier::external_type_specification]
+ pub struct ExIgnoredAny(serde::de::IgnoredAny);
+diff --git a/source/rust_verify_test/tests/serde_tagged_content.rs b/source/rust_verify_test/tests/serde_tagged_content.rs
+new file mode 100644
+--- /dev/null
++++ b/source/rust_verify_test/tests/serde_tagged_content.rs
+@@ -0,0 +1,163 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_tagged_content_keeps_all_scalar_variants_and_fields
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::__private229::de::Content;
++
++        fn fields() {
++            let c = Content::Bool(true);
++            assert(match c { Content::Bool(v) => v, _ => false });
++            let c = Content::U8(255);
++            assert(match c { Content::U8(v) => v == 255, _ => false });
++            let c = Content::U16(65535);
++            assert(match c { Content::U16(v) => v == 65535, _ => false });
++            let c = Content::U32(4294967295);
++            assert(match c { Content::U32(v) => v == 4294967295, _ => false });
++            let c = Content::U64(18446744073709551615);
++            assert(match c { Content::U64(v) => v == 18446744073709551615, _ => false });
++            let c = Content::I8(-128);
++            assert(match c { Content::I8(v) => v == -128, _ => false });
++            let c = Content::I16(-32768);
++            assert(match c { Content::I16(v) => v == -32768, _ => false });
++            let c = Content::I32(-2147483648);
++            assert(match c { Content::I32(v) => v == -2147483648, _ => false });
++            let c = Content::I64(-9223372036854775808);
++            assert(match c { Content::I64(v) => v == -9223372036854775808, _ => false });
++            let c = Content::F32(1.25f32);
++            assert(c is F32);
++            let c = Content::F64(-2.5f64);
++            assert(c is F64);
++            let c = Content::Char('界');
++            assert(match c { Content::Char(v) => v == '界', _ => false });
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_tagged_content_keeps_complete_borrowed_owned_and_recursive_fields
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::__private229::de::Content;
++
++        fn fields<'de>(text: &'de str, bytes: &'de [u8], owned: String, buffer: Vec<u8>) {
++            let c = Content::Str(text);
++            assert(match c { Content::Str(v) => v@ == text@, _ => false });
++            let c = Content::Bytes(bytes);
++            assert(match c { Content::Bytes(v) => v@ == bytes@, _ => false });
++            let ghost original = owned@;
++            let c = Content::String(owned);
++            assert(match c { Content::String(v) => v@ == original, _ => false });
++            let ghost original = buffer@;
++            let c = Content::ByteBuf(buffer);
++            assert(match c { Content::ByteBuf(v) => v@ == original, _ => false });
++            assert(Content::None is None);
++            assert(Content::Unit is Unit);
++            let c = Content::Some(Box::new(Content::Bool(true)));
++            match c {
++                Content::Some(inner) => {
++                    assert(match *inner { Content::Bool(v) => v, _ => false });
++                },
++                _ => assert(false),
++            }
++            let c = Content::Newtype(Box::new(Content::U8(7)));
++            match c {
++                Content::Newtype(inner) => {
++                    assert(match *inner { Content::U8(v) => v == 7, _ => false });
++                },
++                _ => assert(false),
++            }
++            let mut values = Vec::new();
++            values.push(Content::None);
++            let c = Content::Seq(values);
++            match c {
++                Content::Seq(values) => {
++                    assert(values.len() == 1);
++                    assert(values[0] is None);
++                },
++                _ => assert(false),
++            }
++            let mut pairs = Vec::new();
++            pairs.push((Content::Str(text), Content::Bytes(bytes)));
++            let c = Content::Map(pairs);
++            match c {
++                Content::Map(pairs) => {
++                    assert(pairs.len() == 1);
++                    assert(match &pairs[0].0 { Content::Str(v) => v@ == text@, _ => false });
++                    assert(match &pairs[0].1 { Content::Bytes(v) => v@ == bytes@, _ => false });
++                },
++                _ => assert(false),
++            }
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_tagged_content_forwards_original_visitor_and_deserializer_parameters
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Deserializer, Error};
++        use serde::__private229::de::{Content, ContentDeserializer, TaggedContentVisitor};
++
++        fn tagged<'de, T: Deserialize<'de>, D: Deserializer<'de>>(
++            deserializer: D, name: &'static str, expecting: &'static str,
++        ) -> Result<(T, Content<'de>), D::Error> {
++            deserializer.deserialize_any(TaggedContentVisitor::<T>::new(name, expecting))
++        }
++
++        fn buffered<'de, T: Deserialize<'de>, E: Error>(content: Content<'de>) -> Result<T, E> {
++            T::deserialize(ContentDeserializer::<E>::new(content))
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_tagged_content_rejects_a_changed_field
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::__private229::de::Content;
++        fn wrong() {
++            let c = Content::U8(7);
++            assert(match c { Content::U8(v) => v == 8, _ => false }); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_tagged_content_does_not_assume_deserialization_success
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Error};
++        use serde::__private229::de::{Content, ContentDeserializer};
++        fn wrong<'de, T: Deserialize<'de>, E: Error>(content: Content<'de>) {
++            let result: Result<T, E> = T::deserialize(ContentDeserializer::<E>::new(content));
++            assert(result is Ok); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_tagged_content_does_not_assume_deserialization_failure
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Error};
++        use serde::__private229::de::{Content, ContentDeserializer};
++        fn wrong<'de, T: Deserialize<'de>, E: Error>(content: Content<'de>) {
++            let result: Result<T, E> = T::deserialize(ContentDeserializer::<E>::new(content));
++            assert(result is Err); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}

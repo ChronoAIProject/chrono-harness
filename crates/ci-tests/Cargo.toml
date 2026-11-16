@@ -14,7 +14,7 @@ sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 chrono-harness = { path = "../runner" }
-chrono-ci = { path = "../ci" }
+chrono-ci = { path = "../ci", features = ["generation-test"] }
 chrono-judge-ci = { path = "../judge-ci" }
 chrono-judge-registration = { path = "../judge-registration" }
 serde_json = { version = "1", features = ["unbounded_depth"] }
@@ -74,6 +74,10 @@ path = "tests/inventory.rs"
 [[test]]
 name = "verified_literals"
 path = "tests/verified_literals.rs"
+
+[[test]]
+name = "verified_generation"
+path = "tests/verified_generation.rs"
 
 [[test]]
 name = "verified_download"

@@ -5,6 +5,13 @@ use chrono_harness::verus;
 use vstd::prelude::*;
 
 verus! {
+pub fn age_preservation_required(disposable_present: bool, retained_file_present: bool)
+    -> (required: bool)
+    ensures required == (disposable_present || !retained_file_present),
+{
+    disposable_present || !retained_file_present
+}
+
 pub fn reusable_release(terminal_handoff: bool, expired_source_preserved: bool, generation: u64,
     requested_generation: Option<u64>) -> (release: bool)
     ensures release <==> (terminal_handoff || expired_source_preserved || (requested_generation.is_some()
@@ -55,6 +62,44 @@ impl AgePolicy {
 }
 #[cfg(not(verus_keep_ghost))]
 impl Manager {
+    // Sufficient evidence that this attempt has no physical effect. Probe only
+    // declared roots and one immediate retained entry per root; other layouts
+    // continue through the original preservation and retirement implementation.
+    fn age_has_no_effect(&self, e: &Entry) -> Result<bool, String> {
+        if e.cache_attempts.last().is_some_and(|a| a.receipt.is_none()) {
+            return Ok(false);
+        }
+        let mut retained_file = false;
+        for artifact in &self.inputs.policy.artifacts {
+            let path = no_symlink_parents(&e.path, artifact.path.trim_end_matches('/'))?;
+            let metadata = match fs::symlink_metadata(&path) {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.to_string()),
+            };
+            if select_artifact(&artifact.disposition, true, false) {
+                return Ok(!age_preservation_required(true, retained_file));
+            }
+            if !metadata.is_dir() || metadata.file_type().is_symlink() {
+                return Err(
+                    "retained age artifact is not a physical directory; preserve it".into(),
+                );
+            }
+            if let Some(entry) = fs::read_dir(&path)
+                .map_err(|error| error.to_string())?
+                .next()
+                .transpose()
+                .map_err(|error| error.to_string())?
+            {
+                retained_file |= entry
+                    .file_type()
+                    .map_err(|error| error.to_string())?
+                    .is_file();
+            }
+        }
+        Ok(!age_preservation_required(false, retained_file))
+    }
+
     pub(super) fn age_eligible(&self, e: &Entry, deleting: bool) -> Result<bool, String> {
         let Some(policy) = &self.inputs.policy.age_policy else {
             return Ok(false);
@@ -136,12 +181,64 @@ impl Manager {
         let original_ref = format!("{prefix}head-{head}");
         self.retained_branch(r, &original_ref, &head)?;
         let reflog = r.text(&e.path, &["reflog", "show", "--format=%H", "HEAD"])?;
-        let mut reflog_refs = BTreeMap::new();
-        for commit in reflog.lines().collect::<BTreeSet<_>>() {
+        let commits: Vec<_> = reflog
+            .lines()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .filter(|commit| *commit != head)
+            .collect();
+        for commit in &commits {
             facts::full_oid(commit)?;
-            let reference = format!("{prefix}reflog-{commit}");
-            self.retained_branch(r, &reference, commit)?;
-            reflog_refs.insert(reference, commit.to_owned());
+        }
+        let mut reflog_refs = BTreeMap::new();
+        // The retained HEAD already covers its ancestors. Keep argv below 9 KiB
+        // even for SHA-256 OIDs instead of passing an unbounded reflog to Git.
+        for batch in commits.chunks(128) {
+            let mut args = vec!["merge-base", "--independent", &head];
+            args.extend_from_slice(batch);
+            for commit in r.text(&e.path, &args)?.lines() {
+                facts::full_oid(commit)?;
+                if commit != head {
+                    let reference = format!("{prefix}reflog-{commit}");
+                    reflog_refs.insert(reference, commit.to_owned());
+                }
+            }
+        }
+        if !reflog_refs.is_empty() {
+            let retained = r.text(
+                &self.inputs.policy.coordinator_root,
+                &[
+                    "for-each-ref",
+                    "--format=%(refname) %(objectname) %(symref)",
+                    &prefix,
+                ],
+            )?;
+            let mut observed = BTreeSet::new();
+            for line in retained.lines() {
+                let (reference, identity) = line
+                    .split_once(' ')
+                    .ok_or("invalid retained branch inventory")?;
+                let Some(commit) = reflog_refs.get(reference) else {
+                    continue;
+                };
+                let (oid, symbolic) = identity
+                    .split_once(' ')
+                    .ok_or("invalid retained branch identity")?;
+                if !symbolic.is_empty() {
+                    return Err("source custody requires a direct retained branch".into());
+                }
+                if oid != commit {
+                    return Err("retained source branch changed".into());
+                }
+                observed.insert(reference);
+            }
+            // Git omits dangling symbolic refs from this inventory. New refs
+            // still need the original direct-ref check and compare-and-create.
+            for (reference, commit) in &reflog_refs {
+                if !observed.contains(reference.as_str()) {
+                    self.retained_branch(r, reference, commit)?;
+                }
+            }
         }
         let index = r.text(&e.path, &["write-tree"])?.trim().to_owned();
         facts::full_oid(&index)?;
@@ -158,18 +255,20 @@ impl Manager {
                 facts::full_oid(&commit)?;
                 Ok(commit)
             };
-        let index_commit = if r.oid(&e.path, &format!("{head}^{{tree}}"))? == index {
-            head.clone()
+        let head_tree = r.oid(&e.path, &format!("{head}^{{tree}}"))?;
+        let (index_commit, index_ref) = if head_tree == index {
+            (head.clone(), original_ref.clone())
         } else {
-            commit_tree(
+            let commit = commit_tree(
                 r,
                 &index,
                 &head,
                 b"Preserve lifecycle index before age reuse\n",
-            )?
+            )?;
+            let reference = format!("{prefix}index-{commit}");
+            self.retained_branch(r, &reference, &commit)?;
+            (commit, reference)
         };
-        let index_ref = format!("{prefix}index-{index_commit}");
-        self.retained_branch(r, &index_ref, &index_commit)?;
         let host_config = r.config.host_config.clone();
         let (regs, _) = start::registrations(r, &e.path, &head, &host_config)?;
         let tracked = start::paths(r.git(&e.path, &["ls-files", "-z"])?)?;
@@ -219,18 +318,21 @@ impl Manager {
             }
         }
         let tree = r.text(&e.path, &["write-tree"])?.trim().to_owned();
-        let saved = if r.oid(&e.path, &format!("{head}^{{tree}}"))? == tree {
-            head.clone()
+        let (saved, reference) = if head_tree == tree {
+            (head.clone(), original_ref.clone())
+        } else if index == tree {
+            (index_commit.clone(), index_ref.clone())
         } else {
-            commit_tree(
+            let commit = commit_tree(
                 r,
                 &tree,
                 &head,
                 b"Preserve source before automatic worktree age reuse\n",
-            )?
+            )?;
+            let reference = format!("{prefix}source-{commit}");
+            self.retained_branch(r, &reference, &commit)?;
+            (commit, reference)
         };
-        let reference = format!("{prefix}source-{saved}");
-        self.retained_branch(r, &reference, &saved)?;
         self.check_entry(r, e, &head, None)?;
         if saved != head {
             r.git(
@@ -266,10 +368,21 @@ impl Manager {
             return Err("checkout has not passed its reuse age".into());
         }
         self.birth_ready(&e)?;
-        let (head, reference) = self.preserve_age_source(r, &e, report)?;
         report["age_policy"] = value!({"reuse_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().reuse_after_seconds,
             "delete_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().delete_after_seconds,
             "clock":"physical-checkout-creation","task_completion":"not-claimed"});
+        if self.age_has_no_effect(&e)? {
+            let head = r.oid(&e.path, "HEAD")?;
+            self.check_entry(r, &e, &head, None)?;
+            report["source_preservation"] = value!({"status":"not-needed",
+                "reason":"all disposable roots absent; retained file prevents checkout retirement"});
+            report["age_outcome"] = value!("no-disposable-output-retained-checkout");
+            if let Some(owner) = &mut self.ledger.entries[i].ownership {
+                owner.cache_pending = false;
+            }
+            return self.save();
+        }
+        let (head, reference) = self.preserve_age_source(r, &e, report)?;
         let expired_source_preserved = self.age_eligible(&e, true)?;
         if expired_source_preserved {
             let names: Vec<_> = self
@@ -410,6 +523,7 @@ impl Manager {
             retained_ref: reference.into(),
             retained_commit: head.into(),
             retention: Retention::Ancestor,
+            allow_retained_ref_advance: false,
             discard_artifacts: names,
             remove_branch: false,
             allow_absent_worktree: !e.attempts.is_empty(),

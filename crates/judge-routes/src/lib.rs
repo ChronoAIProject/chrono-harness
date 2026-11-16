@@ -1,4 +1,5 @@
 //! Routes owns method planning and comparison with runner-produced observations.
+pub use chrono_harness::verified_verifier::sources::validate_source_plan;
 use chrono_harness::{
     ProcessResult, facts,
     observation::{self, Tool},
@@ -35,8 +36,18 @@ pub fn proof_invocations(
         .map(
             |operation| chrono_harness::verified_verifier::ProofInvocation {
                 operation: &operation.method.operation,
-                argv: &operation.method.argv,
-                output_contract: &operation.method.output_contract,
+                argv: operation
+                    .method
+                    .nested_proof
+                    .as_ref()
+                    .map(|p| &p.argv)
+                    .unwrap_or(&operation.method.argv),
+                output_contract: operation
+                    .method
+                    .nested_proof
+                    .as_ref()
+                    .map(|p| &p.output_contract)
+                    .unwrap_or(&operation.method.output_contract),
                 output_limit_bytes: operation.output_limit_bytes,
             },
         )
@@ -50,25 +61,35 @@ pub fn validate_proof_plan(
     affected_nodes: &BTreeSet<String>,
     methods: &BTreeMap<String, Vec<Method>>,
     operations: &[Operation],
+    continuity: &chrono_harness::verified_verifier::sources::continuity::Continuity,
 ) -> Result<(), String> {
-    chrono_harness::verified_verifier::sources::validate_file_classifications(registry, previous)
-        .map_err(|error| error.render(|message, path| format!("{message}{path}")))?;
     let scopes = methods
         .values()
         .flatten()
-        .map(
-            |method| chrono_harness::verified_verifier::sources::SourceMethodScope {
-                operation: &method.operation,
-                owner: &method.owner,
-                tool: &method.tool,
-            },
-        )
+        .flat_map(|method| {
+            std::iter::once(
+                chrono_harness::verified_verifier::sources::SourceMethodScope {
+                    operation: &method.operation,
+                    owner: &method.owner,
+                    tool: &method.tool,
+                },
+            )
+            .chain(method.nested_proof.as_ref().map(|proof| {
+                chrono_harness::verified_verifier::sources::SourceMethodScope {
+                    operation: &method.operation,
+                    owner: &method.owner,
+                    tool: &proof.tool,
+                }
+            }))
+        })
         .collect();
-    chrono_harness::verified_verifier::sources::validate_selected_roots(
-        &registry.files,
+    validate_source_plan(
+        registry,
+        previous,
         &affected_nodes.iter().cloned().collect(),
         &proof_invocations(operations),
         &scopes,
+        continuity,
     )
     .map_err(|error| error.render(|message, path| format!("{message}{path}")))
 }
@@ -177,6 +198,14 @@ pub fn order(
                 .ok_or_else(|| format!("E_ROUTE_MISSING: {id}"))?;
             if defs.len() != 1 || id == "validate.delta" {
                 return Err(format!("E_ROUTE_AMBIGUOUS: {id}"));
+            }
+            if defs[0].nested_proof.as_ref().is_some_and(|proof| {
+                proof.timeout_seconds != bounds.timeout_seconds
+                    || proof.output_limit_bytes != bounds.output_limit_bytes
+            }) {
+                return Err(format!(
+                    "E_PLAN_BOUNDS: nested proof must use selected operation bounds: {id}"
+                ));
             }
             let op = operations.entry(id.clone()).or_insert_with(|| Operation {
                 method: defs[0].clone(),
@@ -547,6 +576,8 @@ pub struct Receipt {
     pub compiler_dependency: Option<Result<Vec<u8>, String>>,
     pub compiler_artifact:
         Option<Result<chrono_harness::verified_verifier::CompiledArtifact, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nested_proof: Option<Result<chrono_harness::nested_proof::Original, String>>,
     pub digest: String,
 }
 
@@ -584,6 +615,14 @@ impl Receipt {
             plan: plan.identity.clone(),
             operation: op.method.operation.clone(),
             method: wire::digest(&op.method)?,
+            nested_proof: op.method.nested_proof.as_ref().map(|_| {
+                chrono_harness::nested_proof::read_original(
+                    &plan.root,
+                    &op.method.operation,
+                    &process.stdout_bytes,
+                    op.output_limit_bytes,
+                )
+            }),
             compiler_dependency: chrono_harness::verified_verifier::sources::observe_dependency(
                 &op.method.output_contract,
                 &op.method.argv,
@@ -644,13 +683,41 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
             "E_RECEIPT_MISMATCH: plan/method/tool/argv/cwd/input/environment/output".into(),
         );
     }
-    let decoded = serde_json::from_slice::<chrono_harness::verified_verifier::CompilerReport>(
-        chrono_harness::verified_verifier::proof_stdout(
-            &op.method.output_contract,
+    match (&op.method.nested_proof, &r.nested_proof) {
+        (None, None) => {}
+        (Some(selected), Some(Ok(original))) => {
+            original.validate(&plan.root, &op.method.operation, selected)?;
+            let child = &original.process;
+            let decoded =
+                serde_json::from_slice::<chrono_harness::verified_verifier::CompilerReport>(
+                    &child.stdout_bytes,
+                )
+                .ok();
+            chrono_harness::verified_verifier::admit_observed_output(
+                &selected.output_contract,
+                &decoded,
+                &original.resolved_argv,
+                child.exit_code,
+                child.failure.is_some(),
+                &original.compiler_dependency,
+                selected.output_limit_bytes,
+                &original.compiler_artifact,
+            )?;
+        }
+        (_, Some(Err(error))) => return Err(error.clone()),
+        _ => {
+            return Err(
+                "E_VERUS_NESTED: selected child proof original is missing or unexpected".into(),
+            );
+        }
+    }
+    let decoded = match &op.method.output_contract {
+        None => None,
+        Some(_) => serde_json::from_slice::<chrono_harness::verified_verifier::CompilerReport>(
             &p.stdout_bytes,
-        ),
-    )
-    .ok();
+        )
+        .ok(),
+    };
     chrono_harness::verified_verifier::admit_observed_output(
         &op.method.output_contract,
         &decoded,
@@ -755,12 +822,39 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
         order(&selected, &global_plans, &methods, &execute_actions(&r))?;
     let previous_registry =
         serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
+    let registry: chrono_harness::verified_verifier::sources::SourceRegistry =
+        serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?;
+    let affected = impact.closure.reached.keys().cloned().collect::<Vec<_>>();
+    let continuity = chrono_harness::facts::source_continuity::observe(
+        reader,
+        &req.candidate.root,
+        Some((
+            &req.base.commit,
+            old.filemap(),
+            old.projects(),
+            facts::artifact_directories(old.config())?
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+        )),
+        (
+            &req.candidate.commit,
+            r.filemap(),
+            r.projects(),
+            facts::artifact_directories(r.config())?
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+        ),
+        &chrono_harness::verified_verifier::sources::continuity_paths(&registry.files, &affected),
+    )?;
     validate_proof_plan(
-        &serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?,
+        &registry,
         previous_registry.as_ref().map(Some).map_err(String::as_str),
         &impact.closure.reached.keys().cloned().collect(),
         &methods,
         &global_operations,
+        &continuity,
     )?;
     let global_selected = selected.clone();
     let selected = unit_selection(req, &selected, &global_plans)?;

@@ -1,5 +1,5 @@
 //! Shared strict registration data; loading does not assert readiness or semantic validity.
-use crate::{NodeKind, Result, schema};
+use super::{NodeKind, Result, schema};
 use chrono_harness::facts;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -59,8 +59,8 @@ impl Registrations {
         ] {
             check(v).map_err(|e| format!("{name}: {e}"))?;
         }
-        s.filemap = crate::select_filemap(&s.filemap, Some(&s.effective_path))?;
-        crate::execution::scheduling(s.filemap(), s.projects(), &s.config()["artifacts"])?;
+        s.filemap = super::select_filemap(&s.filemap, Some(&s.effective_path))?;
+        super::execution::scheduling(s.filemap(), s.projects(), &s.config()["artifacts"])?;
         Ok(s)
     }
     /// Structurally validated values; semantic admissibility is still registration policy.
@@ -124,9 +124,9 @@ impl Registrations {
     pub fn nodes(&self) -> BTreeSet<String> {
         self.node_data().into_keys().collect()
     }
-    pub fn test_bindings(&self) -> BTreeMap<String, Vec<crate::execution::TestBinding>> {
+    pub fn test_bindings(&self) -> BTreeMap<String, Vec<super::execution::TestBinding>> {
         let mut bindings =
-            crate::execution::test_bindings(&self.projects).expect("validated test bindings");
+            super::execution::test_bindings(&self.projects).expect("validated test bindings");
         for (test, definitions) in self
             .historical
             .iter()
@@ -137,7 +137,7 @@ impl Registrations {
                     bindings
                         .entry(test.clone())
                         .or_default()
-                        .push(crate::execution::TestBinding {
+                        .push(super::execution::TestBinding {
                             owner: owner.clone(),
                             action: "execute".into(),
                             operation: operation.into(),
@@ -156,7 +156,7 @@ impl Registrations {
     pub fn node_data(&self) -> BTreeMap<String, NodeView<'_>> {
         let mut nodes: BTreeMap<String, NodeView<'_>> = BTreeMap::new();
         let bindings =
-            crate::execution::test_bindings(&self.projects).expect("validated test bindings");
+            super::execution::test_bindings(&self.projects).expect("validated test bindings");
         for (prefix, kind, value, key, id) in [
             ("file", NodeKind::File, &self.filemap, "files", "path"),
             (

@@ -15,18 +15,14 @@ pub fn expected_post_publish_prefix(diagnostics: bool) -> (out: &'static str)
 }
 }
 
-#[cfg(not(verus_keep_ghost))]
 use chrono_ci::{generate, init, release};
-#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
-#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
 };
 
-#[cfg(not(verus_keep_ghost))]
 fn config() -> Value {
     json!({
         "schema":"chrono-github-release/v1",
@@ -44,7 +40,6 @@ fn config() -> Value {
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn release_render_consumes_literal_argument_policy() {
     for value in ["", "普通文本", "$", "${", "$HOME `literal`", "${x{", "{{"] {
         let mut c = config();
@@ -71,13 +66,27 @@ fn release_render_consumes_literal_argument_policy() {
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn write(root: &Path, path: &str, value: &Value) {
     let target = root.join(path);
     fs::create_dir_all(target.parent().unwrap()).unwrap();
     fs::write(target, serde_json::to_vec_pretty(value).unwrap()).unwrap();
 }
-#[cfg(not(verus_keep_ghost))]
+fn assert_failed_release_adoption(root: &Path, error: &str) {
+    assert!(!root.join(".chrono-harness/ci").exists());
+    let operations: Vec<_> =
+        fs::read_dir(root.join(".chrono-harness/state/ci-generation-operations"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+    assert_eq!(operations.len(), 1);
+    let operation = operations[0].strip_prefix(root).unwrap().to_str().unwrap();
+    let status = chrono_ci::generation::status(root, operation).unwrap();
+    assert_eq!(status["completion"], "confirmed-evaluation");
+    let result = &status["original_result"];
+    assert_eq!(result["producer_evaluation"], json!({"error":error}));
+    assert_eq!(result["effects"], "not-started");
+    assert_eq!(result["original_process_exit"], Value::Null);
+}
 fn cli(root: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-cli"))
         .args(args)
@@ -85,7 +94,6 @@ fn cli(root: &Path, args: &[&str]) -> std::process::Output {
         .output()
         .unwrap()
 }
-#[cfg(not(verus_keep_ghost))]
 fn recording_program(root: &Path) -> PathBuf {
     let program = root.join("$CHRONO_BASE");
     std::os::unix::fs::symlink(
@@ -95,7 +103,6 @@ fn recording_program(root: &Path) -> PathBuf {
     .unwrap();
     program
 }
-#[cfg(not(verus_keep_ghost))]
 fn script(rendered: &str) -> String {
     rendered
         .split("        run: |\n")
@@ -109,7 +116,6 @@ fn script(rendered: &str) -> String {
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn generated_command_preserves_literal_argv_and_original_failure() {
     let d = tempfile::Builder::new()
         .prefix("release host ")
@@ -165,7 +171,6 @@ fn generated_command_preserves_literal_argv_and_original_failure() {
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn release_adoption_preserves_customization_and_verify_does_not_repair() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
@@ -223,7 +228,6 @@ fn release_adoption_preserves_customization_and_verify_does_not_repair() {
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn invalid_release_declarations_fail_before_adoption() {
     let mut bad = Vec::new();
     for (key, value) in [
@@ -269,12 +273,9 @@ fn invalid_release_declarations_fail_before_adoption() {
     for c in bad {
         let d = tempfile::tempdir().unwrap();
         write(d.path(), "source.json", &c);
-        assert!(
-            init(d.path(), &d.path().join("source.json")).is_err(),
-            "{c}"
-        );
+        let error = init(d.path(), &d.path().join("source.json")).unwrap_err();
         assert!(!d.path().join(".github").exists());
-        assert!(!d.path().join(".chrono-harness").exists());
+        assert_failed_release_adoption(d.path(), &error);
     }
     let d = tempfile::tempdir().unwrap();
     let duplicate = serde_json::to_string(&config()).unwrap().replacen(
@@ -283,13 +284,14 @@ fn invalid_release_declarations_fail_before_adoption() {
         1,
     );
     fs::write(d.path().join("source.json"), duplicate).unwrap();
-    assert!(init(d.path(), &d.path().join("source.json")).is_err());
+    let error = init(d.path(), &d.path().join("source.json")).unwrap_err();
+    assert!(!d.path().join(".github").exists());
+    assert_failed_release_adoption(d.path(), &error);
     let valid: release::Config = serde_json::from_value(config()).unwrap();
     assert!(release::render(&valid).is_ok());
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn release_ownership_refuses_old_check_marker_unowned_and_symlink_outputs() {
     for text in ["host-owned\n", "# chrono-ci: owned github-actions/v1\n"] {
         let d = tempfile::tempdir().unwrap();
@@ -298,13 +300,15 @@ fn release_ownership_refuses_old_check_marker_unowned_and_symlink_outputs() {
         let path = root.join(".github/workflows/package.yml");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, text).unwrap();
-        assert!(
-            init(root, &root.join("source.json"))
-                .unwrap_err()
-                .contains("collision")
+        let before = chrono_harness::artifact_disposal::identity(&path).unwrap();
+        let error = init(root, &root.join("source.json")).unwrap_err();
+        assert!(error.contains("collision"));
+        assert_eq!(fs::read_to_string(&path).unwrap(), text);
+        assert_eq!(
+            chrono_harness::artifact_disposal::identity(&path).unwrap(),
+            before
         );
-        assert_eq!(fs::read_to_string(path).unwrap(), text);
-        assert!(!root.join(".chrono-harness").exists());
+        assert_failed_release_adoption(root, &error);
     }
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
@@ -323,7 +327,6 @@ fn release_ownership_refuses_old_check_marker_unowned_and_symlink_outputs() {
     );
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn units_config() -> Value {
     let mut c = config();
     c["schema"] = json!("chrono-github-release/v2");
@@ -342,7 +345,6 @@ fn units_config() -> Value {
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn delivery_binds_landing_source_and_limits_write_permission_to_the_publisher() {
     let mut c = units_config();
     c["push_branches"] = json!([]);
@@ -386,7 +388,6 @@ fn delivery_binds_landing_source_and_limits_write_permission_to_the_publisher() 
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn delivery_rejects_unregistered_publishers_push_bypasses_and_unsuccessful_dependencies() {
     for case in 0..5 {
         let mut c = units_config();
@@ -409,7 +410,6 @@ fn delivery_rejects_unregistered_publishers_push_bypasses_and_unsuccessful_depen
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn promotion_skips_only_explicit_build_jobs_and_keeps_the_registered_commands() {
     let mut c = units_config();
     c["push_branches"] = json!([]);
@@ -499,7 +499,6 @@ fn promotion_skips_only_explicit_build_jobs_and_keeps_the_registered_commands() 
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn release_units_render_literal_edges_exact_artifact_ids_and_current_dependency_metadata() {
     let c: release::Config = serde_json::from_value(units_config()).unwrap();
     let yaml = release::render(&c).unwrap();
@@ -514,7 +513,6 @@ fn release_units_render_literal_edges_exact_artifact_ids_and_current_dependency_
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn shared_downloads_preserve_each_jobs_expanded_dependencies_and_destinations() {
     let mut value = units_config();
     for (id, directory) in [("same", "inputs/native/"), ("different", "other/native/")] {
@@ -563,7 +561,6 @@ fn shared_downloads_preserve_each_jobs_expanded_dependencies_and_destinations() 
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn oversized_workflows_reject_adoption_and_generation_without_writes() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
@@ -593,7 +590,6 @@ fn oversized_workflows_reject_adoption_and_generation_without_writes() {
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn release_units_reject_undeclared_edges_cycles_and_overlapping_downloads() {
     for case in 0..7 {
         let mut c = units_config();
@@ -616,7 +612,6 @@ fn release_units_reject_undeclared_edges_cycles_and_overlapping_downloads() {
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn release_units_cli_runs_literal_command_and_writes_original_dependency_data() {
     let d = tempfile::Builder::new()
         .prefix("units host λ ")
@@ -656,7 +651,6 @@ fn release_units_cli_runs_literal_command_and_writes_original_dependency_data() 
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn release_v1_rejects_even_empty_opt_in_fields() {
     for (key, value) in [
         ("needs", json!([])),
@@ -673,7 +667,6 @@ fn release_v1_rejects_even_empty_opt_in_fields() {
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn release_readoption_rejects_v2_fields_in_existing_v1_without_writes() {
     for (key, value) in [
         ("needs", json!([])),
@@ -711,7 +704,6 @@ fn release_readoption_rejects_v2_fields_in_existing_v1_without_writes() {
 }
 
 #[test]
-#[cfg(not(verus_keep_ghost))]
 fn generated_command_mock_rejects_unknown_shell_domain_and_preserves_literal_bytes() {
     let sample: Value =
         serde_json::from_str(include_str!("fixtures/generated-command.json")).unwrap();

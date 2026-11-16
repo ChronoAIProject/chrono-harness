@@ -1,0 +1,12 @@
+--- a/vstd/vstd.rs
++++ b/vstd/vstd.rs
+@@ -85,5 +85,9 @@
+ pub mod seq_lib;
+ #[cfg(all(feature = "std", verus_keep_ghost))]
+ pub mod serde_specs;
++// 复用宿主唯一 JSON 合同源；相对路径对应登记的固定源码缓存布局。
++#[cfg(all(feature = "std", verus_keep_ghost))]
++#[path = "../../../../../../../crates/runner/src/json_value_specs.rs"]
++pub mod json_value_specs;
+ pub mod set;
+ pub mod set_lib;

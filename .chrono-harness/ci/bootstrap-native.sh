@@ -26,4 +26,4 @@ fi
 if ! rustup run 1.95.0 cargo --version >/dev/null 2>&1; then
     rustup toolchain install 1.95.0 --profile minimal --component rustfmt
 fi
-exec rustup run 1.95.0 cargo run --locked --manifest-path "$task_root/.chrono-harness/ci/native/Cargo.toml" --target-dir "$task_root/.chrono-harness/cache/host-bootstrap-native/target" --bin chrono-host-bootstrap -- "$@"
+exec rustup run 1.95.0 cargo run --locked --manifest-path "$task_root/crates/host-bootstrap/Cargo.toml" --target-dir "$task_root/.chrono-harness/cache/host-bootstrap-native/target" --bin chrono-host-bootstrap -- "$@"

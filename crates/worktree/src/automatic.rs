@@ -11,6 +11,136 @@ pub use owner_deployment::{absent_attachment_conflict, known_absent_enrollment};
 
 verus! {
 
+pub open spec fn admission_handoff_result<S, H, R, P>(initial: S,
+    handoff: H, reload: R, protect: P, out: (S, Result<(), String>)) -> bool
+    where H: FnOnce(S) -> (S, Result<(), String>),
+        R: FnOnce(S, String) -> (S, Result<(), String>),
+        P: FnOnce(S) -> (S, Result<(), String>),
+{
+    exists|attempted: S, result: Result<(), String>|
+        #[trigger] handoff.ensures((initial,), (attempted, result))
+        && match result {
+            Ok(()) => protect.ensures((attempted,), out),
+            Err(error) => exists|restored: S, recovery: Result<(), String>|
+                #[trigger] reload.ensures((attempted, error), (restored, recovery))
+                && match recovery {
+                    Err(failure) => out == (restored, Err::<(), String>(failure)),
+                    Ok(()) => protect.ensures((restored,), out),
+                },
+        }
+}
+
+/// 交接失败先保留原错并重读持久记录；必要保护成功才允许后续消费。
+pub fn admission_handoff<S, H, R, P>(initial: S, handoff: H, reload: R, protect: P)
+    -> (out: (S, Result<(), String>))
+    where H: FnOnce(S) -> (S, Result<(), String>),
+        R: FnOnce(S, String) -> (S, Result<(), String>),
+        P: FnOnce(S) -> (S, Result<(), String>),
+    requires handoff.requires((initial,)),
+        forall|state: S, error: String| reload.requires((state, error)),
+        forall|state: S| protect.requires((state,)),
+    ensures admission_handoff_result(initial, handoff, reload, protect, out),
+{
+    let (state, result) = handoff(initial);
+    let ghost attempted = state;
+    let ghost observation = result;
+    assert(handoff.ensures((initial,), (attempted, observation)));
+    match result {
+        Ok(()) => {
+            let out = protect(state);
+            assert(protect.ensures((attempted,), out));
+            out
+        },
+        Err(error) => {
+            let ghost original = error;
+            let (state, recovery) = reload(state, error);
+            let ghost restored = state;
+            let ghost reloaded = recovery;
+            assert(reload.ensures((attempted, original), (restored, reloaded)));
+            match recovery {
+                Err(error) => (state, Err(error)),
+                Ok(()) => {
+                    let out = protect(state);
+                    assert(protect.ensures((restored,), out));
+                    out
+                },
+            }
+        },
+    }
+}
+
+pub open spec fn enrollment_write_result<S, W, A>(initial: S,
+    write: W, after: A, out: (S, Result<(), String>)) -> bool
+    where W: FnOnce(S) -> (S, Result<(), String>),
+        A: FnOnce(S) -> (S, Result<(), String>),
+{
+    exists|written: S, writing: Result<(), String>|
+        #[trigger] write.ensures((initial,), (written, writing))
+        && match writing {
+            Err(error) => out == (written, Err::<(), String>(error)),
+            Ok(()) => after.ensures((written,), out),
+        }
+}
+
+pub open spec fn enrollment_record_result<S, B, W, A>(initial: S, grows: bool,
+    before: B, write: W, after: A, out: (S, Result<(), String>)) -> bool
+    where B: FnOnce(S) -> (S, Result<(), String>),
+        W: FnOnce(S) -> (S, Result<(), String>),
+        A: FnOnce(S) -> (S, Result<(), String>),
+{
+    if grows {
+        exists|prepared: S, preparation: Result<(), String>|
+            #[trigger] before.ensures((initial,), (prepared, preparation))
+            && match preparation {
+                Err(error) => out == (prepared, Err::<(), String>(error)),
+                Ok(()) => enrollment_write_result(prepared, write, after, out),
+            }
+    } else {
+        enrollment_write_result(initial, write, after, out)
+    }
+}
+
+/// 新引用先保护；收窄沿用旧保护，写入成功后才发布当前引用。
+pub fn publish_enrollment_record<S, B, W, A>(initial: S, grows: bool,
+    before: B, write: W, after: A) -> (out: (S, Result<(), String>))
+    where B: FnOnce(S) -> (S, Result<(), String>),
+        W: FnOnce(S) -> (S, Result<(), String>),
+        A: FnOnce(S) -> (S, Result<(), String>),
+    requires before.requires((initial,)),
+        forall|state: S| write.requires((state,)),
+        forall|state: S| after.requires((state,)),
+    ensures enrollment_record_result(initial, grows, before, write, after, out),
+{
+    let (state, preparation) = if grows { before(initial) } else { (initial, Ok(())) };
+    let ghost prepared = state;
+    let ghost preparation_result = preparation;
+    assert(if grows { before.ensures((initial,), (prepared, preparation_result)) }
+        else { prepared == initial && preparation_result == Ok::<(), String>(()) });
+    match preparation {
+        Err(error) => {
+            let out = (state, Err(error));
+            assert(enrollment_record_result(initial, grows, before, write, after, out));
+            return out;
+        },
+        Ok(()) => (),
+    }
+    let (state, writing) = write(state);
+    let ghost written = state;
+    let ghost writing_result = writing;
+    assert(write.ensures((prepared,), (written, writing_result)));
+    let out = match writing {
+        Err(error) => (state, Err(error)),
+        Ok(()) => {
+            let out = after(state);
+            assert(after.ensures((written,), out));
+            out
+        },
+    };
+    assert(enrollment_write_result(prepared, write, after, out));
+    assert(enrollment_record_result(initial, grows, before, write, after, out));
+    out
+}
+
 /// Only explicit maintenance with the original exclusion probes a missing cache.
 pub fn absence_probe_required(maintenance: bool, cache_pending: bool, excluded: bool)
     -> (required: bool)
@@ -61,8 +191,11 @@ mod cache_adoption;
 pub(crate) mod inventory;
 #[cfg(not(verus_keep_ghost))]
 pub(crate) mod inventory;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/migration.rs"]
+pub(crate) mod migration;
 #[cfg(not(verus_keep_ghost))]
-mod migration;
+pub(crate) mod migration;
 #[cfg(not(verus_keep_ghost))]
 mod owner_deployment;
 #[cfg(verus_keep_ghost)]
@@ -1249,17 +1382,6 @@ impl Manager {
             scope: &self.scope,
         }
     }
-    fn observe_inventory(
-        &self,
-        r: &mut Runner,
-        exclude: &[PathBuf],
-        report: &mut Value,
-        all: bool,
-        selected: &BTreeSet<PathBuf>,
-    ) -> Result<BTreeSet<PathBuf>, String> {
-        self.observation()
-            .observe_inventory(r, exclude, report, all, selected)
-    }
     fn enrollment_paths(&self) -> Result<Vec<PathBuf>, String> {
         self.observation().enrollment_paths()
     }
@@ -1826,6 +1948,7 @@ impl Manager {
             scope,
             exclusive_namespace,
             wait,
+            false,
         )?
         else {
             return Ok(None);
@@ -1844,11 +1967,22 @@ impl Manager {
         scope: &Path,
         exclusive_namespace: bool,
         wait: bool,
+        recover_published_results: bool,
     ) -> Result<Option<Self>, String> {
         let Some(inputs) = PolicyInputs::load(r, root, config_path, bytes)? else {
             return Ok(None);
         };
-        Self::from_inputs(r, inputs, token, scope, exclusive_namespace, wait).map(Some)
+        Self::from_inputs(
+            r,
+            inputs,
+            token,
+            scope,
+            exclusive_namespace,
+            wait,
+            true,
+            recover_published_results,
+        )
+        .map(Some)
     }
     fn from_inputs(
         r: &mut Runner,
@@ -1857,6 +1991,8 @@ impl Manager {
         scope: &Path,
         exclusive_namespace: bool,
         wait: bool,
+        protect: bool,
+        recover_published_results: bool,
     ) -> Result<Self, String> {
         let scope = absolute(scope, true)?;
         let policy = &inputs.policy;
@@ -2034,7 +2170,7 @@ impl Manager {
             }
             absolute(&e.path, true)?;
         }
-        let manager = Self {
+        let mut manager = Self {
             inputs,
             ledger,
             directory,
@@ -2043,7 +2179,12 @@ impl Manager {
             _namespace: namespace,
             _gate: gate,
         };
-        manager.protect_originals()?;
+        if recover_published_results {
+            manager.reconcile_published_results()?;
+        }
+        if protect {
+            manager.protect_originals()?;
+        }
         Ok(manager)
     }
     /// The enrollment is an actual durable consumer, independently of any
@@ -2122,13 +2263,15 @@ impl Manager {
         if let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(
             &self.inputs.policy.coordinator_root,
         )? {
-            inventory.reference_paths(
-                &self.original_role()?,
-                &self
-                    .original_paths(&self.ledger)?
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-            )?;
+            let paths = self
+                .original_paths(&self.ledger)?
+                .into_iter()
+                .collect::<Vec<_>>();
+            let role = self.original_role()?;
+            // A prior handoff can have committed its shrink before its role
+            // update. Remove those stale members before admitting new paths.
+            inventory.prune_reference_paths(&role, &paths)?;
+            inventory.reference_paths(&role, &paths)?;
         }
         Ok(())
     }
@@ -2136,7 +2279,6 @@ impl Manager {
     /// A full original accepting this receipt ends only its interim ledger
     /// reference. The report's own consumers and dependency edges remain.
     fn reconcile_published_results(&mut self) -> Result<(), String> {
-        let mut changed = false;
         for i in 0..self.ledger.entries.len() {
             for (field, binding) in [
                 ("completed_uses", "managed_use_receipt"),
@@ -2148,10 +2290,13 @@ impl Manager {
                 let receipts: Vec<Receipt> =
                     serde_json::from_value(self.ledger.entries[i].enrollment[field].clone())
                         .map_err(|e| format!("invalid pending result handoff: {e}"))?;
-                let mut pending = Vec::new();
                 for receipt in receipts {
+                    let _receipt_input = chrono_harness::retained_artifacts::retention::read_guard(
+                        &self.inputs.policy.coordinator_root,
+                        &receipt.path,
+                    )?;
                     let original = json(&self.receipt(&receipt)?)?;
-                    let accepted = if let Some(path) = original["report_path"].as_str() {
+                    if let Some(path) = original["report_path"].as_str() {
                         let physical =
                             no_symlink_parents(&self.inputs.policy.coordinator_root, path)?;
                         let _input = chrono_harness::retained_artifacts::retention::read_guard(
@@ -2179,42 +2324,48 @@ impl Manager {
                                             &self.inputs.policy.coordinator_root,
                                             &report,
                                         )?;
+                                        let pending = self.ledger.entries[i].enrollment[field]
+                                            .as_array_mut()
+                                            .ok_or("pending result handoffs")?;
+                                        pending.retain(|value| *value != value!(receipt));
+                                        if pending.is_empty() {
+                                            self.ledger.entries[i]
+                                                .enrollment
+                                                .as_object_mut()
+                                                .ok_or("enrollment object")?
+                                                .remove(field);
+                                        }
+                                        // Keep both read capabilities through the atomic
+                                        // handoff. No existing role member is released
+                                        // before the smaller ledger is durable.
+                                        self.save_result_handoff()?;
                                     }
-                                    matches
-                                } else {
-                                    false
                                 }
                             }
-                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
                             Err(e) => return Err(e.to_string()),
-                        }
-                    } else {
-                        false
-                    };
-                    if accepted {
-                        changed = true;
-                    } else {
-                        pending.push(receipt);
+                        };
                     }
                 }
-                if pending.is_empty() {
-                    self.ledger.entries[i]
-                        .enrollment
-                        .as_object_mut()
-                        .ok_or("enrollment object")?
-                        .remove(field);
-                } else {
-                    self.ledger.entries[i].enrollment[field] = value!(pending);
-                }
             }
-        }
-        if changed {
-            self.save()?;
         }
         Ok(())
     }
 
     fn adopt_live_policy(&mut self, r: &mut Runner) -> Result<(), String> {
+        if let Some(i) = self.current_entry(&self.scope) {
+            if self
+                .policy_binding(&self.ledger.entries[i])?
+                .policy_source
+                .is_some()
+            {
+                return self.restore_adopted_policy(r);
+            }
+        }
+        self.adopt_target_policy(r)
+    }
+
+    fn adopt_target_policy(&mut self, r: &mut Runner) -> Result<(), String> {
         if self.scope == self.inputs.source_root {
             return Ok(());
         }
@@ -2289,62 +2440,70 @@ impl Manager {
         // An import adopts the caller's policy while retaining the target's raw
         // input bindings. Those are separate sources until an explicit migration.
         let mut _original_guard = None;
-        match crate::verified_lifecycle::adopted_policy_source(
-            entry.enrollment["kind"].as_str().unwrap_or(""),
-            !entry.policy_migrations.is_empty(),
-            &binding.head,
-            &self.inputs.source_head,
-            &binding.policy_sha256,
-            &sha256(&self.inputs.policy_bytes),
-        ) {
-            crate::verified_lifecycle::AdoptedPolicySource::Current => return Ok(()),
-            crate::verified_lifecycle::AdoptedPolicySource::RetainedTarget => (),
-            crate::verified_lifecycle::AdoptedPolicySource::ImportedOriginal => {
-                let path = entry.enrollment["receipt"]["report_path"]
-                    .as_str()
-                    .ok_or("import enrollment lacks its original report path")?;
-                _original_guard =
-                    chrono_harness::retained_artifacts::retention::read_guard(&root, path)?;
-                let bytes = crate::recovery::state_bytes(&root, path)?;
-                let inventory =
-                    chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
-                        .ok_or("import policy restoration requires its published original")?;
-                let published =
-                    inventory.published_original(path, &sha256(&bytes), bytes.len() as u64)?;
-                let report = json(&bytes)?;
-                let fields = crate::verified_lifecycle::ImportedPolicyReceipt {
-                    schema: report["schema"].as_str(),
-                    operation: report["operation"].as_str(),
-                    status: report["status"].as_str(),
-                    source_root: report["source_root"].as_str(),
-                    report_path: report["report_path"].as_str(),
-                    config_path: report["config_path"].as_str(),
-                };
-                if !crate::verified_lifecycle::imported_policy_receipt_valid(
-                    &fields,
-                    published,
-                    root.to_str().ok_or("non-UTF8 coordinator root")?,
-                    path,
-                    &self.inputs.config_path,
-                ) {
-                    return Err("import policy original does not bind this adoption".into());
-                }
-                self.verify_inputs(&report)?;
-                binding.head = report["policy_source_commit"]
-                    .as_str()
-                    .ok_or("import policy original lacks its fixed policy source commit")?
+        if let Some(source) = binding.policy_source.take() {
+            binding.head = source.head;
+            binding.inputs = source.inputs;
+        } else {
+            match crate::verified_lifecycle::adopted_policy_source(
+                entry.enrollment["kind"].as_str().unwrap_or(""),
+                !entry.policy_migrations.is_empty(),
+                &binding.head,
+                &self.inputs.source_head,
+                &binding.policy_sha256,
+                &sha256(&self.inputs.policy_bytes),
+            ) {
+                crate::verified_lifecycle::AdoptedPolicySource::Current => return Ok(()),
+                crate::verified_lifecycle::AdoptedPolicySource::RetainedTarget => (),
+                crate::verified_lifecycle::AdoptedPolicySource::ImportedOriginal => {
+                    let path = entry.enrollment["receipt"]["report_path"]
+                        .as_str()
+                        .ok_or("import enrollment lacks its original report path")?;
+                    _original_guard =
+                        chrono_harness::retained_artifacts::retention::read_guard(&root, path)?;
+                    let bytes = crate::recovery::state_bytes(&root, path)?;
+                    let inventory =
+                        chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
+                            .ok_or("import policy restoration requires its published original")?;
+                    let published =
+                        inventory.published_original(path, &sha256(&bytes), bytes.len() as u64)?;
+                    let report = json(&bytes)?;
+                    let fields = crate::verified_lifecycle::ImportedPolicyReceipt {
+                        schema: report["schema"].as_str(),
+                        operation: report["operation"].as_str(),
+                        status: report["status"].as_str(),
+                        source_root: report["source_root"].as_str(),
+                        report_path: report["report_path"].as_str(),
+                        config_path: report["config_path"].as_str(),
+                    };
+                    if !crate::verified_lifecycle::imported_policy_receipt_valid(
+                        &fields,
+                        published,
+                        root.to_str().ok_or("non-UTF8 coordinator root")?,
+                        path,
+                        &self.inputs.config_path,
+                    ) {
+                        return Err("import policy original does not bind this adoption".into());
+                    }
+                    self.verify_inputs(&report)?;
+                    binding.head = crate::verified_lifecycle::imported_policy_source_commit(
+                        report.get("policy_source_commit").is_some(),
+                        report["policy_source_commit"].as_str(),
+                        report["source_commit"].as_str(),
+                    )
+                    .ok_or("import policy original lacks a valid fixed policy source commit")?
                     .into();
-                facts::full_oid(&binding.head)?;
-                let config_sha256 = report["config_sha256"]
-                    .as_str()
-                    .ok_or("import policy original lacks its configuration digest")?;
-                binding.inputs = BTreeMap::from([
-                    (self.inputs.config_path.clone(), Some(config_sha256.into())),
-                    (
-                        self.inputs.policy_path.clone(),
-                        Some(binding.policy_sha256.clone()),
-                    ),
-                ]);
+                    facts::full_oid(&binding.head)?;
+                    let config_sha256 = report["config_sha256"]
+                        .as_str()
+                        .ok_or("import policy original lacks its configuration digest")?;
+                    binding.inputs = BTreeMap::from([
+                        (self.inputs.config_path.clone(), Some(config_sha256.into())),
+                        (
+                            self.inputs.policy_path.clone(),
+                            Some(binding.policy_sha256.clone()),
+                        ),
+                    ]);
+                }
             }
         }
         let config_bytes = r.blob(&root, &binding.head, &self.inputs.config_path)?;
@@ -2412,7 +2571,7 @@ impl Manager {
         self.inputs.registry_digest = registry_digest;
         Ok(())
     }
-    fn save(&self) -> Result<(), String> {
+    fn update_path(&self) -> Result<PathBuf, String> {
         if self.inputs.policy.schema == "chrono-worktree-automatic-cleanup/v2"
             && self._gate.lease.is_none()
         {
@@ -2428,32 +2587,62 @@ impl Manager {
         }
         self._namespace.stable()?;
         self._gate.stable()?;
-        let path = no_symlink_parents(&self.record_directory, "ledger.json")?;
+        no_symlink_parents(&self.record_directory, "ledger.json")
+    }
+    fn save_result_handoff(&self) -> Result<(), String> {
+        let path = self.update_path()?;
+        let previous: Ledger = decode(&fs::read(&path).map_err(|e| e.to_string())?)?;
+        let grows = !self
+            .original_paths(&self.ledger)?
+            .is_subset(&self.original_paths(&previous)?);
+        // The existing role is deliberately unchanged on either side of this
+        // write. A failed or interrupted write preserves the old recovery roots;
+        // the next open prunes only what the durable ledger no longer consumes.
+        let (_, result) = publish_enrollment_record(
+            (),
+            grows,
+            |()| {
+                (
+                    (),
+                    Err("result handoff cannot introduce recovery inputs".into()),
+                )
+            },
+            |()| ((), write_json(&path, &self.ledger, false).map(|_| ())),
+            |()| ((), Ok(())),
+        );
+        result
+    }
+    fn save(&self) -> Result<(), String> {
+        let path = self.update_path()?;
         let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(
             &self.inputs.policy.coordinator_root,
         )?;
-        if let Some(inventory) = &inventory {
-            let previous: Ledger = decode(&fs::read(&path).map_err(|e| e.to_string())?)?;
-            let mut paths = self.original_paths(&previous)?;
-            paths.extend(self.original_paths(&self.ledger)?);
-            // Protect both possible durable records before publication. A
-            // failed ledger write leaves the previous recovery inputs rooted.
-            inventory.reference_paths(
-                &self.original_role()?,
-                &paths.into_iter().collect::<Vec<_>>(),
-            )?;
-        }
-        write_json(&path, &self.ledger, false)?;
-        if let Some(inventory) = inventory {
-            inventory.reference_paths(
-                &self.original_role()?,
-                &self
-                    .original_paths(&self.ledger)?
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-            )?;
-        }
-        Ok(())
+        let Some(inventory) = inventory else {
+            return write_json(&path, &self.ledger, false).map(|_| ());
+        };
+        let previous: Ledger = decode(&fs::read(&path).map_err(|e| e.to_string())?)?;
+        let previous = self.original_paths(&previous)?;
+        let next = self.original_paths(&self.ledger)?;
+        let grows = !next.is_subset(&previous);
+        let role = self.original_role()?;
+        let (_, result) = publish_enrollment_record(
+            (),
+            grows,
+            |()| {
+                let mut paths = previous;
+                paths.extend(next.iter().cloned());
+                let result =
+                    inventory.reference_paths(&role, &paths.into_iter().collect::<Vec<_>>());
+                ((), result)
+            },
+            |()| ((), write_json(&path, &self.ledger, false).map(|_| ())),
+            |()| {
+                let result =
+                    inventory.reference_paths(&role, &next.iter().cloned().collect::<Vec<_>>());
+                ((), result)
+            },
+        );
+        result
     }
     fn stable(&self, r: &mut Runner) -> Result<(), String> {
         self._namespace.stable()?;
@@ -2478,16 +2667,21 @@ impl Manager {
         )?
         .exit_code
             != 1
-            || r.oid(
-                &self.inputs.policy.coordinator_root,
-                &self.inputs.policy.retained_ref,
-            )? != t.retained_commit
         {
             return Err(
                 "retained reference changed after terminal handoff; preserve checkout".into(),
             );
         }
-        Ok(())
+        let current = r.oid(
+            &self.inputs.policy.coordinator_root,
+            &self.inputs.policy.retained_ref,
+        )?;
+        maintenance::retained_commit_reachable(
+            r,
+            &self.inputs.policy.coordinator_root,
+            &t.retained_commit,
+            &current,
+        )
     }
     fn target_policy_inputs(
         &self,
@@ -3478,7 +3672,7 @@ impl Manager {
             let e = self.ledger.entries[i].clone();
             let cache =
                 e.status == "active" && e.ownership.as_ref().is_some_and(|o| o.cache_pending);
-            let age = if matches!(e.status.as_str(), "active" | "retained" | "terminal")
+            let age = if matches!(e.status.as_str(), "active" | "terminal" | "retained")
                 && e.enrollment["age_retirement"].is_null()
             {
                 match self.age_eligible(&e, false) {
@@ -3654,14 +3848,16 @@ impl Manager {
                         .ok_or("cleanup report path")?
                         .to_owned();
                     let b = crate::recovery::state_bytes(&root, &path)?;
-                    let cache_outcome = result["age_outcome"] == "reusable-source-preserved"
-                        || (cache
-                            && result["age_outcome"]
-                                != "expired-checkout-verified-absent-source-branches-retained");
-                    let stage = crate::verified_lifecycle::cleanup_result(
-                        cache_outcome,
-                        result["status"].as_str().unwrap_or(""),
-                        result["worktree_removal"].as_str().unwrap_or(""),
+                    let crate::verified_lifecycle::CleanupOutcome {
+                        cache: cache_outcome,
+                        cleaned,
+                        stage,
+                    } = crate::verified_lifecycle::observed_cleanup_result(
+                        cache,
+                        e.status.as_str(),
+                        result["age_outcome"].as_str(),
+                        result["status"].as_str(),
+                        result["worktree_removal"].as_str(),
                     );
                     if cache_outcome {
                         if let Some(a) = self.ledger.entries[i]
@@ -3673,7 +3869,7 @@ impl Manager {
                                 path: path.clone(),
                                 sha256: sha256(&b),
                             });
-                            if result["status"] == "cleaned" {
+                            if cleaned {
                                 a.completed_at = Some(
                                     std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
@@ -3719,7 +3915,7 @@ impl Manager {
                         }
                         _ => {}
                     }
-                    if result["status"] != "cleaned" {
+                    if !cleaned {
                         failures.push(format!("{}: {}", e.path.display(), result["error"]));
                     }
                     self.progress(
@@ -4032,7 +4228,15 @@ impl Manager {
         self.ledger.entries[i].cleanup = Some(CleanupProgress {
             stage,
             detail: detail.into(),
-            report_path: report["report_path"].as_str().map(str::to_owned),
+            // A whole-round report is still being published while unrelated
+            // business completes. Progress consumes only the observation, not
+            // that publisher's path. Actual cleanup children retain their own
+            // sealed original when they return through this same boundary.
+            report_path: if report["operation"] == "maintain" {
+                None
+            } else {
+                report["report_path"].as_str().map(str::to_owned)
+            },
         });
         self.save()
     }
@@ -4118,13 +4322,14 @@ impl Manager {
         if e.path.exists() {
             self.check_entry(r, &e, &t.head, None)?;
             if preserved.is_none() {
-                if let Err(error) = maintenance::saved_commit(
+                if let Err(error) = maintenance::saved_commit_with_reference(
                     r,
                     &self.inputs.policy.coordinator_root,
                     &t.head,
                     &self.inputs.policy.retained_ref,
                     &t.retained_commit,
                     &self.inputs.policy.retention,
+                    true,
                 ) {
                     preserved = Some(format!("commit retention unresolved: {error}"));
                 }
@@ -4204,6 +4409,7 @@ impl Manager {
                     retained_ref: manager.inputs.policy.retained_ref.clone(),
                     retained_commit: t.retained_commit.clone(),
                     retention: manager.inputs.policy.retention.clone(),
+                    allow_retained_ref_advance: true,
                     discard_artifacts: names,
                     remove_branch: manager.inputs.policy.remove_branch,
                     allow_absent_worktree: !e.attempts.is_empty(),
@@ -4346,8 +4552,19 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             n += 1;
             continue;
         }
-        if ["--dispose-evidence", "--artifacts-only"].contains(&key.as_str()) {
-            if operation != "finish" || !flags.insert(key.as_str()) {
+        if [
+            "--dispose-evidence",
+            "--artifacts-only",
+            "--adopt-cleanup-policy",
+        ]
+        .contains(&key.as_str())
+        {
+            let valid = if key == "--adopt-cleanup-policy" {
+                operation == "migrate"
+            } else {
+                operation == "finish"
+            };
+            if !valid || !flags.insert(key.as_str()) {
                 return Err("invalid or repeated terminal flag".into());
             }
             n += 1;
@@ -4472,6 +4689,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     target.is_none(),
                 );
             }
+            let handoff = crate::verified_lifecycle::ordinary_admission(operation.as_str());
             let mut manager = Manager::from_inputs(
                 r,
                 inputs,
@@ -4479,11 +4697,48 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 target.as_deref().unwrap_or(&invoking),
                 operation == "deploy-owner",
                 true,
+                !handoff,
+                false,
             )?;
             manager.restore_absent_policy(r)?;
-            if !matches!(operation.as_str(), "maintain" | "import") {
+            if operation == "migrate" {
+                if !flags.contains("--adopt-cleanup-policy") {
+                    manager.adopt_target_policy(r)?;
+                }
+            } else if !matches!(operation.as_str(), "maintain" | "import") {
                 manager.adopt_live_policy(r)?;
             }
+            let mut manager = if handoff {
+                // Settle sealed predecessors before adding another consumer,
+                // including at the previous role's membership limit. Recovery
+                // failure preserves the durable ledger and its original error;
+                // independent work still proceeds if its protection succeeds.
+                let (manager, result) = admission_handoff(
+                    manager,
+                    |mut manager| {
+                        let result = manager.reconcile_published_results();
+                        (manager, result)
+                    },
+                    |mut manager, error| {
+                        report["result_handoff_error"] = value!(error);
+                        let result = (|| {
+                            let path =
+                                no_symlink_parents(&manager.record_directory, "ledger.json")?;
+                            manager.ledger = decode(&fs::read(path).map_err(|e| e.to_string())?)?;
+                            Ok(())
+                        })();
+                        (manager, result)
+                    },
+                    |manager| {
+                        let result = manager.protect_originals();
+                        (manager, result)
+                    },
+                );
+                result?;
+                manager
+            } else {
+                manager
+            };
             manager.inputs.report_source(report);
             report["drain"] = value!([]);
             report["cleanup_failures"] = value!([]);
@@ -4516,7 +4771,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 }
                 "migrate" => {
                     let target = target.as_ref().unwrap();
-                    manager.migrate(r, target, report)?;
+                    manager.migrate(r, target, flags.contains("--adopt-cleanup-policy"), report)?;
                     if let Some(producer) = values.get("--partition-producer") {
                         manager.partition_producer(r, target, producer, report)?;
                     }
@@ -4687,6 +4942,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
                     let coordinator = manager.inputs.policy.coordinator_root.clone();
+                    let activation = chrono_harness::maintenance_signal::RequestContext::new(
+                        target,
+                        &coordinator,
+                    )?;
+                    command.env.insert(
+                        chrono_harness::maintenance_signal::CONTEXT_ENV.into(),
+                        serde_json::to_string(&activation).map_err(|error| error.to_string())?,
+                    );
                     manager.observe_attention(r, report, false)?;
                     let coordinator_bytes = manager.inputs.anchor_config_bytes.clone();
                     drop(manager);

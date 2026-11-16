@@ -1,0 +1,82 @@
+//! 借用 JSON 和标准文本比较的外部接口合同；不包含仓内选择或状态逻辑。
+#![allow(unexpected_cfgs)]
+
+#[cfg(verus_keep_ghost)]
+use crate::vstd::{self, prelude::*};
+use serde_json::{Map as JsonMap, Value};
+use verus_builtin_macros::verus;
+
+verus! {
+
+// 只声明外部类型。适配器及其投影函数均不在受信边界内。
+#[verifier::external_type_specification]
+#[verifier::external_body]
+pub struct ExValue(Value);
+
+#[verifier::external_type_specification]
+#[verifier::external_body]
+#[verifier::accept_recursive_types(K)]
+#[verifier::accept_recursive_types(V)]
+pub struct ExJsonMap<K, V>(JsonMap<K, V>);
+
+/// 这些观察属于同一个不可变原值；文本借用保留全部 Unicode 字符。
+pub uninterp spec fn text(value: &Value) -> Option<&str>;
+pub uninterp spec fn object(value: &Value) -> Option<&JsonMap<String, Value>>;
+pub uninterp spec fn members(map: &JsonMap<String, Value>) -> Map<Seq<char>, &Value>;
+
+pub open spec fn field<'a>(value: &'a Value, key: Seq<char>) -> Option<&'a Value> {
+    match object(value) {
+        None => None,
+        Some(map) => if members(map).contains_key(key) { Some(members(map)[key]) } else { None },
+    }
+}
+
+pub open spec fn field_text<'a>(value: &'a Value, key: Seq<char>) -> Option<&'a str> {
+    match field(value, key) { None => None, Some(value) => text(value) }
+}
+
+pub open spec fn fields(value: &Value) -> Option<usize> {
+    match object(value) { None => None, Some(map) => Some(members(map).len() as usize) }
+}
+
+// 保留公开 Map::get 的真实泛型；只解释现役 str 查询，其他 Q 保持不透明。
+pub uninterp spec fn lookup<'a, Q: ?Sized>(map: &'a JsonMap<String, Value>, key: &Q)
+    -> Option<&'a Value>;
+
+pub broadcast axiom fn str_lookup(map: &JsonMap<String, Value>, key: &str)
+    ensures #[trigger] lookup(map, key) ==
+        if members(map).contains_key(key@) { Some(members(map)[key@]) } else { None };
+
+// serde_json 1.0.151 value/mod.rs::as_str/as_object、map.rs::get。
+pub assume_specification[ Value::as_str ](value: &Value) -> (out: Option<&str>)
+    ensures out == text(value);
+
+pub assume_specification[ Value::as_object ](value: &Value)
+    -> (out: Option<&JsonMap<String, Value>>)
+    ensures out == object(value);
+
+pub assume_specification<'a, Q: ?Sized + Ord + Eq + std::hash::Hash>[
+    JsonMap::<String, Value>::get::<Q>
+](
+    map: &'a JsonMap<String, Value>, key: &Q,
+) -> (out: Option<&'a Value>)
+    where String: std::borrow::Borrow<Q>,
+    ensures out == lookup(map, key);
+
+// serde_json 1.0.151 map.rs::len：有限原成员数，不把非对象当作空对象。
+pub assume_specification[ JsonMap::<String, Value>::len ](
+    map: &JsonMap<String, Value>,
+) -> (out: usize)
+    ensures members(map).dom().finite(), out == members(map).len();
+
+// 标准 String／str 的比较与 Borrow 顺序合同。成员查询和插入效果由
+// vstd 已有集合合同及仓内证明得出，不假设某个 map／set 的成员或状态。
+pub broadcast axiom fn standard_string_key_order()
+    ensures
+        #[trigger] vstd::laws_cmp::obeys_cmp::<String>(),
+        #[trigger] vstd::std_specs::cmp::borrowed_key_ordering_matches::<String, str>();
+
+pub broadcast axiom fn standard_str_key_order()
+    ensures #[trigger] vstd::laws_cmp::obeys_cmp::<&str>();
+
+} // verus!
