@@ -29,6 +29,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 | 按单元检查、汇总原始报告 | [CI 单元与汇总](docs/ci-units.md) |
 | 理解如何按变更选择测试 | [文件影响范围](docs/filemap-impact.md)、[执行检查](docs/execution.md) |
 | 同时修改检查规则和产品 | [混合修改警告](docs/mixed.md)、[成本报告](docs/costs.md) |
+| 项目目标、宪法与规则演进 | [项目宪法与成本治理](docs/project-constitution.md) |
 | 检查分支、集成结果和迁移 | [工作流检查](docs/workflow.md)、[工作流选测](docs/workflow-selection.md) |
 | 创建、恢复或清理工作树 | [工作树管理](docs/worktree.md) |
 | 收集外部输入、核对 Git 实际状态 | [输入快照](docs/inputs.md)、[Git 状态核对](docs/git-facts.md) |

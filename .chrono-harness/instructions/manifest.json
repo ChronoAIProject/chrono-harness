@@ -23,6 +23,7 @@
         "method.host-tools",
         "method.entry",
         "judge.register",
+        "policy.project-constitution",
         "policy.evolution",
         "policy.mixed-warning",
         "delta.selection",
@@ -75,6 +76,16 @@
         "name": "iterate-releases",
         "description": "持续发布测试版，迁移和验证真实下游，修复反馈，并在明确的稳定条件满足后发布正式版；随实际执行更新流程。用于已授权的发布与下游采用迭代。"
       }
+    },
+    {
+      "id": "constitution",
+      "path": "docs/project-constitution.md",
+      "format": "markdown",
+      "locale": "zh-CN",
+      "roots": [
+        "policy.project-constitution-text"
+      ],
+      "title": "项目宪法与成本治理"
     }
   ]
 }
