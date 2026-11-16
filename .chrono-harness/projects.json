@@ -2959,6 +2959,11 @@
             "crates/inputs/Cargo.toml"
           ]
         },
+        "format": {
+          "operation": "format.inputs",
+          "tool": "cargo",
+          "argv": ["fmt", "--manifest-path", "crates/inputs/Cargo.toml"]
+        },
         "verify_blobs": {
           "operation": "verify.inputs-blobs",
           "tool": "verus",

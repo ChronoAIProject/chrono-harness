@@ -4211,6 +4211,44 @@ pub fn publish_pending_file(
     length: u64,
     outcome: Value,
 ) -> Result<bool, String> {
+    publish_original_file(
+        root,
+        producer,
+        path,
+        input,
+        digest,
+        length,
+        outcome,
+        Some(("publication-recheck", false)),
+    )
+}
+
+/// Streaming publication whose actual caller keeps the returned input scope.
+/// No unfinished-report role is invented for an independent input export.
+#[cfg(not(verus_keep_ghost))]
+pub fn publish_owned_file(
+    root: &Path,
+    producer: &str,
+    path: &str,
+    input: &Path,
+    digest: &str,
+    length: u64,
+    outcome: Value,
+) -> Result<bool, String> {
+    publish_original_file(root, producer, path, input, digest, length, outcome, None)
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn publish_original_file(
+    root: &Path,
+    producer: &str,
+    path: &str,
+    input: &Path,
+    digest: &str,
+    length: u64,
+    outcome: Value,
+    consumer: Option<(&str, bool)>,
+) -> Result<bool, String> {
     publish_owned_with(
         root,
         producer,
@@ -4232,7 +4270,7 @@ pub fn publish_pending_file(
             }
             Ok(())
         },
-        Some(("publication-recheck", false)),
+        consumer,
     )
 }
 
