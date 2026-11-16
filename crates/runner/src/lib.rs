@@ -913,7 +913,7 @@ pub struct ProcessEvidence<'a> {
     /// Existing directory owner; its caller seals the whole operation after joining.
     pub publication: Option<&'a retained_artifacts::retention::Publication>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg(not(verus_keep_ghost))]
 struct LaunchEvidence {
@@ -970,49 +970,35 @@ pub(crate) fn validate_launch_evidence_bytes(
     let output_limit_bytes = process
         .output_limit_bytes
         .ok_or("process receipt missing output bound")?;
-    let expected = LaunchEvidence {
-        schema: "chrono-process-launch/v2".into(),
-        launcher_pid,
-        child_pid,
-        argv: process.argv.clone(),
-        cwd: process.cwd.clone(),
-        executable: process.executable.clone(),
-        sha256: process.sha256.clone(),
-        environment_digest: process.environment_digest.clone(),
-        ownership_fds: process.ownership_fds.clone(),
-        stdin_sha256: process.stdin_sha256.clone(),
-        timeout_seconds,
-        output_limit_bytes,
-    };
     let mut mismatches = Vec::new();
-    if record.schema != expected.schema {
+    if record.schema != "chrono-process-launch/v2" {
         mismatches.push("schema");
     }
-    if record.launcher_pid != expected.launcher_pid || launcher_pid == 0 {
+    if record.launcher_pid != launcher_pid || launcher_pid == 0 {
         mismatches.push("launcher_pid");
     }
     if record.child_pid != child_pid || child_pid == 0 {
         mismatches.push("child_pid");
     }
-    if record.argv != expected.argv {
+    if record.argv != process.argv {
         mismatches.push("argv");
     }
-    if record.cwd != expected.cwd {
+    if record.cwd != process.cwd {
         mismatches.push("cwd");
     }
-    if record.executable != expected.executable {
+    if record.executable != process.executable {
         mismatches.push("executable");
     }
-    if record.sha256 != expected.sha256 {
+    if record.sha256 != process.sha256 {
         mismatches.push("executable_sha256");
     }
-    if record.environment_digest != expected.environment_digest {
+    if record.environment_digest != process.environment_digest {
         mismatches.push("environment_digest");
     }
-    if record.ownership_fds != expected.ownership_fds {
+    if record.ownership_fds != process.ownership_fds {
         mismatches.push("ownership_fds");
     }
-    if record.stdin_sha256 != expected.stdin_sha256 {
+    if record.stdin_sha256 != process.stdin_sha256 {
         mismatches.push("stdin_sha256");
     }
     if record.timeout_seconds != timeout_seconds {
@@ -1573,7 +1559,7 @@ fn run_process_inner_with_stdout(
         #[cfg(unix)]
         child.ownership.log_identity();
         let publication_failure = evidence.as_ref().and_then(|paths| {
-            let mut record = launch_record.as_ref().expect("prepared launch record").clone();
+            let mut record = launch_record.expect("prepared launch record");
             record["child_pid"] = serde_json::json!(pid);
             let published = (|| -> Result<(), Failure> {
                 let relative = paths.launch.strip_prefix(paths.root).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?.to_str().ok_or_else(||Failure::new("E_PROCESS_EVIDENCE","launch path UTF-8"))?;
