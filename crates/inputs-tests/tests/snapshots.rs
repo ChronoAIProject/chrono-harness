@@ -1290,18 +1290,29 @@ fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
     }
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let (host, _input, _values, commit) = fixture();
-    fs::write(host.path().join(POLICY_PATH), serde_json::to_vec(&value!({
-        "schema":"chrono-output-retention/v2",
-        "producers":{"full-original":[".chrono-harness/state/"]},
-        "keep_seconds":0,"metadata_keep_seconds":0
-    })).unwrap()).unwrap();
+    fs::write(
+        host.path().join(POLICY_PATH),
+        serde_json::to_vec(&value!({
+            "schema":"chrono-output-retention/v2",
+            "producers":{"full-original":[".chrono-harness/state/"]},
+            "keep_seconds":0,"metadata_keep_seconds":0
+        }))
+        .unwrap(),
+    )
+    .unwrap();
     let path = ".chrono-harness/state/retained-snapshot.json";
     let snapshot = chrono_inputs::capture(host.path(), CONFIG, &commit, path).unwrap();
     let owner = Inventory::adopted(host.path()).unwrap().unwrap();
-    assert!(owner.enrolled(path).unwrap(), "published snapshot is outside the maintenance inventory");
+    assert!(
+        owner.enrolled(path).unwrap(),
+        "published snapshot is outside the maintenance inventory"
+    );
     let blob = snapshot["files"]["data"]["blob"].as_str().unwrap();
     assert_eq!(snapshot["files"]["data"], snapshot["files"]["same-bytes"]);
-    assert!(owner.enrolled(blob).unwrap(), "shared blob is outside the maintenance inventory");
+    assert!(
+        owner.enrolled(blob).unwrap(),
+        "shared blob is outside the maintenance inventory"
+    );
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
