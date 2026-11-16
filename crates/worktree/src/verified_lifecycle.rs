@@ -72,8 +72,8 @@ pub use crate::automatic::producer::rolling::{rolling_disposal, rolling_keep};
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::producer::{
     ProducerDeclarations, ProducerLookupError, ProducerNamespaceMember, find_producer_declaration,
-    producer_namespace_member, producer_namespace_retired, producer_visit_prefix,
-    take_resolved_store, visit_producer_stores,
+    producer_namespace_member, producer_namespace_retired, take_resolved_store,
+    visit_producer_stores,
 };
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::producer::rolling::{rolling_disposal, rolling_keep};
