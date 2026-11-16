@@ -516,13 +516,10 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
         for _ in 0..2 {
             let out = h.command(&["check", "--collect"], &d, &n).output().unwrap();
             if !out.status.success() {
-                // Keep the actual nested producer receipts, including child exit,
-                // stdout and stderr, before the fixture's temporary host is dropped.
-                let evidence = tempfile::Builder::new()
-                    .prefix("chrono-gating-failure-")
-                    .tempdir()
-                    .unwrap()
-                    .keep();
+                // The retained host already owns the nested producer receipts.
+                // Keep this process's original output in the same finite window.
+                let evidence = h.host.root.join(".chrono-harness/state/collection-failure");
+                fs::create_dir_all(&evidence).unwrap();
                 fs::write(evidence.join("stdout"), &out.stdout).unwrap();
                 fs::write(evidence.join("stderr"), &out.stderr).unwrap();
                 json_file(
@@ -530,10 +527,6 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
                     "process.json",
                     &json!({"exit_code":out.status.code(),
                     "status":out.status.to_string(),"detection":d,"needs":n}),
-                );
-                copy_artifacts(
-                    &h.host.root.join(".chrono-harness/state"),
-                    &evidence.join("state"),
                 );
                 panic!(
                     "collection failed: status={} stdout={} stderr={}; original process evidence retained at {}",

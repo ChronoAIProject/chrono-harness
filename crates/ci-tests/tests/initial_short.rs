@@ -6,7 +6,7 @@ use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
 
 struct Host {
-    temporary: Option<tempfile::TempDir>,
+    temporary: crate::tools::FixtureDirectory,
     root: PathBuf,
     remote: PathBuf,
     candidate: String,
@@ -14,18 +14,13 @@ struct Host {
 impl Drop for Host {
     fn drop(&mut self) {
         if std::thread::panicking() {
-            if let Some(temporary) = self.temporary.take() {
-                eprintln!("Original failed host: {}", temporary.keep().display());
-            }
+            eprintln!("Original failed host: {}", self.temporary.path().display());
         }
     }
 }
 impl Host {
     fn new(unregistered: bool, binding: bool) -> Self {
-        let temporary = tempfile::Builder::new()
-            .prefix("empty initial λ ")
-            .tempdir()
-            .unwrap();
+        let temporary = crate::tools::temporary_host("empty initial λ ");
         let parent = fs::canonicalize(temporary.path()).unwrap();
         let root = parent.join("independent host");
         let remote = parent.join("registered target.git");
@@ -152,7 +147,7 @@ impl Host {
         generate(&root, ".chrono-harness/ci/github.json", false).unwrap();
         let candidate = commit(&root);
         Self {
-            temporary: Some(temporary),
+            temporary,
             root,
             remote,
             candidate,
@@ -164,6 +159,7 @@ impl Host {
             .arg("check")
             .env("ACQUISITION_SECRET", "fixture acquisition credential")
             .env_remove(prepared::SOURCE);
+        self.temporary.bind_command(&mut c).unwrap();
         c
     }
     fn native(&self, payload: Value) -> std::process::Output {
