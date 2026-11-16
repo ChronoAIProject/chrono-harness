@@ -496,6 +496,13 @@ mod behavior {
         assert_eq!(replay.stderr, first.stderr);
         assert_eq!(fs::read(&count).unwrap(), b"x");
         assert_eq!(fs::read(attempt.join("result.json")).unwrap(), receipt);
+        assert!(
+            inventory
+                .rooted_original("cache-probe-attempt", role)
+                .unwrap()
+                .is_none(),
+            "replay must release the recovery root before physical cleanup"
+        );
         let mut rounds = Vec::new();
         for _ in 0..19 {
             rounds.push(inventory.maintain_at(u64::MAX).unwrap());
