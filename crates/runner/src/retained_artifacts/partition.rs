@@ -418,6 +418,13 @@ impl Inventory {
             if output.is_some_and(|output| output.phase == "disposing") {
                 return Err("referenced original disposal has started".into());
             }
+            if !prune_only {
+                if let Some(output) = output.filter(|output| {
+                    !role.ids.contains(&output.id) && !role.attached.contains(&output.id)
+                }) {
+                    output.admit(now()?)?;
+                }
+            }
             let id = output.map(|output| output.id.clone());
             next.extend(id.iter().cloned());
             requested.insert(path.clone(), id);
@@ -448,6 +455,12 @@ impl Inventory {
             let gate =
                 self.addressed_gate_scope(&[], &[path.clone()], &[], None, false, false, true)?;
             let ledger = self.load(&gate)?;
+            if let Some(id) = expected
+                .as_ref()
+                .filter(|id| !role.ids.contains(id) && !role.attached.contains(*id))
+            {
+                self.admit(&ledger, std::slice::from_ref(id))?;
+            }
             let actual = ledger
                 .outputs
                 .iter()
@@ -1162,7 +1175,7 @@ impl Inventory {
                 .iter()
                 .try_fold(0u64, |sum, e| sum.checked_add(e.allocated_bytes?));
             json!({"id":o.id,"producer":o.producer,"identity":o.identity,
-                "phase":o.phase,"tree":o.tree,"expires":o.expires,
+                "phase":o.phase,"tree":o.tree,"expires":o.expires,"lifetime":o.lifetime,
                 "outcome":o.outcome,"observed_return":o.observed_return,
                 "references":o.references,"removed_logical_bytes":o.removed_logical_bytes,
                 "sealed_measurement":{"sealed":o.manifest.sealed,
@@ -2223,10 +2236,21 @@ impl Inventory {
         }
         Ok(ledger)
     }
-    pub(super) fn partition_rebind_policy(&self, gate: &Gate) -> Result<(), String> {
+    pub(super) fn partition_rebind_policy(
+        &self,
+        gate: &Gate,
+        lifetimes: &BTreeMap<String, Option<super::Lifetime>>,
+    ) -> Result<(), String> {
         self.stable(gate)?;
         let digest = sha256(&self.policy_bytes);
         for record in gate.objects.borrow_mut().values_mut() {
+            if let Some(output) = record.output.as_mut() {
+                output.lifetime = lifetimes
+                    .get(&output.id)
+                    .ok_or("migration original lifetime missing")?
+                    .clone();
+                output.expires = output.bound_expiry(output.expires);
+            }
             if record.policy_sha256 != digest {
                 record.policy_sha256 = digest.clone();
                 self.write_metadata(
