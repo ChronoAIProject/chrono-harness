@@ -70,6 +70,114 @@ mod inventory_failure_owner;
 
 verus! {
 
+struct DeclarationRows<'a> { rows: Vec<(&'a str, bool)> }
+
+impl<'a> policy::ProducerDeclarations for DeclarationRows<'a> {
+    open spec fn count(&self) -> nat { self.rows@.len() }
+    open spec fn name_at(&self, index: int) -> &str { self.rows@[index].0 }
+    open spec fn temporary_at(&self, index: int) -> bool { self.rows@[index].1 }
+    fn len(&self) -> usize { self.rows.len() }
+    fn name(&self, index: usize) -> &str { self.rows[index].0 }
+    fn temporary(&self, index: usize) -> bool { self.rows[index].1 }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn producer_lookup_preserves_first_match_and_temporary_admission() {
+    let mut entries = Vec::new();
+    entries.push(("fixture λ\0\n", false));
+    entries.push(("fixture λ\0\n", true));
+    entries.push(("", true));
+    let rows = DeclarationRows { rows: entries };
+    match policy::find_producer_declaration(&rows, "fixture λ\0\n", false) {
+        Ok(index) => expect(index == 0), _ => expect(false),
+    }
+    match policy::find_producer_declaration(&rows, "fixture λ\0\n", true) {
+        Err(error) => expect(policy::equal_text(error, "temporary producer is not prospectively adopted")),
+        _ => expect(false),
+    }
+    match policy::find_producer_declaration(&rows, "", true) {
+        Ok(index) => expect(index == 2), _ => expect(false),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn producer_lookup_rejects_absence_and_nearby_full_names() {
+    let rows = DeclarationRows { rows: Vec::new() };
+    match policy::find_producer_declaration(&rows, "", false) {
+        Err(error) => expect(policy::equal_text(error, "retained producer store is not declared by its owner")),
+        _ => expect(false),
+    }
+    let mut entries = Vec::new();
+    entries.push(("fixture-extra", true));
+    entries.push(("Fixture", true));
+    let rows = DeclarationRows { rows: entries };
+    match policy::find_producer_declaration(&rows, "fixture", true) {
+        Err(error) => expect(policy::equal_text(error, "retained producer store is not declared by its owner")),
+        _ => expect(false),
+    }
+}
+
+fn producer_visit_case(stop: usize, failure: bool)
+    requires stop <= 2,
+{
+    let mut rows = Vec::new();
+    rows.push(17u8); rows.push(239u8);
+    let visit = |state: Vec<(usize, u8)>, index: usize, row: &u8|
+        -> (out: (Vec<(usize, u8)>, Result<bool, (u32, u64)>))
+        ensures out.0@ == state@.push((index, *row)),
+            out.1 == if index == stop {
+                if failure { Err::<bool, (u32, u64)>((u32::MAX, u64::MAX)) }
+                else { Ok::<bool, (u32, u64)>(false) }
+            } else { Ok::<bool, (u32, u64)>(true) },
+    {
+        let mut next = state;
+        next.push((index, *row));
+        let result = if index == stop {
+            if failure { Err((u32::MAX, u64::MAX)) } else { Ok(false) }
+        } else { Ok(true) };
+        (next, result)
+    };
+    let (trace, result) = policy::visit_producer_stores(Vec::new(), &rows, &visit);
+    expect(trace.len() == if stop == 0 { 1 } else { 2 });
+    expect(trace[0].0 == 0 && trace[0].1 == 17);
+    if stop != 0 { expect(trace[1].0 == 1 && trace[1].1 == 239); }
+    match result {
+        Ok(value) => { expect(!failure || stop == 2); expect(value == (stop == 2)); },
+        Err(error) => { expect(failure && stop < 2); expect(error == (u32::MAX, u64::MAX)); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn producer_visits_stop_at_the_actual_false_or_original_error() {
+    producer_visit_case(0, false); producer_visit_case(1, false);
+    producer_visit_case(0, true); producer_visit_case(1, true);
+    producer_visit_case(2, false); producer_visit_case(2, true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn empty_producer_visit_does_not_observe_any_store() {
+    let rows: Vec<u8> = Vec::new();
+    let visit = |state: u8, _: usize, _: &u8| -> (out: (u8, Result<bool, u8>))
+        ensures out == (255u8, Err::<bool, u8>(state)),
+    { (255, Err(state)) };
+    let (state, result) = policy::visit_producer_stores(17u8, &rows, &visit);
+    expect(state == 17);
+    match result { Ok(value) => expect(value), _ => expect(false), }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn single_store_adapter_preserves_value_and_full_missing_error() {
+    let mut stores = Vec::new();
+    stores.push((u32::MAX, u64::MAX));
+    match policy::take_resolved_store(stores) {
+        Ok(value) => expect(value == (u32::MAX, u64::MAX)), _ => expect(false),
+    }
+    let stores: Vec<u8> = Vec::new();
+    match policy::take_resolved_store(stores) {
+        Err(error) => expect(policy::equal_text(error, "retained producer store was not resolved")),
+        _ => expect(false),
+    }
+}
 
 fn report_scope_case(operation: &str, publication: Option<u8>,
     result: Result<(u8, u8), (u32, u64)>, expected: u8)

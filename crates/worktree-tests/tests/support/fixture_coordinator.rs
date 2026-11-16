@@ -35,22 +35,16 @@ mod runtime {
     }
 
     pub fn retired(root: &Path) -> Result<bool, String> {
-        for producer in [
-            "ci-test-host",
-            "projects-test-host",
-            "workflow-test-tools",
-            "worktree-test-host",
-        ] {
-            let (directory, _) = chrono_worktree::TemporaryHost::registered_store(
-                root,
-                ".chrono-harness/worktree.json",
-                producer,
-            )?;
-            if !chrono_worktree::TemporaryHost::retired_fixture_store(&directory, producer)? {
-                return Ok(false);
-            }
-        }
-        Ok(true)
+        chrono_worktree::TemporaryHost::retired_registered_fixture_stores(
+            root,
+            ".chrono-harness/worktree.json",
+            &[
+                "ci-test-host",
+                "projects-test-host",
+                "workflow-test-tools",
+                "worktree-test-host",
+            ],
+        )
     }
 
     pub fn root() -> &'static Path {

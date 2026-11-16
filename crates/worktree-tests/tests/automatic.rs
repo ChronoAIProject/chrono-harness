@@ -1688,6 +1688,7 @@ fn ordinary_report_capacity(
         );
         if operation == "bootstrap" {
             assert_eq!(report["managed_process"]["exit_code"], 0);
+            assert_eq!(report["managed_process"]["owned_work_joined"], true);
             assert_eq!(
                 report["managed_process"]["argv"],
                 value!([

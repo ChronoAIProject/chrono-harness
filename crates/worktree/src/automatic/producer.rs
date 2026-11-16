@@ -43,6 +43,130 @@ pub fn producer_namespace_retired(objects_empty: bool, metadata_empty: bool,
 {
     objects_empty && metadata_empty && members_known
 }
+
+/// Observe the original declarations without copying their policy or fields.
+pub trait ProducerDeclarations {
+    spec fn count(&self) -> nat;
+    spec fn name_at(&self, index: int) -> &str;
+    spec fn temporary_at(&self, index: int) -> bool;
+
+    fn len(&self) -> (out: usize)
+        ensures out == self.count();
+    fn name(&self, index: usize) -> (out: &str)
+        requires index < self.count(),
+        ensures out == self.name_at(index as int);
+    fn temporary(&self, index: usize) -> (out: bool)
+        requires index < self.count(),
+        ensures out == self.temporary_at(index as int);
+}
+
+/// Preserve the first exact declaration and the existing admission error order.
+pub fn find_producer_declaration<R: ProducerDeclarations>(rows: &R, producer: &str,
+    temporary: bool) -> (out: Result<usize, &'static str>)
+    ensures match out {
+        Ok(index) => index < rows.count()
+            && rows.name_at(index as int)@ == producer@
+            && (!temporary || rows.temporary_at(index as int))
+            && forall|j: int| 0 <= j < index ==> rows.name_at(j)@ != producer@,
+        Err(error) => if error@ == "retained producer store is not declared by its owner"@ {
+            forall|j: int| 0 <= j < rows.count() ==> rows.name_at(j)@ != producer@
+        } else {
+            error@ == "temporary producer is not prospectively adopted"@
+                && temporary && exists|index: int| 0 <= index < rows.count()
+                    && rows.name_at(index)@ == producer@ && !rows.temporary_at(index)
+                    && forall|j: int| 0 <= j < index ==> rows.name_at(j)@ != producer@
+        },
+    },
+{
+    let count = rows.len();
+    let mut index = 0usize;
+    while index < count
+        invariant index <= count, count == rows.count(),
+            forall|j: int| 0 <= j < index ==> rows.name_at(j)@ != producer@,
+        decreases count - index,
+    {
+        if equal_text(rows.name(index), producer) {
+            if temporary && !rows.temporary(index) {
+                return Err("temporary producer is not prospectively adopted");
+            }
+            return Ok(index);
+        }
+        index += 1;
+    }
+    Err("retained producer store is not declared by its owner")
+}
+
+pub open spec fn producer_visit_prefix<S, T, E, F>(rows: Seq<T>, states: Seq<S>,
+    initial: S, visit: &F) -> bool
+    where F: Fn(S, usize, &T) -> (S, Result<bool, E>),
+{
+    states.len() > 0 && states.len() <= rows.len() + 1 && states[0] == initial
+        && forall|j: int| 0 <= j < states.len() - 1 ==> #[trigger]
+            visit.ensures((states[j], j as usize, &rows[j]),
+                (states[j + 1], Ok::<bool, E>(true)))
+}
+
+/// Visit every requested store in order, stopping at the first false or error.
+pub fn visit_producer_stores<S, T, E, F>(state: S, rows: &[T], visit: &F)
+    -> (out: (S, Result<bool, E>))
+    where F: Fn(S, usize, &T) -> (S, Result<bool, E>),
+    requires forall|state: S, index: usize, row: &T| visit.requires((state, index, row)),
+    ensures exists|states: Seq<S>| producer_visit_prefix(rows@, states, state, visit)
+        && match out.1 {
+            Ok(true) => states.len() == rows.len() + 1 && out.0 == states.last(),
+            _ => states.len() <= rows.len() && visit.ensures(
+                (states.last(), (states.len() - 1) as usize, &rows@[states.len() - 1]), out),
+        },
+{
+    let ghost initial = state;
+    let ghost states = seq![initial];
+    let mut current = state;
+    let mut index = 0usize;
+    while index < rows.len()
+        invariant index <= rows.len(), states.len() == index + 1,
+            states.last() == current,
+            producer_visit_prefix(rows@, states, initial, visit),
+            forall|state: S, index: usize, row: &T| visit.requires((state, index, row)),
+        decreases rows.len() - index,
+    {
+        let ghost before = current;
+        let (next, result) = visit(current, index, &rows[index]);
+        assert(visit.ensures((before, index, &rows@[index as int]), (next, result)));
+        match result {
+            Ok(true) => {
+                proof {
+                    let previous = states;
+                    states = states.push(next);
+                    assert forall|j: int| 0 <= j < states.len() - 1 implies #[trigger]
+                        visit.ensures((states[j], j as usize, &rows@[j]),
+                            (states[j + 1], Ok::<bool, E>(true))) by {
+                        if j < previous.len() - 1 {
+                            assert(visit.ensures((previous[j], j as usize, &rows@[j]),
+                                (previous[j + 1], Ok::<bool, E>(true))));
+                        }
+                    }
+                }
+                current = next;
+            },
+            _ => return (next, result),
+        }
+        index += 1;
+    }
+    (current, Ok(true))
+}
+
+pub fn take_resolved_store<T>(mut stores: Vec<T>) -> (out: Result<T, &'static str>)
+    ensures match out {
+        Ok(store) => stores@.len() > 0 && store == stores@.last(),
+        Err(error) => stores@.len() == 0
+            && error@ == "retained producer store was not resolved"@,
+    },
+{
+    match stores.pop() {
+        Some(store) => Ok(store),
+        None => Err("retained producer store was not resolved"),
+    }
+}
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -78,6 +202,19 @@ pub(super) struct ProducerPolicy {
     /// These exact registered operations publish one whole run directory.
     #[serde(default)]
     pub(super) operations: Vec<String>,
+}
+
+#[cfg(not(verus_keep_ghost))]
+impl ProducerDeclarations for Vec<ProducerPolicy> {
+    fn len(&self) -> usize {
+        Vec::len(self)
+    }
+    fn name(&self, index: usize) -> &str {
+        self[index].id.as_str()
+    }
+    fn temporary(&self, index: usize) -> bool {
+        self[index].temporary
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -871,6 +1008,21 @@ impl RetainedArtifact {
         producer: &str,
         temporary: bool,
     ) -> Result<(PathBuf, Vec<String>, PathBuf), String> {
+        take_resolved_store(Self::resolve_stores(
+            host_root,
+            config_path,
+            &[producer],
+            temporary,
+        )?)
+        .map_err(String::from)
+    }
+
+    fn resolve_stores(
+        host_root: &Path,
+        config_path: &str,
+        producers: &[&str],
+        temporary: bool,
+    ) -> Result<Vec<(PathBuf, Vec<String>, PathBuf)>, String> {
         let root = fs::canonicalize(host_root).map_err(|e| e.to_string())?;
         let (config, bytes) = crate::configuration(&root, config_path)?;
         let mut selected = None;
@@ -884,26 +1036,33 @@ impl RetainedArtifact {
             |r, _token, report| {
                 let inputs = PolicyInputs::load(r, &root, config_path, &bytes)?
                     .ok_or("retained producer owner is not opted in")?;
-                let declaration = inputs
-                    .anchor_policy
-                    .retained_producers
-                    .iter()
-                    .find(|p| p.id == producer)
-                    .ok_or("retained producer store is not declared by its owner")?;
-                if temporary && !declaration.temporary {
-                    return Err("temporary producer is not prospectively adopted".into());
-                }
-                let directory = declaration.directory(&inputs.policy.coordinator_root)?;
+                let (stores, resolved) = visit_producer_stores(
+                    Vec::with_capacity(producers.len()),
+                    producers,
+                    &|mut stores: Vec<(PathBuf, Vec<String>, PathBuf)>, _, producer: &&str| {
+                        let result: Result<bool, String> = (|| {
+                            let index = find_producer_declaration(
+                                &inputs.anchor_policy.retained_producers,
+                                producer,
+                                temporary,
+                            )?;
+                            let declaration = &inputs.anchor_policy.retained_producers[index];
+                            stores.push((
+                                declaration.directory(&inputs.policy.coordinator_root)?,
+                                declaration.generated_outputs.clone(),
+                                inputs.policy.coordinator_root.clone(),
+                            ));
+                            Ok(true)
+                        })();
+                        (stores, result)
+                    },
+                );
+                resolved?;
                 inputs.anchor_stable(r)?;
-                report["producer"] = value!(producer);
                 report["coordinator_root"] = value!(inputs.policy.coordinator_root);
-                report["directory"] = value!(directory);
-                report["generated_outputs"] = value!(declaration.generated_outputs);
-                selected = Some((
-                    directory,
-                    declaration.generated_outputs.clone(),
-                    inputs.policy.coordinator_root.clone(),
-                ));
+                report["producers"] = value!(producers);
+                report["stores"] = value!(stores);
+                selected = Some(stores);
                 Ok(())
             },
         )?;
