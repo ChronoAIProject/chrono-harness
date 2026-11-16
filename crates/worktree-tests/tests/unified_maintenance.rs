@@ -859,6 +859,78 @@ fn explicit_competitor_requests_the_resident_executor_without_a_parallel_round()
 #[test]
 #[cfg(unix)]
 #[cfg(not(verus_keep_ghost))]
+fn activated_service_drains_busy_hints_without_resignalling_and_recovers_on_later_event() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = socket_host("noop");
+    let path = adopt_activation(&h);
+    let os = UnixDatagram::bind(&path).unwrap();
+    os.set_nonblocking(true).unwrap();
+    let target = h.parent.join("after-explicit-owner");
+    assert_eq!(h.invoke("feature", "after-explicit-owner", &target).0, 0);
+    super::automatic::output(&target);
+    assert_eq!(h.auto("finish", &["--path", target.to_str().unwrap()]).0, 0);
+    let lease = h
+        .root
+        .join(".chrono-harness/state/automatic-cleanup/maintenance.lease");
+    let explicit = chrono_harness::ownership::Lease::acquire(&lease, None, true, true, None)
+        .unwrap()
+        .expect("controlled explicit executor owns the actual singleton");
+    chrono_harness::maintenance_signal::send(&path, b"pending-work").unwrap();
+    let report_directory = h.root.join(".chrono-harness/state/worktrees");
+    let before: std::collections::BTreeSet<_> = fs::read_dir(&report_directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    let busy =
+        chrono_worktree::run_maintenance_service_socket(&h.root, POLICY, os.try_clone().unwrap())
+            .unwrap();
+    let mut bytes = [0; 64];
+    let unread = os.recv(&mut bytes);
+    let after: std::collections::BTreeSet<_> = fs::read_dir(&report_directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(busy["status"], "maintenance-idle-exit", "{busy}");
+    assert_eq!(busy["owned_work_joined"], true);
+    assert_eq!(
+        unread.unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock,
+        "a busy activation must consume existing hints without creating its own"
+    );
+    assert_eq!(before, after, "a competing service must not start a round");
+    assert!(
+        target.join("output λ/data").exists(),
+        "the current executor still excludes disposal"
+    );
+    explicit.stable().unwrap();
+    drop(explicit);
+    chrono_harness::maintenance_signal::send(&path, b"later-work").unwrap();
+    let recovered =
+        chrono_worktree::run_maintenance_service_socket(&h.root, POLICY, os.try_clone().unwrap())
+            .unwrap();
+    assert_eq!(recovered["status"], "maintenance-idle-exit");
+    assert!(
+        !target.join("output λ/data").exists(),
+        "later event must recover authoritative pending work"
+    );
+    let rounds: Vec<Value> = fs::read_dir(&report_directory)
+        .unwrap()
+        .filter_map(|entry| fs::read(entry.ok()?.path()).ok())
+        .filter_map(|bytes| json(&bytes).ok())
+        .filter(|report| report["operation"] == "maintain" && report["round_started"] == true)
+        .collect();
+    assert_eq!(rounds.len(), 1);
+    assert_eq!(rounds[0]["maintenance_trigger"], "event");
+    assert_eq!(rounds[0]["status"], "maintained", "{}", rounds[0]);
+    assert_eq!(rounds[0]["owned_work_joined"], true);
+    assert!(rounds[0]["complete_inventory"]["receipt"]["sha256"].is_string());
+}
+
+#[test]
+#[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn wake_failure_preserves_successful_business_and_its_original_streams() {
     if !chrono_git_boundary::isolated_git() {
         return;
