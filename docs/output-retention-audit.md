@@ -30,6 +30,7 @@
 | diagnostics | JSONL、`runtime.lock`、stderr；[rolling.rs](../crates/diagnostics/src/rolling.rs)、[runtime.rs](../crates/diagnostics/src/runtime.rs) | CLI 故障诊断；CI 原 stderr 另由报告采集 | 正常日志按容量滚动，缺少时间到期；锁文件是固定状态 |
 | runner | 准备输入、快照／blob、原进程流／launch、检查原件、固定报告、full 导出、保留声明和租约；[prepared_artifacts.rs](../crates/runner/src/prepared_artifacts.rs)、[lib.rs](../crates/runner/src/lib.rs)、[full.rs](../crates/runner/src/full.rs)、[initial.rs](../crates/runner/src/initial.rs) | 输入→判官→单元／汇总→CI 上传／PR 准入；固定指针保护当前检查，原流用于核真实退出和失败 | 已采用 retention 的路径有条件回收；initial 报告及未采用时的直接写入不能据此认定已纳管 |
 | instructions | 指南、别名和宿主输入；事务 staging／backup／intent／结果；[lib.rs](../crates/instructions/src/lib.rs)、[transaction.rs](../crates/instructions/src/transaction.rs) | 人与 AI 读取生成指南；原事务支持中断恢复、结果查询 | 当前指南是产品结果；事务原件有有限终态政策，领域恢复根和活使用方继续保护 |
+| judge-ci | stdout 判定／选择说明、诊断流；通过 routes／projects 保存所选操作原件；[main.rs](../crates/judge-ci/src/main.rs)、[lib.rs](../crates/judge-ci/src/lib.rs)、[collect.rs](../crates/judge-ci/src/collect.rs) | runner 消费判定→本地退出／CI 准入；collection 读取各单元原报告并核原流，避免把缺失或失败写成通过 | 判定通道归 runner；操作文件归 projects 的 publication；日志归 diagnostics。判官自身没有另建一套报告保管目录，不能把委托执行产生的文件漏出审计 |
 | judge-registration | stdout 响应；[main.rs](../crates/judge-registration/src/main.rs) | runner 消费登记判定→拒绝错误／缺失输入的执行 | 通道由调用方采集；无独立领域文件输出 |
 | judge-filemap | stdout 影响图响应；[main.rs](../crates/judge-filemap/src/main.rs) | routes／runner 按明确 DELTA 选中工作 | 同上 |
 | judge-routes | stdout 计划／执行响应；[lib.rs](../crates/judge-routes/src/lib.rs) | projects 执行当前登记方法，runner 汇总 | 同上；实际子进程文件归所执行 action 的所有者 |
@@ -132,6 +133,10 @@ U ≜ ∀o∈O. ∃T<∞. ∀t≥T. ¬P(o,t) ∧ ¬M(o,t)
 | 原错误 | 8 条 cleanup_failures；另有缺失原件、政策／项目格式不符、Git 未解决冲突和身份／所有权不符。保持原失败，未借此清理其他人的源码／元数据 |
 
 一个实际 `check-original` 声明仍有 `consumer:launchd-maintenance-program-202de6ec-20261115` 与 current-report 根；所读父报告来自 main 的源码观察 `202de6ec…`。它证明存在真实引用，不证明该旧程序当前仍被这一个 launchd 服务使用，也不证明全部外部读者已结束，必须由原安装负责方结清。
+
+本次候选 `bc4d037b…` 的本地 canonical check 实际通过，原件为 `preparation/check-a8cf1a68df21d2ced9cf2e0304b60023f32b17e527aee736f854a781924ecd7c.json`。原 judge 退出 0、`failure:null`、`owned_work_joined:true`，两流完整且摘要与原字节相符。但控制台同时报告维护请求 `wake-failed`，原错误为 `No buffer space available (os error 55)`；它没有宣称轮次完成或删除。这是 O7 的实际激活缺口，不能用业务检查通过覆盖它，也没有据此重启或重复启动维护。
+
+外部只读 API 在同日返回 Actions cache 29 项、10,412,706,640 字节；这是 provider 的逻辑大小观察，不是本机占用或永久容量界。公开版本 `v0.1.5-dev.43667091970.1.g92022124cdf26b4bab71b135ec78f13a6318de4e` 的安装器和 manifest 各有 3 次下载、两平台 worktree 程序各有 2 次下载。这支持“确有下载消费”，不能识别下载者、证明当前安装或区分内部安装验收与外部用户。读取 artifacts 列表失败；补取 HTTP 原响应为 500、空正文、请求号 `F953:1CD415:70E10A4:B2233F8:6AFB0357`，故各 artifact 的有效过期信息仍为 unknown，没有用默认天数补值。
 
 本次源码检出开始时没有构建输出，`du -sk .` 为 14,116 KiB；卷可用空间为 178,987,352 KiB。主库 bin／state／cache 的另一次计量没有收取到完整退出和输出，保持 unknown，未将它当成零或空间收益。本次没有运行新的全库维护，也没有声称已完成三次定时验收。
 
