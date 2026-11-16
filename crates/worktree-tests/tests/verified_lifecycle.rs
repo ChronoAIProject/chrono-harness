@@ -70,7 +70,7 @@ mod inventory_failure_owner;
 
 verus! {
 
-struct DeclarationRows<'a> { rows: Vec<(&'a str, bool)> }
+pub struct DeclarationRows<'a> { pub rows: Vec<(&'a str, bool)> }
 
 impl<'a> policy::ProducerDeclarations for DeclarationRows<'a> {
     open spec fn count(&self) -> nat { self.rows@.len() }
