@@ -114,7 +114,17 @@ fn producer_lookup_preserves_first_match_and_temporary_admission() {
         _ => expect(false),
     }
     match policy::find_producer_declaration(&rows, "", true) {
-        Ok(index) => expect(index == 2), _ => expect(false),
+        Ok(index) => expect(index == 2),
+        Err(policy::ProducerLookupError::Missing) => {
+            assert(rows.name_at(2)@ == ""@);
+            expect(false);
+        },
+        Err(policy::ProducerLookupError::NotTemporary(index)) => {
+            assert(index < 3);
+            if index < 2 { assert(rows.name_at(index as int)@ != ""@); }
+            else { assert(rows.temporary_at(2)); }
+            expect(false);
+        },
     }
 }
 
@@ -175,6 +185,10 @@ fn producer_visit_case(stop: usize, failure: bool)
                         (states.last(), (states.len() - 1) as usize,
                             &rows@[states.len() - 1]), (trace, result)),
                 };
+        assert(policy::producer_visit_prefix(rows@, states, original, &visit));
+        assert(forall|j: int| 0 <= j < states.len() - 1 ==> #[trigger]
+            visit.ensures((states[j], j as usize, &rows@[j]),
+                (states[j + 1], Ok::<bool, (u32, u64)>(true))));
         assert(1 <= states.len() <= 3);
         assert(states[0]@ == Seq::<(usize, u8)>::empty());
         if states.len() >= 2 {
