@@ -143,7 +143,7 @@ fn producer_visit_case(stop: usize, failure: bool)
     if stop != 0 { expect(trace[1].0 == 1 && trace[1].1 == 239); }
     match result {
         Ok(value) => { expect(!failure || stop == 2); expect(value == (stop == 2)); },
-        Err(error) => { expect(failure && stop < 2); expect(error == (u32::MAX, u64::MAX)); },
+        Err(error) => { expect(failure && stop < 2); expect(error.0 == u32::MAX && error.1 == u64::MAX); },
     }
 }
 
@@ -170,7 +170,7 @@ fn single_store_adapter_preserves_value_and_full_missing_error() {
     let mut stores = Vec::new();
     stores.push((u32::MAX, u64::MAX));
     match policy::take_resolved_store(stores) {
-        Ok(value) => expect(value == (u32::MAX, u64::MAX)), _ => expect(false),
+        Ok(value) => expect(value.0 == u32::MAX && value.1 == u64::MAX), _ => expect(false),
     }
     let stores: Vec<u8> = Vec::new();
     match policy::take_resolved_store(stores) {
