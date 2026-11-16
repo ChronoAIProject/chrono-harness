@@ -59,7 +59,7 @@
 | 分发生成的 launcher／installer | 用户执行固定版本安装，消费 manifest、lock、安装器和二进制 | 当前版本和安装是产品；临时目录正常 trap 清理，强制中断仍需宿主保管，不能把 trap 叫时间滚动 |
 | Python 示例 `message.py`、`check.py` 及 install／verify shell | 示例程序打印 `message.txt` 内容，测试断言 greeting；install 复制四个实际 CLI，verify 消费 CI 配置 | stdout 归调用方；CPython 可能创建 `__pycache__`，安装副本和 bytecode 没有示例自己的 TTL；不能从 Rust target 的登记推及它们 |
 | Git branches、临时 fetch ref、保全分支、rebind backup | 创建／恢复、保存源码／索引／独有提交；清理需要实际保全证据 | 临时 ref／rebind 有明确恢复入口；`remove_branch:false` 与保全目标不承诺自动删除永久 Git 历史，不应以清缓存替代源码保管 |
-| GitHub Actions artifacts、cache、日志和 `$GITHUB_OUTPUT`／临时 runner 文件 | 单元／collection、发布 collector、晋升和安装 job；原生输出传递选择和 artifact ID | workflow 没有显式 `retention-days`，provider 实际保留设置和 cache 淘汰由外部负责；本次未取得这些设置、使用方版本及逐 artifact 释放证据，结论 unknown |
+| GitHub Actions artifacts、cache、日志和 `$GITHUB_OUTPUT`／临时 runner 文件 | 单元／collection、发布 collector、晋升和安装 job；原生输出传递选择和 artifact ID。startup 也由始终运行的 aggregate 下载、核验和安装，不依赖业务单元是否被选中 | workflow 没有显式 `retention-days`；后续精确运行 API 已证实 12 项 artifact 有有限 `expires_at`，见下文。其余 artifact、cache 淘汰、日志与 runner 文件仍由 provider 负责；未取得全局有效设置及实际释放证据，不能泛化为全链回收 |
 | 公开 GitHub Release／tag／发行资产及下游安装 | 下载者、四个示例宿主、正式版晋升和固定版本恢复；需求见[发布合同](release-ci.md)与[示例](examples.md) | 代码／文档有当前需求和具名采用入口；本次未验证所有下游的实际安装与释放，不按“本宿主没读”判废。没有本仓时间滚动退役公开版本的合同 |
 | 固定报告、当前安装指针、OS plist／socket、租约／owner 文件 | 当前位置查询、当前执行物／启动、互斥与恢复；删除它们可能使仍在使用的工具失效 | 固定数量与内容到期是不同性质。卸载、换代和释放后才可退休；不得泛化为按目录年龄删 state／bin |
 
@@ -136,9 +136,39 @@ U ≜ ∀o∈O. ∃T<∞. ∀t≥T. ¬P(o,t) ∧ ¬M(o,t)
 
 一个实际 `check-original` 声明仍有 `consumer:launchd-maintenance-program-202de6ec-20261115` 与 current-report 根；所读父报告来自 main 的源码观察 `202de6ec…`。它证明存在真实引用，不证明该旧程序当前仍被这一个 launchd 服务使用，也不证明全部外部读者已结束，必须由原安装负责方结清。
 
+后续只读核验取得同一服务的四份已完成原报告：上述首轮，以及
+`maintain-19816-1794831618082676000-409.json`、
+`maintain-19816-1794835908281788000-821.json`、
+`maintain-19816-1794840761273716000-1232.json`。
+四轮均为 `failed`，各有 8 条 `cleanup_failures`；第四轮明确为 `timer`，
+`owned_work_joined:true`。其完整库存为 584,967,436 字节、559,663 行，
+SHA-256 `a341e3a55313142df09c02ebeade9bbed307ea8346262d03b81d40158c9249dd`，
+已完整流式核对；父报告内 9,171 份进程记录的两流也均核对解压长度和摘要。
+该轮观察窗为 `1794840761971` 至 `1794845129311` Unix ms，
+报告 elapsed 为 4,367,311 ms；两项完整性标志仍为 false，
+`physical_release_bytes:null`。这更新的是实际失败证据，不能计为三次连续成功定时验收，
+也不能把非原子库存体积变化当作物理释放量。本次没有重启或改配该服务。
+
 本次候选 `bc4d037b…` 的本地 canonical check 实际通过，原件为 `preparation/check-a8cf1a68df21d2ced9cf2e0304b60023f32b17e527aee736f854a781924ecd7c.json`。原 judge 退出 0、`failure:null`、`owned_work_joined:true`，两流完整且摘要与原字节相符。但控制台同时报告维护请求 `wake-failed`，原错误为 `No buffer space available (os error 55)`；它没有宣称轮次完成或删除。这是 O7 的实际激活缺口，不能用业务检查通过覆盖它，也没有据此重启或重复启动维护。
 
-外部只读 API 在同日返回 Actions cache 29 项、10,412,706,640 字节；这是 provider 的逻辑大小观察，不是本机占用或永久容量界。公开版本 `v0.1.5-dev.43667091970.1.g92022124cdf26b4bab71b135ec78f13a6318de4e` 的安装器和 manifest 各有 3 次下载、两平台 worktree 程序各有 2 次下载。这支持“确有下载消费”，不能识别下载者、证明当前安装或区分内部安装验收与外部用户。读取 artifacts 列表失败；补取 HTTP 原响应为 500、空正文、请求号 `F953:1CD415:70E10A4:B2233F8:6AFB0357`，故各 artifact 的有效过期信息仍为 unknown，没有用默认天数补值。
+外部只读 API 在同日返回 Actions cache 29 项、10,412,706,640 字节；这是 provider 的逻辑大小观察，不是本机占用或永久容量界。公开版本 `v0.1.5-dev.43667091970.1.g92022124cdf26b4bab71b135ec78f13a6318de4e` 的安装器和 manifest 各有 3 次下载、两平台 worktree 程序各有 2 次下载。这支持“确有下载消费”，不能识别下载者、证明当前安装或区分内部安装验收与外部用户。首次读取仓库级 artifacts 列表失败；补取 HTTP 原响应为 500、空正文、请求号 `F953:1CD415:70E10A4:B2233F8:6AFB0357`，当时有效过期信息保持 unknown，没有用默认天数补值。
+
+2026-11-17 后续按精确运行读取
+`repos/ChronoAIProject/chrono-harness/actions/runs/RUN_ID/artifacts`，取得以下实际 metadata。
+两次均返回完整的运行内列表；12 项均为 `expired:false`，合计 API 大小为 92,471,479 字节。
+
+| RUN_ID／固定源码 | artifact 数量与当前用途 | API 字节数 | 全部条目的 `expires_at` |
+| --- | --- | --- | --- |
+| `43891490817`／`7a45d8d2c1e49658f8fb248f9b42569b9bc51cc4` | 3 项：startup、detector evidence、collection | 41,480,323 | `2027-02-14T14:58:48Z` |
+| `43891364614`／`5fb22791e9eb4351f69ad2cf909e856db68d8658` | 9 项：startup、detector evidence、collection，以及 judge-registration、ci、judge-projects、runner、judge-routes、cache 单元原件 | 50,991,156 | `2027-02-14T14:58:06Z` |
+
+这证明这 12 项实际产物具有有限过期 metadata，不证明未来删除已经发生、全仓 artifact
+均有相同政策，或释放了本机空间。仓库级列表在缩至一项后仍返回空／非 JSON 结果，
+全局覆盖继续 unknown。startup 的实际读取端由
+[units.json](../.chrono-harness/ci/units.json) 的 `job_gating.startup.consumers.aggregate`
+登记；[生成工作流](../.github/workflows/chrono-ci.yml) 的 aggregate 以
+`needs.detect.outputs.startup_artifact` 这个精确 ID 下载，按 aggregate profile 安装，
+随后执行 `check --collect`。文档 DELTA 没有业务单元也不取消这条使用链，不能据此退役 startup。
 
 本次源码检出开始时没有构建输出，`du -sk .` 为 14,116 KiB；卷可用空间为 178,987,352 KiB。主库 bin／state／cache 的另一次计量没有收取到完整退出和输出，保持 unknown，未将它当成零或空间收益。本次没有运行新的全库维护，也没有声称已完成三次定时验收。
 
