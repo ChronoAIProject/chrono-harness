@@ -7,14 +7,16 @@ use std::io::Write;
 use vstd::prelude::*;
 
 verus! {
-fn expected_cargo_args() -> (args: [&'static str; 4])
+fn expected_cargo_args() -> (args: [&'static str; 6])
     ensures
         args[0]@ == "test"@,
         args[1]@ == "--locked"@,
         args[2]@ == "--manifest-path"@,
         args[3]@ == "crates/cache-tests/Cargo.toml"@,
+        args[4]@ == "--"@,
+        args[5]@ == "--test-threads=2"@,
 {
-    ["test", "--locked", "--manifest-path", "crates/cache-tests/Cargo.toml"]
+    ["test", "--locked", "--manifest-path", "crates/cache-tests/Cargo.toml", "--", "--test-threads=2"]
 }
 }
 

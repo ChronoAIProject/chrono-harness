@@ -734,6 +734,32 @@
       ]
     },
     {
+      "id": "policy.project-constitution",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "inline",
+            "text": "本仓改规则须遵守项目宪法（登记源 `.chrono-harness/instructions/project-constitution.zh-CN.md`，阅读副本 `docs/project-constitution.md`）。按目标法→宪法→基本法→程序法→实施条例确定最高受影响层，低层不得削弱高层目标。修改前固定使用方、依据、预算、收益口径和验收；失败、改法、迁移、验证及维护都计成本，不因改规则清零，不自行抬高预算或改变窗口来证明本轮划算。未知只支持既有预算内的最小取证；达到边界就停止该路线并保全结果。修法规则本身也无豁免。完整条文在改规则时读取，现有成本判官不强制这些经济条件。"
+          }
+        }
+      ]
+    },
+    {
+      "id": "policy.project-constitution-text",
+      "requires": [],
+      "variants": [
+        {
+          "locale": "zh-CN",
+          "source": {
+            "type": "file",
+            "path": ".chrono-harness/instructions/project-constitution.zh-CN.md"
+          }
+        }
+      ]
+    },
+    {
       "id": "policy.evolution",
       "requires": [],
       "variants": [
@@ -2436,7 +2462,8 @@
         "cache.build-separate",
         "cache.query",
         "test.first-useful-case",
-        "artifact.cleanup"
+        "artifact.cleanup",
+        "policy.project-constitution"
       ],
       "variants": [
         {
@@ -2727,6 +2754,7 @@
           ],
           "atoms": [
             "owner.migration",
+            "policy.project-constitution",
             "policy.evolution",
             "policy.mixed-warning",
             "candidate.isolation",
@@ -2890,6 +2918,7 @@
             "method.host-tools",
             "method.entry",
             "judge.register",
+            "policy.project-constitution",
             "policy.evolution",
             "policy.mixed-warning"
           ]
