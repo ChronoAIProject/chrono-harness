@@ -1295,7 +1295,9 @@ fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
         serde_json::to_vec(&value!({
             "schema":"chrono-output-retention/v2",
             "producers":{"full-original":[".chrono-harness/state/"]},
-            "keep_seconds":0,"metadata_keep_seconds":0
+            "keep_seconds":0,"metadata_keep_seconds":0,
+            "max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,
+            "max_bytes_per_round":1048576,"max_millis_per_round":25
         }))
         .unwrap(),
     )
