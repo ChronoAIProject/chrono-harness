@@ -81,6 +81,122 @@ fn tree(root: &Path, name: &str) -> String {
 
 #[test]
 #[cfg(all(unix, not(verus_keep_ghost)))]
+fn leaf_entry_preserves_rooted_wide_intermediate_with_256_descriptors() {
+    if !isolated_capability_test(
+        "retention_frontier::leaf_entry_preserves_rooted_wide_intermediate_with_256_descriptors",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut originals = Vec::new();
+    for n in 0..135 {
+        let path = format!(".chrono-harness/state/fixtures/required-{n}");
+        fs::write(h.path().join(&path), b"required original").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete_sealed(json!({"exit": 7})).unwrap();
+        originals.push((id, path));
+    }
+    let publish_report = |name: &str, dependencies: &[String]| {
+        let path = format!(".chrono-harness/state/fixtures/{name}");
+        fs::write(h.path().join(&path), b"required report").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = publication.id().to_owned();
+        inventory(h.path()).dependencies(&id, dependencies).unwrap();
+        publication.complete_sealed(json!({"exit": 0})).unwrap();
+        (id, path)
+    };
+    let ids: Vec<_> = originals.iter().map(|(id, _)| id.clone()).collect();
+    let intermediate = publish_report("intermediate-report", &ids);
+    let root = publish_report("current-report", &[intermediate.0.clone()]);
+    inventory(h.path())
+        .reference("current-report", &[root.0.clone()])
+        .unwrap();
+    let declarations: Vec<_> = originals
+        .iter()
+        .chain([&intermediate, &root])
+        .map(|(id, path)| {
+            let record = retention_state::object_path(h.path(), id);
+            (
+                record.clone(),
+                fs::read(&record).unwrap(),
+                path.clone(),
+                fs::read(h.path().join(path)).unwrap(),
+            )
+        })
+        .collect();
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    assert_eq!(
+        unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) },
+        0
+    );
+    limit.rlim_cur = limit.rlim_cur.min(256);
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
+    let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let round = inventory(h.path())
+            .maintain_originals(&[originals[0].0.clone()])
+            .unwrap();
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        assert_eq!(round["removed_logical_bytes"], 0, "{round}");
+        assert!(round["disposed"].as_array().unwrap().is_empty(), "{round}");
+        for (record, before, path, original) in &declarations {
+            let before: Value = serde_json::from_slice(before).unwrap();
+            let mut after: Value = serde_json::from_slice(&fs::read(record).unwrap()).unwrap();
+            // The ordinary maintenance cursor advances even when every output
+            // stays rooted. All other declaration fields and original bytes
+            // must remain exact, including every explicit dependency edge.
+            after["cursor"] = before["cursor"].clone();
+            assert_eq!(after, before);
+            assert_eq!(&fs::read(h.path().join(path)).unwrap(), original);
+        }
+        inventory(h.path())
+            .reference("current-report", &[])
+            .unwrap();
+        for (id, path) in [&root, &intermediate] {
+            for _ in 0..135 + 16 {
+                let record: Value = serde_json::from_slice(
+                    &fs::read(retention_state::object_path(h.path(), id)).unwrap(),
+                )
+                .unwrap();
+                if record["output"].is_null() {
+                    break;
+                }
+                let round = inventory(h.path())
+                    .maintain_originals(&[id.clone()])
+                    .unwrap();
+                assert!(
+                    round["accounting_errors"].as_array().unwrap().is_empty(),
+                    "{round}"
+                );
+                assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+                for (_, original_path) in &originals {
+                    assert_eq!(
+                        fs::read(h.path().join(original_path)).unwrap(),
+                        b"required original"
+                    );
+                }
+            }
+            assert!(!h.path().join(path).exists(), "report not retired: {id}");
+        }
+    }));
+    if let Err(failure) = verification {
+        eprintln!("rooted wide intermediate fixture: {}", h.keep().display());
+        std::panic::resume_unwind(failure);
+    }
+}
+
+#[test]
+#[cfg(all(unix, not(verus_keep_ghost)))]
 fn publishing_recovery_root_preserves_326_originals_with_256_descriptors() {
     if !isolated_capability_test(
         "retention_frontier::publishing_recovery_root_preserves_326_originals_with_256_descriptors",

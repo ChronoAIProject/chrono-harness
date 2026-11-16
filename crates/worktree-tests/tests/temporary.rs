@@ -112,6 +112,13 @@ fn private_fixture_retirement_observes_actual_release_not_test_success() {
         let policy_path = h.root.join(".chrono-harness/cleanup.json");
         let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
         policy["retained_producers"][0]["rolling_directory"]["metadata_keep_seconds"] = value!(0);
+        let mut absent = policy["retained_producers"][0].clone();
+        absent["id"] = value!("unused-fixture");
+        absent["directory"] = value!(".chrono-harness/state/unused-fixture/");
+        policy["retained_producers"]
+            .as_array_mut()
+            .unwrap()
+            .push(absent);
         fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
         commit(&h.root);
         let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
@@ -127,7 +134,12 @@ fn private_fixture_retirement_observes_actual_release_not_test_success() {
         let record = producer_record_path(store, &path);
         let before = fs::read(&record).unwrap();
         let retired = || {
-            chrono_worktree::TemporaryHost::retired_fixture_store(store, "test-allocation").unwrap()
+            chrono_worktree::TemporaryHost::retired_registered_fixture_stores(
+                &h.root,
+                POLICY,
+                &["unused-fixture", "test-allocation"],
+            )
+            .unwrap()
         };
         assert!(
             !retired(),
@@ -715,6 +727,15 @@ fn producer_store_resolution_checks_committed_inputs_without_creating_cleanup_st
                 .unwrap_err()
                 .contains("not declared")
         );
+        assert!(
+            chrono_worktree::TemporaryHost::retired_registered_fixture_stores(
+                &h.root,
+                POLICY,
+                &["test-allocation", "unknown"],
+            )
+            .unwrap_err()
+            .contains("not declared")
+        );
         chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
             .unwrap();
         assert!(
@@ -729,6 +750,15 @@ fn producer_store_resolution_checks_committed_inputs_without_creating_cleanup_st
             chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
                 .is_err(),
             "uncommitted input drift must reject resolution: {changed}"
+        );
+        assert!(
+            chrono_worktree::TemporaryHost::retired_registered_fixture_stores(
+                &h.root,
+                POLICY,
+                &["test-allocation"],
+            )
+            .is_err(),
+            "retirement must reject the same uncommitted input drift: {changed}"
         );
         assert!(!state.exists());
     }
@@ -763,6 +793,15 @@ fn producer_store_resolution_checks_committed_inputs_without_creating_cleanup_st
         chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
             .unwrap_err()
             .contains("not prospectively adopted")
+    );
+    assert!(
+        chrono_worktree::TemporaryHost::retired_registered_fixture_stores(
+            &h.root,
+            POLICY,
+            &["test-allocation"],
+        )
+        .unwrap_err()
+        .contains("not prospectively adopted")
     );
     chrono_worktree::RetainedArtifact::registered_store(&h.root, POLICY, "test-allocation")
         .unwrap();
