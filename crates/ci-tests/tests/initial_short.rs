@@ -1,16 +1,27 @@
 //! Real standalone bare checks with empty business inventory and both input owners.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{prepared, sha256};
+#[cfg(not(verus_keep_ghost))]
 use std::path::PathBuf;
 
+#[cfg(not(verus_keep_ghost))]
 struct Host {
     temporary: crate::tools::FixtureDirectory,
     root: PathBuf,
     remote: PathBuf,
     candidate: String,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Host {
     fn drop(&mut self) {
         if std::thread::panicking() {
@@ -18,6 +29,7 @@ impl Drop for Host {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Host {
     fn new(unregistered: bool, binding: bool) -> Self {
         let temporary = crate::tools::temporary_host("empty initial λ ");
@@ -174,6 +186,7 @@ impl Host {
             .unwrap()
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn commit(root: &Path) -> String {
     git(root, &["add", "."]);
     git(
@@ -191,6 +204,7 @@ fn commit(root: &Path) -> String {
     );
     git(root, &["rev-parse", "HEAD"])
 }
+#[cfg(not(verus_keep_ghost))]
 fn report(root: &Path, path: &str, out: &std::process::Output, exit: i32) -> Value {
     let raw = fs::read(root.join(path)).unwrap();
     let r: Value = serde_json::from_slice(&raw).unwrap();
@@ -209,6 +223,7 @@ fn report(root: &Path, path: &str, out: &std::process::Output, exit: i32) -> Val
     r
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn genuine_root_bare_local_and_generated_native_preserve_inventory_and_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -219,9 +234,9 @@ fn genuine_root_bare_local_and_generated_native_preserve_inventory_and_originals
             &h.root,
             ".chrono-harness/state/initial-report.json",
             &h.command().output().unwrap(),
-            if unregistered { 1 } else { 0 },
+            initial_inventory_exit(unregistered),
         );
-        let native=report(&h.root,".chrono-harness/state/native/initial-report.json",&h.native(json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":h.candidate,"created":true})),if unregistered {1}else{0});
+        let native=report(&h.root,".chrono-harness/state/native/initial-report.json",&h.native(json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":h.candidate,"created":true})),initial_inventory_exit(unregistered));
         for r in [&local, &native] {
             assert_eq!(r["scope"], "initial-inventory");
             assert_eq!(r["governance"], "not-evaluated");
@@ -301,6 +316,7 @@ fn genuine_root_bare_local_and_generated_native_preserve_inventory_and_originals
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn nonroot_bare_local_and_native_use_delta_even_with_initial_inventory_registered() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -338,6 +354,7 @@ fn nonroot_bare_local_and_native_use_delta_even_with_initial_inventory_registere
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_or_incorrect_initial_binding_and_shallow_parented_creation_fail() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -398,4 +415,13 @@ fn absent_or_incorrect_initial_binding_and_shallow_parented_creation_fail() {
             .join(".chrono-harness/state/native/initial-report.json")
             .exists()
     );
+}
+
+verus! {
+/// The existing root-inventory assertions require failure for unregistered files.
+pub(super) fn initial_inventory_exit(unregistered: bool) -> (exit: i32)
+    ensures unregistered ==> exit == 1, !unregistered ==> exit == 0,
+{
+    if unregistered { 1 } else { 0 }
+}
 }

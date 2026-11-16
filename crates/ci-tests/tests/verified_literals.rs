@@ -6,6 +6,12 @@ mod policy;
 #[cfg(verus_keep_ghost)]
 #[path = "release.rs"]
 mod release_expectations;
+#[cfg(verus_keep_ghost)]
+#[path = "initial_short.rs"]
+mod initial_expectations;
+#[cfg(verus_keep_ghost)]
+#[path = "gating.rs"]
+mod gating_expectations;
 #[cfg(not(verus_keep_ghost))]
 use chrono_ci::verified_literals as policy;
 #[cfg(not(verus_keep_ghost))]
@@ -16,6 +22,14 @@ use vstd::prelude::*;
 use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+#[cfg(verus_keep_ghost)]
+fn initial_inventory_rejects_unregistered_files_and_collection_avoids_extra_acquisition() {
+    assert(initial_expectations::initial_inventory_exit(false) == 0);
+    assert(initial_expectations::initial_inventory_exit(true) == 1);
+    assert(gating_expectations::parent_lookup_count(false) == 1);
+    assert(gating_expectations::parent_lookup_count(true) == 2);
+}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn native_job_terminal_outcomes_never_select_another_detail() {
