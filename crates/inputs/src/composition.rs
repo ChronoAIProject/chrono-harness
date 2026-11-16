@@ -868,6 +868,7 @@ pub struct Manifest {
 }
 #[cfg(not(verus_keep_ghost))]
 fn bounded(root: &Path, path: &str) -> Result<Vec<u8>, String> {
+    let _input = retained_artifacts::retention::read_guard(root, path)?;
     let p = no_symlink_parents(root, path)?;
     admit_json_original(fs::metadata(&p).map_err(|e| e.to_string())?.len())?;
     fs::read(p).map_err(|e| e.to_string())
@@ -905,6 +906,7 @@ fn import_blob(root: &Path, f: &Value, source: &Source) -> Result<Value, String>
             sha256: digest.into(),
         };
         let p = chrono_harness::prepared::original_path(&original, source.transport.as_ref())?;
+        let _input = retained_artifacts::retention::read_guard(root, &p)?;
         let observed = store(root, &no_symlink_parents(root, &p)?)?;
         admit_imported_blob(
             observed["sha256"].as_str(),
@@ -1042,6 +1044,7 @@ pub fn compose(
     output: &str,
     receipt: &str,
 ) -> Result<Value, String> {
+    let _inputs = retained_artifacts::retention::read_scope(root)?;
     state(root, output)?;
     state(root, receipt)?;
     admit_output_paths(output, receipt)?;
