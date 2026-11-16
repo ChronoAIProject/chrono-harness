@@ -73,17 +73,18 @@ fn registered_thread_arguments_keep_all_four_exact_owners() {
 fn unknown_case_unicode_and_nul_owners_do_not_gain_thread_arguments() {
     proof {
         reveal_strlit("worktree-tests"); reveal_strlit("judge-workflow-tests");
-        reveal_strlit("pr-tests");
+        reveal_strlit("pr-tests"); reveal_strlit("cache-tests");
         reveal_strlit(""); reveal_strlit("Cache-tests"); reveal_strlit("cache-tests\0");
         reveal_strlit("Worktree-tests"); reveal_strlit("worktree-tests\0");
         reveal_strlit("缓存/λ");
         assert("worktree-tests"@.len() == 14);
         assert("judge-workflow-tests"@.len() == 20);
-        assert("pr-tests"@.len() == 8);
+        assert("pr-tests"@.len() == 8); assert("cache-tests"@.len() == 11);
         assert(""@.len() == 0); assert("Cache-tests"@.len() == 11);
         assert("cache-tests\0"@.len() == 12); assert("Worktree-tests"@.len() == 14);
         assert("worktree-tests\0"@.len() == 15); assert("缓存/λ"@.len() == 4);
         assert("Worktree-tests"@[0] != "worktree-tests"@[0]);
+        assert("Cache-tests"@[0] != "cache-tests"@[0]);
     }
     expect_thread_argument(expected_test_threads(""), None);
     expect_thread_argument(expected_test_threads("Cache-tests"), None);
