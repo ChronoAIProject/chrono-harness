@@ -2171,6 +2171,46 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
         launch["child_pid"].as_u64().unwrap().to_string(),
         fs::read_to_string(working.path().join("retained.pid")).unwrap()
     );
+    chrono_harness::validate_launch_evidence(paths.launch, &result).unwrap();
+    let tampered_path = root.path().join("tampered.launch.json");
+    let mut all_tampered = launch.clone();
+    let mut mismatches = Vec::new();
+    for (field, replacement, mismatch) in [
+        ("schema", value!("other-schema"), "schema"),
+        ("launcher_pid", value!(0), "launcher_pid"),
+        ("child_pid", value!(0), "child_pid"),
+        ("argv", value!(["other-argument"]), "argv"),
+        ("cwd", value!("other-directory"), "cwd"),
+        ("executable", value!("other-program"), "executable"),
+        ("sha256", value!("other-digest"), "executable_sha256"),
+        (
+            "environment_digest",
+            value!("other-digest"),
+            "environment_digest",
+        ),
+        ("ownership_fds", value!("other-fds"), "ownership_fds"),
+        ("stdin_sha256", value!("other-digest"), "stdin_sha256"),
+        ("timeout_seconds", value!(0), "timeout_seconds"),
+        ("output_limit_bytes", value!(0), "output_limit_bytes"),
+    ] {
+        let mut tampered = launch.clone();
+        tampered[field] = replacement.clone();
+        fs::write(&tampered_path, serde_json::to_vec(&tampered).unwrap()).unwrap();
+        assert_eq!(
+            chrono_harness::validate_launch_evidence(&tampered_path, &result).unwrap_err(),
+            format!("launch evidence does not match process receipt: {mismatch}")
+        );
+        all_tampered[field] = replacement;
+        mismatches.push(mismatch);
+    }
+    fs::write(&tampered_path, serde_json::to_vec(&all_tampered).unwrap()).unwrap();
+    assert_eq!(
+        chrono_harness::validate_launch_evidence(&tampered_path, &result).unwrap_err(),
+        format!(
+            "launch evidence does not match process receipt: {}",
+            mismatches.join(",")
+        )
+    );
     assert!(
         chrono_harness::run_process_observed_retained(working.path(), &spec, &[], &digest, &paths)
             .is_err()
