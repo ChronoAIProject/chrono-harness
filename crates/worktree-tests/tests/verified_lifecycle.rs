@@ -70,6 +70,207 @@ mod inventory_failure_owner;
 
 verus! {
 
+use policy::ProducerDeclarations;
+
+pub struct DeclarationRows<'a> { pub rows: Vec<(&'a str, bool)> }
+
+impl<'a> policy::ProducerDeclarations for DeclarationRows<'a> {
+    open spec fn count(&self) -> nat { self.rows@.len() }
+    open spec fn name_at(&self, index: int) -> &str { self.rows@[index].0 }
+    open spec fn temporary_at(&self, index: int) -> bool { self.rows@[index].1 }
+    fn len(&self) -> (out: usize)
+        ensures out == self.count(),
+    { self.rows.len() }
+    fn name(&self, index: usize) -> (out: &str)
+        ensures out == self.name_at(index as int),
+    { self.rows[index].0 }
+    fn temporary(&self, index: usize) -> (out: bool)
+        ensures out == self.temporary_at(index as int),
+    { self.rows[index].1 }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn producer_lookup_preserves_first_match_and_temporary_admission() {
+    proof {
+        reveal_strlit("fixture λ\0\n"); reveal_strlit("");
+        assert("fixture λ\0\n"@.len() != ""@.len());
+    }
+    let mut entries = Vec::new();
+    entries.push(("fixture λ\0\n", false));
+    entries.push(("fixture λ\0\n", true));
+    entries.push(("", true));
+    let rows = DeclarationRows { rows: entries };
+    assert(rows.count() == 3);
+    assert(rows.name_at(0)@ == "fixture λ\0\n"@ && !rows.temporary_at(0));
+    match policy::find_producer_declaration(&rows, "fixture λ\0\n", false) {
+        Ok(index) => expect(index == 0), _ => expect(false),
+    }
+    match policy::find_producer_declaration(&rows, "fixture λ\0\n", true) {
+        Err(policy::ProducerLookupError::NotTemporary(index)) => {
+            expect(index == 0);
+            expect(policy::equal_text(policy::ProducerLookupError::NotTemporary(index).message(),
+                "temporary producer is not prospectively adopted"));
+        },
+        _ => expect(false),
+    }
+    match policy::find_producer_declaration(&rows, "", true) {
+        Ok(index) => expect(index == 2),
+        Err(policy::ProducerLookupError::Missing) => {
+            assert(rows.name_at(2)@ == ""@);
+            expect(false);
+        },
+        Err(policy::ProducerLookupError::NotTemporary(index)) => {
+            assert(index < 3);
+            if index < 2 { assert(rows.name_at(index as int)@ != ""@); }
+            else { assert(rows.temporary_at(2)); }
+            expect(false);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn producer_lookup_rejects_absence_and_nearby_full_names() {
+    proof {
+        reveal_strlit("fixture"); reveal_strlit("fixture-extra"); reveal_strlit("Fixture");
+        assert("fixture"@.len() != "fixture-extra"@.len());
+        assert("fixture"@[0] != "Fixture"@[0]);
+    }
+    let rows = DeclarationRows { rows: Vec::new() };
+    match policy::find_producer_declaration(&rows, "", false) {
+        Err(policy::ProducerLookupError::Missing) => expect(policy::equal_text(
+            policy::ProducerLookupError::Missing.message(), "retained producer store is not declared by its owner")),
+        _ => expect(false),
+    }
+    let mut entries = Vec::new();
+    entries.push(("fixture-extra", true));
+    entries.push(("Fixture", true));
+    let rows = DeclarationRows { rows: entries };
+    match policy::find_producer_declaration(&rows, "fixture", true) {
+        Err(policy::ProducerLookupError::Missing) => expect(policy::equal_text(
+            policy::ProducerLookupError::Missing.message(), "retained producer store is not declared by its owner")),
+        _ => expect(false),
+    }
+}
+
+proof fn producer_trace_prefix_step<S, T, E, F>(rows: Seq<T>, states: Seq<S>, initial: S,
+    visit: &F, index: int)
+    where F: Fn(S, usize, &T) -> (S, Result<bool, E>),
+    requires policy::producer_visit_prefix(rows, states, initial, visit),
+        0 <= index < states.len() - 1,
+    ensures visit.ensures((states[index], index as usize, &rows[index]),
+        (states[index + 1], Ok::<bool, E>(true))),
+{
+    reveal(policy::producer_visit_prefix);
+}
+
+fn producer_visit_case(stop: usize, failure: bool)
+    requires stop <= 2,
+{
+    let mut rows = Vec::new();
+    rows.push(17u8); rows.push(239u8);
+    let visit = |state: Vec<(usize, u8)>, index: usize, row: &u8|
+        -> (out: (Vec<(usize, u8)>, Result<bool, (u32, u64)>))
+        ensures out.0@ == state@.push((index, *row)),
+            out.1 == if index == stop {
+                if failure { Err::<bool, (u32, u64)>((u32::MAX, u64::MAX)) }
+                else { Ok::<bool, (u32, u64)>(false) }
+            } else { Ok::<bool, (u32, u64)>(true) },
+    {
+        let mut next = state;
+        next.push((index, *row));
+        let result = if index == stop {
+            if failure { Err((u32::MAX, u64::MAX)) } else { Ok(false) }
+        } else { Ok(true) };
+        (next, result)
+    };
+    let initial = Vec::new();
+    let ghost original = initial;
+    let (trace, result) = policy::visit_producer_stores(initial, &rows, &visit);
+    proof {
+        reveal(policy::producer_visit_prefix);
+        let states = choose|states: Seq<Vec<(usize, u8)>>|
+            policy::producer_visit_prefix(rows@, states, original, &visit)
+                && match result {
+                    Ok(true) => states.len() == rows.len() + 1 && trace == states.last(),
+                    _ => states.len() <= rows.len() && visit.ensures(
+                        (states.last(), (states.len() - 1) as usize,
+                            &rows@[states.len() - 1]), (trace, result)),
+                };
+        assert(policy::producer_visit_prefix(rows@, states, original, &visit));
+        assert(forall|j: int| 0 <= j < states.len() - 1 ==> #[trigger]
+            visit.ensures((states[j], j as usize, &rows@[j]),
+                (states[j + 1], Ok::<bool, (u32, u64)>(true))));
+        assert(1 <= states.len() <= 3);
+        assert(states[0]@ == Seq::<(usize, u8)>::empty());
+        if states.len() >= 2 {
+            producer_trace_prefix_step(rows@, states, original, &visit, 0);
+            assert((&visit).ensures((states[0], 0usize, &rows@[0]),
+                (states[1], Ok::<bool, (u32, u64)>(true))));
+            assert(stop != 0);
+            assert(states[1]@ == seq![(0usize, 17u8)]);
+        }
+        if states.len() == 3 {
+            producer_trace_prefix_step(rows@, states, original, &visit, 1);
+            assert((&visit).ensures((states[1], 1usize, &rows@[1]),
+                (states[2], Ok::<bool, (u32, u64)>(true))));
+            assert(stop == 2);
+            assert(states[2]@ == seq![(0usize, 17u8), (1usize, 239u8)]);
+        }
+        match result {
+            Ok(true) => {
+                assert(states.len() == 3 && stop == 2);
+                assert(trace@ == seq![(0usize, 17u8), (1usize, 239u8)]);
+            },
+            _ => {
+                let index = states.len() - 1;
+                assert(visit.ensures((states[index], index as usize, &rows@[index]),
+                    (trace, result)));
+                assert(index == stop);
+                if index == 0 { assert(trace@ == seq![(0usize, 17u8)]); }
+                else { assert(trace@ == seq![(0usize, 17u8), (1usize, 239u8)]); }
+            },
+        }
+    }
+    expect(trace.len() == if stop == 0 { 1 } else { 2 });
+    expect(trace[0].0 == 0 && trace[0].1 == 17);
+    if stop != 0 { expect(trace[1].0 == 1 && trace[1].1 == 239); }
+    match result {
+        Ok(value) => { expect(!failure || stop == 2); expect(value == (stop == 2)); },
+        Err(error) => { expect(failure && stop < 2); expect(error.0 == u32::MAX && error.1 == u64::MAX); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn producer_visits_stop_at_the_actual_false_or_original_error() {
+    producer_visit_case(0, false); producer_visit_case(1, false);
+    producer_visit_case(0, true); producer_visit_case(1, true);
+    producer_visit_case(2, false); producer_visit_case(2, true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn empty_producer_visit_does_not_observe_any_store() {
+    let rows: Vec<u8> = Vec::new();
+    let visit = |state: u8, _index: usize, _row: &u8| -> (out: (u8, Result<bool, u8>))
+        ensures out == (255u8, Err::<bool, u8>(state)),
+    { (255, Err(state)) };
+    let (state, result) = policy::visit_producer_stores(17u8, &rows, &visit);
+    expect(state == 17);
+    match result { Ok(value) => expect(value), _ => expect(false), }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn single_store_adapter_preserves_value_and_full_missing_error() {
+    let mut stores = Vec::new();
+    stores.push((u32::MAX, u64::MAX));
+    match policy::take_resolved_store(stores) {
+        Ok(value) => expect(value.0 == u32::MAX && value.1 == u64::MAX), _ => expect(false),
+    }
+    let stores: Vec<u8> = Vec::new();
+    match policy::take_resolved_store(stores) {
+        Err(error) => expect(policy::equal_text(error, "retained producer store was not resolved")),
+        _ => expect(false),
+    }
+}
 
 fn report_scope_case(operation: &str, publication: Option<u8>,
     result: Result<(u8, u8), (u32, u64)>, expected: u8)

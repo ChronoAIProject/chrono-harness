@@ -2216,6 +2216,7 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
         },
     )
     .unwrap();
+    assert!(result.owned_work_joined, "{result:?}");
     assert!(
         result
             .failure
@@ -2747,6 +2748,7 @@ fn interrupted_nested_launcher_with_terminal_child_completes_enclosing_owner() {
     );
     assert!(p.stdout.contains("original child bytes"));
     assert_eq!(p.exit_code, 0, "{p:?}");
+    assert!(p.owned_work_joined, "{p:?}");
     assert!(p.failure.is_none(), "{p:?}");
 }
 
@@ -2756,6 +2758,7 @@ fn interrupted_nested_launcher_with_live_child_retains_cleanup_failure() {
     let (d, p) = interrupted_launch(false);
     assert!(d.path().join("ready").exists());
     assert_eq!(p.exit_code, 0, "{p:?}");
+    assert!(!p.owned_work_joined, "{p:?}");
     assert!(
         p.failure
             .as_deref()
