@@ -602,6 +602,8 @@ fn retained_identity(root: &Path, value: &Value) -> Result<Option<(String, u64)>
             digest,
             length,
         } => {
+            let _input = chrono_harness::retained_artifacts::retention::read_guard(root, path)
+                .map_err(|e| format!("E_INPUT_BLOB: {e}"))?;
             let path = no_symlink_parents(root, path).map_err(|e| format!("E_INPUT_BLOB: {e}"))?;
             let observed = file_identity(&path).map_err(|e| format!("E_INPUT_BLOB: {e}"))?;
             if observed != (digest.into(), length) {
