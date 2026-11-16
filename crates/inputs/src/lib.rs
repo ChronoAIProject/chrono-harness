@@ -410,7 +410,6 @@ pub fn capture_selected(
 #[cfg(not(verus_keep_ghost))]
 fn transport(from: &Path, snapshot: &str, to: &Path) -> Result<Value, String> {
     let _snapshot = chrono_harness::retained_artifacts::retention::read_guard(from, snapshot)?;
-    let _snapshot = chrono_harness::retained_artifacts::retention::read_guard(from, snapshot)?;
     let bytes = fs::read(state(from, snapshot)?).map_err(|e| e.to_string())?;
     let mut v = json(&bytes)?;
     snapshot_shape(&v)?;
@@ -427,7 +426,6 @@ fn transport(from: &Path, snapshot: &str, to: &Path) -> Result<Value, String> {
         };
         let _blob = chrono_harness::retained_artifacts::retention::read_guard(from, blob)?;
         let path = state(from, blob)?;
-        let _blob = chrono_harness::retained_artifacts::retention::read_guard(from, blob)?;
         let observed = store(to, &path)?;
         if observed["sha256"] != f["sha256"] || observed["length"] != f["length"] {
             return Err("E_INPUT_BLOB: retained bytes differ from snapshot".into());

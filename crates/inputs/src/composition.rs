@@ -907,7 +907,6 @@ fn import_blob(root: &Path, f: &Value, source: &Source) -> Result<Value, String>
         };
         let p = chrono_harness::prepared::original_path(&original, source.transport.as_ref())?;
         let _input = retained_artifacts::retention::read_guard(root, &p)?;
-        let _input = retained_artifacts::retention::read_guard(root, &p)?;
         let observed = store(root, &no_symlink_parents(root, &p)?)?;
         admit_imported_blob(
             observed["sha256"].as_str(),
@@ -1048,7 +1047,6 @@ pub fn compose(
     receipt: &str,
 ) -> Result<Produced, String> {
     let read_scope = retained_artifacts::retention::read_scope(root)?;
-    let _inputs = retained_artifacts::retention::read_scope(root)?;
     state(root, output)?;
     state(root, receipt)?;
     admit_output_paths(output, receipt)?;

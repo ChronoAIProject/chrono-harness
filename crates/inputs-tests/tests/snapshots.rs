@@ -827,6 +827,7 @@ fn input_commands_keep_exact_modes_and_first_option_error() {
         reveal_strlit("--manifest"); reveal_strlit("--receipt"); reveal_strlit("--unknown");
         reveal_strlit("--base-snapshot"); reveal_strlit("--candidate-snapshot");
         reveal_strlit("--base-root"); reveal_strlit("--candidate-root");
+        reveal_strlit("--report-consumer"); assert("--report-consumer"@.len() == 17);
         assert("capture"@.len() == 7); assert("compose"@.len() == 7); assert("pair"@.len() == 4);
         assert("--version"@.len() == 9); assert("--help"@.len() == 6);
         assert("capture"@[0] == 'c'); assert("compose"@[0] == 'c');
@@ -844,6 +845,9 @@ fn input_commands_keep_exact_modes_and_first_option_error() {
         reveal_strlit("--output\0"); assert("--output\0"@.len() == 9);
         assert(!policy::input_key_allowed(policy::InputKind::Capture, "--base"@));
         assert(!policy::input_key_allowed(policy::InputKind::Capture, "--output\0"@));
+        assert(policy::input_key_allowed(policy::InputKind::Capture, "--report-consumer"@));
+        assert(policy::input_key_allowed(policy::InputKind::Pair, "--report-consumer"@));
+        assert(policy::input_key_allowed(policy::InputKind::Compose, "--report-consumer"@));
     }
     input_parse_error(&[], "E_USAGE: capture or pair required");
     input_parse_error(&["--version".to_string(), "x".to_string()], "E_USAGE: unknown command");
