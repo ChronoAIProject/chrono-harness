@@ -853,6 +853,26 @@ impl Reader {
         paths: &[String],
     ) -> Result<Vec<(String, Vec<u8>)>, String> {
         let mut bytes = BTreeMap::new();
+        for blob in self.acquire_missing_blobs(root, oid, paths)? {
+            bytes.insert(blob.path, blob.bytes);
+        }
+        for path in paths {
+            if !bytes.contains_key(path) {
+                bytes.insert(path.clone(), self.blob_with_reuse(root, oid, path)?);
+            }
+        }
+        Ok(ordered_acquired_blobs(paths, &bytes).expect("acquired explicit registry"))
+    }
+    /// Fill the original-receipt cache, returning only newly acquired bytes.
+    /// Prefetch consumers need no copies of cached bytes or ordered output rows.
+    pub(crate) fn acquire_missing_blobs(
+        &self,
+        root: &Path,
+        oid: &str,
+        paths: &[String],
+    ) -> Result<Vec<RegistryBlob>, String> {
+        self.check_root(root)?;
+        self.unchanged(true).map_err(|e| self.error(&e))?;
         let mut pending = vec![];
         let mut unique = BTreeSet::new();
         for path in paths {
@@ -860,13 +880,11 @@ impl Reader {
             if !unique.insert(path) {
                 continue;
             }
-            if self
+            if !self
                 .blobs
                 .borrow()
                 .contains_key(&(oid.into(), path.clone()))
             {
-                bytes.insert(path.clone(), self.blob_with_reuse(root, oid, path)?);
-            } else {
                 pending.push(path.clone());
             }
         }
@@ -886,13 +904,14 @@ impl Reader {
             },
             |message| self.error(message),
         )?;
-        for blob in acquired {
+        for blob in &acquired {
             self.blobs
                 .borrow_mut()
-                .insert((oid.into(), blob.path.clone()), blob.receipt);
-            bytes.insert(blob.path, blob.bytes);
+                .insert((oid.into(), blob.path.clone()), blob.receipt.clone());
         }
-        Ok(ordered_acquired_blobs(paths, &bytes).expect("acquired explicit registry"))
+        self.check_root(root)?;
+        self.unchanged(true).map_err(|e| self.error(&e))?;
+        Ok(acquired)
     }
     pub(crate) fn record_verified_oid(&self, oid: &str) {
         // Only verify_oid's existing successful commit/tree observations may
@@ -930,17 +949,19 @@ impl Reader {
         }
         let result = run_process_observed(root, &spec, input, text(&b.binding, "sha256")?)
             .map_err(|e| self.error(&e))?;
-        let failure = result.failure.clone().or_else(|| {
-            (result.exit_code != 0).then(|| format!("Git facts process exit {}", result.exit_code))
-        });
-        let bytes = result.stdout_bytes.clone();
+        let index = self.processes.borrow().len();
         self.processes.borrow_mut().push(result);
         self.check_root(root)?;
         self.unchanged(true).map_err(|e| self.error(&e))?;
-        if let Some(failure) = failure {
-            return Err(self.error(&failure));
+        let processes = self.processes.borrow();
+        let result = &processes[index];
+        if let Some(failure) = &result.failure {
+            return Err(self.error(failure));
         }
-        Ok(bytes)
+        if result.exit_code != 0 {
+            return Err(self.error(&format!("Git facts process exit {}", result.exit_code)));
+        }
+        Ok(result.stdout_bytes.clone())
     }
     pub fn verify_config(&self, root: &Path, candidate: &str) -> Result<(), String> {
         if let Some(b) = &self.bound {
