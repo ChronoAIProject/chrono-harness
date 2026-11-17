@@ -2299,7 +2299,14 @@ impl Manager {
             }
             paths.extend(e.policy_migrations.iter().map(|r| r.path.clone()));
             paths.extend(e.main_cache_adoptions.iter().map(|r| r.path.clone()));
-            if let Some(path) = e.cleanup.as_ref().and_then(|p| p.report_path.as_ref()) {
+            // Only disposed-history verification consumes this original.
+            // Pending/failed observations from older finish or maintain calls
+            // are descriptive sources, not additional retention roots.
+            if let Some(path) = e.cleanup.as_ref().and_then(|p| {
+                (p.stage == crate::verified_lifecycle::CleanupStage::Disposed)
+                    .then_some(p.report_path.as_ref())
+                    .flatten()
+            }) {
                 paths.insert(path.clone());
             }
             for token in &e.uses {
@@ -4465,14 +4472,13 @@ impl Manager {
         self.ledger.entries[i].cleanup = Some(CleanupProgress {
             stage,
             detail: detail.into(),
-            // A whole-round report is still being published while unrelated
-            // business completes. Progress consumes only the observation, not
-            // that publisher's path. Actual cleanup children retain their own
-            // sealed original when they return through this same boundary.
-            report_path: if report["operation"] == "maintain" {
-                None
-            } else {
+            // Progress consumes a child's cleanup result for history retirement.
+            // finish and whole-round maintain reports only supply observations;
+            // keeping their paths would root already transferred terminal facts.
+            report_path: if report["operation"] == "cleanup" {
                 report["report_path"].as_str().map(str::to_owned)
+            } else {
+                None
             },
         });
         self.save()

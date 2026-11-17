@@ -951,6 +951,8 @@ fn terminal_original_fixture(fault: &str) -> EnrollmentOriginalsFixture {
     let e = &mut ledger["entries"][0];
     e["adopted_birth"] = value!("established");
     e["status"] = value!("retained");
+    e["creator_agent"] = value!(null);
+    e["custodian_agent"] = value!(null);
     let mut original = value!({
         "schema":"chrono-worktree-terminal/v1","path":h.target,
         "attachment":e["attachment"],"branch":e["branch"],
@@ -978,6 +980,10 @@ fn terminal_original_fixture(fault: &str) -> EnrollmentOriginalsFixture {
         "head":"b".repeat(64),"retained_commit":"c".repeat(64),
         "dispose_evidence":false,"artifacts_only":true,"receipt":receipt
     });
+    // Legacy pending progress could carry a source path. It supplies an
+    // observation only; it must not root a transferred original indefinitely.
+    e["cleanup"] = value!({"stage":"pending","detail":"terminal handoff recorded",
+        "report_path":path});
     fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
     let publication = inventory
@@ -1245,6 +1251,7 @@ fn new_terminal_facts_survive_original_retirement_through_cleanup_and_history_re
     assert_eq!(code, 0, "{finished} {error}");
     let terminal = h.ledger()["entries"][0]["terminal"].clone();
     assert!(terminal["established"].is_string());
+    assert!(h.ledger()["entries"][0]["cleanup"]["report_path"].is_null());
     let source = terminal["receipt"]["path"].as_str().unwrap();
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
     maintain_original_until_absent(&inventory, &h.root.join(source));

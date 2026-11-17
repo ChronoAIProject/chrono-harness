@@ -1026,7 +1026,7 @@ fn explicit_cleanup_adoption_preserves_changed_inputs_and_corrupt_source_evidenc
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn explicit_cleanup_adoption_keeps_terminal_original_until_new_responsibility_handoff() {
+fn explicit_cleanup_adoption_preserves_terminal_facts_and_requires_new_responsibility_handoff() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
@@ -1062,9 +1062,17 @@ fn explicit_cleanup_adoption_keeps_terminal_original_until_new_responsibility_ha
     assert_eq!(code, 0, "{report} {error}");
     assert!(!target.join("output λ").exists());
     assert_eq!(fs::read(terminal).unwrap(), terminal_bytes);
-    assert_eq!(
-        h.ledger()["entries"][0]["enrollment"]["terminal_history"][0],
+    let current = h.ledger()["entries"][0].clone();
+    assert!(current["enrollment"]["terminal_history"].is_null());
+    assert!(current["terminal"]["established"].is_string());
+    assert_ne!(
+        current["terminal"]["receipt"],
         original["terminal"]["receipt"]
+    );
+    let cleanup = drain_report(&report["drain"][0]);
+    assert_eq!(
+        current["terminal"]["receipt"],
+        cleanup["terminal_handoff"]["source"]
     );
 }
 
@@ -1363,7 +1371,7 @@ fn interrupted_removal_restores_target_config_even_when_cleanup_policy_is_identi
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
+fn policy_migration_preserves_terminal_facts_and_requires_a_new_finish() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
@@ -1407,9 +1415,14 @@ fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
     );
     assert!(!target.join("output λ").exists());
     assert_eq!(fs::read(terminal).unwrap(), bytes);
+    let current = h.ledger()["entries"][0].clone();
+    assert!(current["enrollment"]["terminal_history"].is_null());
+    assert!(current["terminal"]["established"].is_string());
+    assert_ne!(current["terminal"]["receipt"], prior["terminal"]["receipt"]);
+    let cleanup = drain_report(&report_cleanup["drain"][0]);
     assert_eq!(
-        h.ledger()["entries"][0]["enrollment"]["terminal_history"][0],
-        prior["terminal"]["receipt"]
+        current["terminal"]["receipt"],
+        cleanup["terminal_handoff"]["source"]
     );
 }
 
