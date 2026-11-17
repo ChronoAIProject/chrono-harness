@@ -4188,6 +4188,40 @@ pub fn directory_adopted(publication: Option<&Publication>, output: &Path) -> Re
 /// A registered reader protects an enrolled original. Unknown legacy evidence retains old semantics.
 #[cfg(not(verus_keep_ghost))]
 pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
+    read_guard_for(root, path, None, &mut |_| {})
+}
+
+/// An existing domain owner may finish transferring its already protected,
+/// sealed originals after a missed deadline. This never admits a new consumer
+/// or adds the old original to an invocation's report dependencies.
+#[cfg(not(verus_keep_ghost))]
+pub fn consumer_read_guard(
+    root: &Path,
+    path: &str,
+    consumer: &str,
+) -> Result<Option<Lease>, String> {
+    read_guard_for(root, path, Some(consumer), &mut |_| {})
+}
+
+#[cfg(feature = "retention-test")]
+#[doc(hidden)]
+#[cfg(not(verus_keep_ghost))]
+pub fn consumer_read_observed(
+    root: &Path,
+    path: &str,
+    consumer: &str,
+    mut observe: impl FnMut(&str),
+) -> Result<Option<Lease>, String> {
+    read_guard_for(root, path, Some(consumer), &mut observe)
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn read_guard_for(
+    root: &Path,
+    path: &str,
+    consumer: Option<&str>,
+    observe: &mut dyn FnMut(&str),
+) -> Result<Option<Lease>, String> {
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
@@ -4201,7 +4235,19 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     if o.phase == "disposing" {
         return Err("original evidence unavailable: disposal has started".into());
     }
-    o.admit(now()?)?;
+    let observed = now()?;
+    if let Some(consumer) = consumer.filter(|_| {
+        o.lifetime.as_ref().is_some_and(|window| {
+            window.created_at.is_some_and(|created| created <= observed)
+                && window.deadline <= observed
+        })
+    }) {
+        drop(gate);
+        return inventory
+            .partition_consumer_read(consumer, o, observe)
+            .map(Some);
+    }
+    o.admit(observed)?;
     let lease = Lease::acquire(
         &inventory.directory.join(&o.lease),
         Some(&o.lease_id),
