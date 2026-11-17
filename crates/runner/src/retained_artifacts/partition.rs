@@ -367,8 +367,9 @@ impl Gate {
 impl Inventory {
     /// The held role is the existing owner's authority. Follow only reciprocal
     /// incoming edges of the requested original, preferring that role's direct
-    /// members. One local metadata descriptor is used at a time; no membership,
-    /// deadline, recovery root or caller dependency is written here.
+    /// members. Discovery uses one local metadata descriptor at a time; the
+    /// resulting path is then excluded and revalidated as one snapshot. No
+    /// membership, deadline, recovery root or caller dependency is written here.
     pub(super) fn partition_consumer_read(
         &self,
         consumer: &str,
@@ -384,7 +385,7 @@ impl Inventory {
             .read_role(consumer)?
             .ok_or("existing retention consumer disappeared")?;
         let mut pending = BTreeMap::from([(original.id.clone(), BTreeSet::<String>::new())]);
-        let mut visited = BTreeSet::new();
+        let mut successors = BTreeMap::new();
         let mut capability = None;
         while !pending.is_empty() {
             let id = pending
@@ -394,7 +395,7 @@ impl Inventory {
                 .unwrap()
                 .clone();
             let children = pending.remove(&id).unwrap();
-            if visited.contains(&id) {
+            if successors.contains_key(&id) {
                 continue;
             }
             let directory = self.object_directory(&id)?;
@@ -410,11 +411,11 @@ impl Inventory {
                 .output
                 .as_ref()
                 .ok_or("existing consumer original unavailable")?;
-            if !children.is_empty()
-                && !children
-                    .iter()
-                    .any(|child| output.references.contains(child))
-            {
+            let successor = children
+                .iter()
+                .find(|child| output.references.contains(child))
+                .cloned();
+            if !children.is_empty() && successor.is_none() {
                 continue; // Interrupted removals can leave conservative incoming edges.
             }
             if output.phase != "released" || !output.manifest.sealed {
@@ -444,31 +445,120 @@ impl Inventory {
                 }
             }
             self.stable(&guard)?;
+            successors.insert(id.clone(), successor);
             drop(guard);
             observe(&id);
             if role.ids.contains(&id) {
                 if !record.roles.contains(consumer) {
                     return Err("existing consumer membership is not reciprocal".into());
                 }
+                self.verify_consumer_read_path(consumer, original, &id, &successors)?;
                 self.stable(&owner)?;
-                return capability.ok_or("existing consumer read lacks original capability".into());
+                let capability =
+                    capability.ok_or("existing consumer read lacks original capability")?;
+                self.stable(&capability)?;
+                return Ok(capability);
             }
-            visited.insert(id.clone());
             for parent in &record.incoming {
-                if !visited.contains(parent) {
+                if !successors.contains_key(parent) {
                     pending
                         .entry(parent.clone())
                         .or_default()
                         .insert(id.clone());
                 }
             }
-            if visited.len() + pending.len() > self.policy.max_related_outputs {
+            if successors.len() + pending.len() > self.policy.max_related_outputs {
                 return Err(
                     "existing consumer read exceeds related retention graph capacity".into(),
                 );
             }
         }
         Err("original is not protected by the existing retention consumer".into())
+    }
+
+    // The caller still holds the original consumer and original-byte leases.
+    // Discovery observations may span different graph states. Only this final
+    // simultaneous exclusion establishes a path that can authorize the read.
+    fn verify_consumer_read_path(
+        &self,
+        consumer: &str,
+        original: &Output,
+        member: &str,
+        successors: &BTreeMap<String, Option<String>>,
+    ) -> Result<(), String> {
+        let mut path = Vec::new();
+        let mut current = member;
+        loop {
+            if path.len() >= self.policy.max_related_outputs {
+                return Err(
+                    "existing consumer path exceeds related retention graph capacity".into(),
+                );
+            }
+            path.push(current.to_owned());
+            match successors.get(current) {
+                Some(Some(next)) => current = next,
+                Some(None) if current == original.id => break,
+                _ => return Err("existing consumer reference path is incomplete".into()),
+            }
+        }
+        let mut guards = Vec::new();
+        // Never wait while holding the role in the opposite acquisition order
+        // to publishers. Width does not increase this descriptor set; resource
+        // exhaustion or a busy path fails without granting a read capability.
+        for id in path.iter().collect::<BTreeSet<_>>() {
+            guards.push(
+                DirectoryLease::acquire_local(&self.object_directory(id)?, false, None)?
+                    .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
+            );
+        }
+        let role = self
+            .read_role(consumer)?
+            .ok_or("existing retention consumer disappeared")?;
+        if !role.ids.iter().any(|id| id == member) {
+            return Err("existing consumer membership changed".into());
+        }
+        let policy = sha256(&self.policy_bytes);
+        for (index, id) in path.iter().enumerate() {
+            let record = self.read_object(id, &self.object_directory(id)?)?;
+            if record.policy_sha256 != policy {
+                return Err(
+                    "retention policy migration required; original record preserved".into(),
+                );
+            }
+            let output = record
+                .output
+                .as_ref()
+                .ok_or("existing consumer original unavailable")?;
+            if output.phase != "released" || !output.manifest.sealed {
+                return Err("existing consumer original is not a sealed released output".into());
+            }
+            if index == 0 && !record.roles.contains(consumer) {
+                return Err("existing consumer membership is not reciprocal".into());
+            }
+            if (index > 0 && !record.incoming.contains(&path[index - 1]))
+                || path
+                    .get(index + 1)
+                    .is_some_and(|child| !output.references.contains(child))
+            {
+                return Err("existing consumer reference path changed".into());
+            }
+            if id == &original.id
+                && (output.path != original.path
+                    || output.identity != original.identity
+                    || output.lease != original.lease
+                    || output.lease_id != original.lease_id
+                    || output.lifetime != original.lifetime)
+            {
+                return Err("existing consumer original address or lifetime changed".into());
+            }
+        }
+        if identity(&no_symlink_parents(&self.root, &original.path)?)? != original.identity {
+            return Err("existing consumer original identity changed".into());
+        }
+        for guard in &guards {
+            self.stable(guard)?;
+        }
+        Ok(())
     }
 
     /// Keep the consumer excluded, visiting only one member at a time. Install

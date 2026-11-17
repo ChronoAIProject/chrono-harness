@@ -514,10 +514,10 @@ fn consumer_recovery_requires_one_simultaneously_valid_reference_path() {
         "the interleaving did not execute: {:?}",
         read.as_ref().err()
     );
-    assert!(
-        read.is_err(),
-        "observations from different graph states cannot authorize recovery"
-    );
+    let error = read
+        .err()
+        .expect("observations from different graph states cannot authorize recovery");
+    assert!(error.contains("reference path changed"), "{error}");
     assert_eq!(
         ledger(h.path())["outputs"]
             .as_array()
