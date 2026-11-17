@@ -100,7 +100,7 @@ pub(super) struct PolicyBinding {
 
 #[cfg(not(verus_keep_ghost))]
 impl Manager {
-    fn committed_policy_source(&self, r: &mut Runner) -> Result<PolicySource, String> {
+    pub(super) fn committed_policy_source(&self, r: &mut Runner) -> Result<PolicySource, String> {
         let inputs = BTreeMap::from([
             (
                 self.inputs.config_path.clone(),
@@ -167,7 +167,7 @@ impl Manager {
         Ok(binding)
     }
 
-    fn validate_adopted_binding(&self, binding: &PolicyBinding) -> Result<(), String> {
+    pub(super) fn validate_adopted_binding(&self, binding: &PolicyBinding) -> Result<(), String> {
         facts::full_oid(&binding.head)?;
         let input_keys_valid = binding.inputs.keys().eq(BTreeMap::from([
             (self.inputs.config_path.clone(), ()),

@@ -316,6 +316,10 @@ impl EnrollmentOriginalsFixture {
     }
 
     fn build(import_fault: Option<&str>) -> Self {
+        Self::build_with_lifetime(import_fault, false)
+    }
+
+    fn build_with_lifetime(import_fault: Option<&str>, finite: bool) -> Self {
         use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
         let directory = tempfile::tempdir().unwrap();
         let root = fs::canonicalize(directory.path()).unwrap();
@@ -389,17 +393,19 @@ impl EnrollmentOriginalsFixture {
                 "allow_evidence_disposal":true,"artifacts":[]
             }),
         );
-        write(
-            POLICY_PATH,
-            value!({
-                "schema":"chrono-output-retention/v2",
-                "producers":{"lifecycle-original":[".chrono-harness/state/"]},
-                "keep_seconds":0,"max_related_outputs":512,"max_summaries":128,
-                "max_nodes_per_round":256,"max_bytes_per_round":67108864,
-                "max_millis_per_round":25,"max_output_bytes":1073741824,
-                "max_manifest_nodes":16384,"max_metadata_bytes_per_round":67108864
-            }),
-        );
+        let mut retention = value!({
+            "schema":"chrono-output-retention/v2",
+            "producers":{"lifecycle-original":[".chrono-harness/state/"]},
+            "keep_seconds":0,"max_related_outputs":512,"max_summaries":128,
+            "max_nodes_per_round":256,"max_bytes_per_round":67108864,
+            "max_millis_per_round":25,"max_output_bytes":1073741824,
+            "max_manifest_nodes":16384,"max_metadata_bytes_per_round":67108864
+        });
+        if finite {
+            retention["max_lifetime_seconds"] = value!(86400);
+            retention["metadata_keep_seconds"] = value!(0);
+        }
+        write(POLICY_PATH, retention);
         let target = root.join("absent-checkout");
         let record = root
             .join(".chrono-harness/state/automatic-cleanup/enrollments")
@@ -723,7 +729,13 @@ fn published_result_handoffs_recover_a_full_enrollment_without_raising_capacity(
         "sealed report handoffs must not deadlock behind capacity: {maintained}"
     );
     let snapshot = retention_state::snapshot(&h.root);
-    assert_eq!(snapshot["roots"][&role].as_array().unwrap().len(), 2);
+    let pending = snapshot["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["path"] == receipts[3]["path"])
+        .unwrap();
+    assert_eq!(snapshot["roots"][&role], value!([pending["id"]]));
     assert!(
         !maintained
             .to_string()
@@ -753,18 +765,196 @@ fn published_result_handoffs_recover_a_full_enrollment_without_raising_capacity(
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn expired_import_original_hands_policy_to_current_state_without_renewal() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, read_guard};
+    for present in [false, true] {
+        let h = EnrollmentOriginalsFixture::build_with_lifetime(Some(""), true);
+        if present {
+            h.make_present();
+        }
+        let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+        let role = format!(
+            "worktree-enrollment:{}",
+            sha256(h.target.to_str().unwrap().as_bytes())
+        );
+        inventory
+            .reference_paths(&role, &[h.original.clone()])
+            .unwrap();
+        let reader = read_guard(&h.root, &h.original).unwrap();
+        let snapshot = retention_state::snapshot(&h.root);
+        let mut output = snapshot["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["path"] == h.original)
+            .unwrap()
+            .clone();
+        output["lifetime"] = value!({"created_at":1,"deadline":2});
+        output["expires"] = value!(2);
+        retention_state::replace_output(&h.root, &output);
+        let before = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
+        let original = fs::read(h.root.join(&h.original)).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{report}");
+        assert_import_policy_handoff(&h, &before);
+        assert_eq!(
+            fs::read(h.root.join(&h.original)).unwrap(),
+            original,
+            "an independent active reader still owns the original"
+        );
+        let snapshot = retention_state::snapshot(&h.root);
+        let observed = snapshot["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|observed| observed["id"] == output["id"])
+            .unwrap();
+        assert_eq!(observed["lifetime"], output["lifetime"]);
+        assert_eq!(observed["expires"], output["expires"]);
+        assert!(read_guard(&h.root, &h.original).is_err());
+        drop(reader);
+        maintain_original_until_absent(&inventory, &h.root.join(&h.original));
+        assert!(!h.root.join(&h.original).exists());
+        let adopted = fs::read(h.record.join("ledger.json")).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{report}");
+        assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), adopted);
+        assert_eq!(h.target.exists(), present);
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn assert_import_policy_handoff(h: &EnrollmentOriginalsFixture, before: &Value) {
+    let after = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
+    let previous = &before["entries"][0];
+    let current = &after["entries"][0];
+    for field in [
+        "path",
+        "branch",
+        "attachment",
+        "policy_sha256",
+        "status",
+        "enrollment",
+        "uses",
+        "terminal",
+        "attempts",
+    ] {
+        assert_eq!(current[field], previous[field], "handoff changed {field}");
+    }
+    let report = json(&fs::read(h.root.join(&h.original)).unwrap()).unwrap();
+    assert_eq!(
+        current["adopted_policy"],
+        value!({
+            "policy_sha256":previous["policy_sha256"],
+            "head":previous["enrollment"]["observed_head"],
+            "inputs":previous["enrollment"]["policy_inputs"],
+            "policy_source":{"head":"c".repeat(64),"inputs":{
+                (POLICY):report["config_sha256"],(AUTO_POLICY):previous["policy_sha256"]
+            }}
+        })
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn invalid_import_policy_handoff_preserves_original_role_and_ledger() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    for fault in [
+        "digest",
+        "input-keys",
+        "source-policy",
+        "migration-conflict",
+    ] {
+        let h = EnrollmentOriginalsFixture::imported();
+        let role = format!(
+            "worktree-enrollment:{}",
+            sha256(h.target.to_str().unwrap().as_bytes())
+        );
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .reference_paths(&role, &[h.original.clone()])
+            .unwrap();
+        let ledger_path = h.record.join("ledger.json");
+        let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        let entry = &mut ledger["entries"][0];
+        let original = fs::read(h.root.join(&h.original)).unwrap();
+        let report = json(&original).unwrap();
+        entry["adopted_policy"] = value!({
+            "policy_sha256":entry["policy_sha256"],
+            "head":entry["enrollment"]["observed_head"],
+            "inputs":entry["enrollment"]["policy_inputs"],
+            "policy_source":{"head":"c".repeat(64),"inputs":{
+                (POLICY):report["config_sha256"],(AUTO_POLICY):entry["policy_sha256"]
+            }}
+        });
+        let expected_error = match fault {
+            "digest" => {
+                entry["adopted_policy"]["policy_sha256"] = value!("invalid");
+                "invalid current adopted policy binding"
+            }
+            "input-keys" => {
+                entry["adopted_policy"]["inputs"]["unexpected"] = value!(null);
+                "invalid current adopted policy binding"
+            }
+            "source-policy" => {
+                entry["adopted_policy"]["policy_source"]["inputs"][AUTO_POLICY] =
+                    value!("0".repeat(64));
+                "current adopted policy digest differs from its committed inputs"
+            }
+            "migration-conflict" => {
+                entry["policy_migrations"] =
+                    value!([{"path":h.original,"sha256":sha256(&original)}]);
+                "current policy binding cannot retain a migration chain"
+            }
+            _ => unreachable!(),
+        };
+        let ledger = serde_json::to_vec(&ledger).unwrap();
+        fs::write(&ledger_path, &ledger).unwrap();
+        let role_path = retention_state::role_path(&h.root, &role);
+        let previous_role = fs::read(&role_path).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_ne!(code, 0, "{fault}: {report}");
+        assert!(
+            report.to_string().contains(expected_error),
+            "{fault}: {report}"
+        );
+        assert_eq!(
+            fs::read(&role_path).ok(),
+            Some(previous_role),
+            "invalid handoff must not release the original role: {fault}"
+        );
+        assert_eq!(fs::read(&ledger_path).unwrap(), ledger, "{fault}");
+        assert_eq!(
+            fs::read(h.root.join(&h.original)).unwrap(),
+            original,
+            "{fault}"
+        );
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
     let h = EnrollmentOriginalsFixture::imported();
-    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let ledger = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
     let original = fs::read(h.root.join(&h.original)).unwrap();
+    let _reader =
+        chrono_harness::retained_artifacts::retention::read_guard(&h.root, &h.original).unwrap();
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 0, "{report}");
     assert_eq!(report["cleanup_failures"], value!([]), "{report}");
     assert_eq!(attention_row(&report, &h.target)["work_state"], "unknown");
-    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_import_policy_handoff(&h, &ledger);
     assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
 }
 
@@ -776,12 +966,14 @@ fn present_import_restores_adopted_caller_policy_without_reinterpreting_target_i
     }
     let h = EnrollmentOriginalsFixture::imported();
     h.make_present();
-    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let ledger = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
     let original = fs::read(h.root.join(&h.original)).unwrap();
+    let _reader =
+        chrono_harness::retained_artifacts::retention::read_guard(&h.root, &h.original).unwrap();
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 0, "{report}");
     assert_eq!(report["cleanup_failures"], value!([]), "{report}");
-    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_import_policy_handoff(&h, &ledger);
     assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
     for (path, expected) in [
         (POLICY, "target original configuration is raw data"),
@@ -808,12 +1000,15 @@ fn import_uses_original_fixed_caller_source_only_when_policy_field_is_absent() {
         if present {
             h.make_present();
         }
-        let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+        let ledger = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
         let original = fs::read(h.root.join(&h.original)).unwrap();
+        let _reader =
+            chrono_harness::retained_artifacts::retention::read_guard(&h.root, &h.original)
+                .unwrap();
         let (code, report) = h.invoke("maintain", false);
         assert_eq!(code, 0, "{report}");
         assert_eq!(report["cleanup_failures"], value!([]), "{report}");
-        assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+        assert_import_policy_handoff(&h, &ledger);
         assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
         assert_eq!(h.target.exists(), present);
         if present {
@@ -876,6 +1071,8 @@ fn absent_import_after_explicit_migration_uses_the_last_target_binding() {
     let ledger_bytes = serde_json::to_vec(&ledger).unwrap();
     fs::write(&ledger_path, &ledger_bytes).unwrap();
     let original = fs::read(h.root.join(&h.original)).unwrap();
+    let _reader =
+        chrono_harness::retained_artifacts::retention::read_guard(&h.root, &h.original).unwrap();
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 0, "{report}");
     assert_eq!(report["cleanup_failures"], value!([]), "{report}");
@@ -4102,6 +4299,23 @@ fn observational_import_binds_original_inputs_without_adopting_format_or_disposa
         assert_eq!(
             entry["enrollment"]["policy_inputs"][POLICY],
             sha256(&config_bytes)
+        );
+        assert_eq!(entry["adopted_policy"]["head"], head);
+        assert_eq!(
+            entry["adopted_policy"]["inputs"],
+            entry["enrollment"]["policy_inputs"]
+        );
+        assert_eq!(
+            entry["adopted_policy"]["policy_source"]["head"],
+            imported["policy_source_commit"]
+        );
+        assert_eq!(
+            entry["adopted_policy"]["policy_source"]["inputs"][POLICY],
+            sha256(&fs::read(h.root.join(POLICY)).unwrap())
+        );
+        assert_eq!(
+            entry["adopted_policy"]["policy_source"]["inputs"][AUTO_POLICY],
+            entry["policy_sha256"]
         );
         assert!(entry["terminal"].is_null());
         let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
