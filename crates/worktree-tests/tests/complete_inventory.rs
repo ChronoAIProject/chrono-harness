@@ -63,7 +63,9 @@ fn explicit_inventory_keeps_the_whole_union_beyond_the_sample_ceiling() {
         .map(|i| h.root.join(format!("git-only-{i}")))
         .collect();
     configure_inventory(&h, &paths, None);
-    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let ledger = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
+    let _reader =
+        chrono_harness::retained_artifacts::retention::read_guard(&h.root, &h.original).unwrap();
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 0, "{report}");
     let rows = original(&h, &report);
@@ -94,7 +96,7 @@ fn explicit_inventory_keeps_the_whole_union_beyond_the_sample_ceiling() {
         report["complete_inventory"]["member_enumeration_complete"],
         false
     );
-    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_import_policy_handoff(&h, &ledger);
     let state = retention_state::snapshot(&h.root);
     let parent = state["outputs"]
         .as_array()
