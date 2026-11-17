@@ -321,7 +321,8 @@ impl Report {
                 "owner":"worktree-lifecycle","disposition":disposition,
                 "cleanup_state":entry.map(|e| &e.status),"cleanup_progress":entry.and_then(|e| e.cleanup.as_ref()),
                 "uses":entry.map(|e| &e.uses),"ownership":entry.and_then(|e| e.ownership.as_ref()),
-                "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),
+                "terminal_source":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),
+                "terminal_established":entry.and_then(|e| e.terminal.as_ref()).and_then(|t| t.established.as_ref()),
                 "qualification":"not-evaluated-by-report","action":"see worktree-action",
                 "measurement":measurement}));
         }

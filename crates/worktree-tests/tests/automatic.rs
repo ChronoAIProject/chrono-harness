@@ -1153,6 +1153,134 @@ fn failed_terminal_handoff_write_preserves_original_roots_then_resumes() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn conflicting_terminal_handoff_preserves_original_role_and_fact_binding() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for field in [
+        "established",
+        "head",
+        "retained_commit",
+        "dispose_evidence",
+        "artifacts_only",
+        "receipt",
+        "attachment",
+    ] {
+        let h = terminal_original_fixture("");
+        let path = ".chrono-harness/state/terminal-original.json";
+        let role = format!(
+            "worktree-enrollment:{}",
+            sha256(h.target.to_str().unwrap().as_bytes())
+        );
+        let role_path = retention_state::role_path(&h.root, &role);
+        let _reader =
+            chrono_harness::retained_artifacts::retention::read_guard(&h.root, path).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{field}: {report}");
+        // Recreate the stale role membership through the producer API to
+        // exercise recovery after a write succeeded but pruning was interrupted.
+        chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .reference_paths(&role, &[path.into()])
+            .unwrap();
+        let ledger_path = h.record.join("ledger.json");
+        let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        let entry = &mut ledger["entries"][0];
+        match field {
+            "attachment" => entry["attachment"]["metadata_id"] = value!("other"),
+            "receipt" => entry["terminal"]["receipt"]["sha256"] = value!("d".repeat(64)),
+            "dispose_evidence" | "artifacts_only" => {
+                let original = entry["terminal"][field].as_bool().unwrap();
+                entry["terminal"][field] = value!(!original);
+            }
+            _ => entry["terminal"][field] = value!("d".repeat(64)),
+        }
+        let ledger = serde_json::to_vec(&ledger).unwrap();
+        fs::write(&ledger_path, &ledger).unwrap();
+        let role_bytes = fs::read(&role_path).unwrap();
+        let raw = fs::read(h.root.join(path)).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_ne!(code, 0, "{field}: {report}");
+        assert!(
+            report
+                .to_string()
+                .contains("terminal handoff binding changed"),
+            "{field}: {report}"
+        );
+        assert_eq!(fs::read(ledger_path).unwrap(), ledger, "{field}");
+        assert_eq!(fs::read(role_path).unwrap(), role_bytes, "{field}");
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), raw, "{field}");
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn new_terminal_facts_survive_original_retirement_through_cleanup_and_history_retirement() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    adopt_lifecycle_retention(&h);
+    let retention_path = h.root.join(POLICY_PATH);
+    let mut retention = json(&fs::read(&retention_path).unwrap()).unwrap();
+    retention["producers"]["lifecycle-original"] = value!([
+        ".chrono-harness/state/worktrees/",
+        ".chrono-harness/state/automatic-cleanup/"
+    ]);
+    retention["max_related_outputs"] = value!(512);
+    fs::write(retention_path, serde_json::to_vec(&retention).unwrap()).unwrap();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("handoff-without-original");
+    let (code, created, error) = h.invoke("integration", "handoff-without-original", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    let terminal = h.ledger()["entries"][0]["terminal"].clone();
+    assert!(terminal["established"].is_string());
+    let source = terminal["receipt"]["path"].as_str().unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    maintain_original_until_absent(&inventory, &h.root.join(source));
+    assert!(target.join("payload").is_file());
+    let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{observed} {error}");
+    let row = observed["worktree_status"]["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(target))
+        .unwrap();
+    assert!(row["terminal_receipt"].is_null());
+    assert_eq!(
+        row["terminal_handoff"]["established"],
+        terminal["established"]
+    );
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(!target.exists());
+    let cleanup = drain_report(&maintained["drain"][0]);
+    assert_eq!(
+        cleanup["terminal_handoff"]["established"],
+        terminal["established"]
+    );
+    assert!(cleanup["terminal_receipt"].is_null());
+    assert!(cleanup["terminal_input"].is_null());
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
+    assert!(!h.record_directory(&target).exists());
+    assert!(!h.root.join(source).exists());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;

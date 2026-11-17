@@ -514,6 +514,8 @@ struct Terminal {
     dispose_evidence: bool,
     artifacts_only: bool,
     receipt: Receipt,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    established: Option<String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -584,6 +586,31 @@ struct Entry {
 }
 #[cfg(not(verus_keep_ghost))]
 impl Entry {
+    fn terminal_facts(&self, terminal: &Terminal) -> Value {
+        value!({"schema":"chrono-worktree-terminal-handoff/v1",
+            "path":self.path,"attachment":self.attachment,
+            "head":terminal.head,"retained_commit":terminal.retained_commit,
+            "dispose_evidence":terminal.dispose_evidence,"artifacts_only":terminal.artifacts_only,
+            "source":terminal.receipt})
+    }
+    /// Source addresses are provenance after this durable transfer. They do
+    /// not promise the temporary original remains available to a new reader.
+    fn terminal_handoff(&self) -> Result<Option<Value>, String> {
+        let Some(terminal) = &self.terminal else {
+            return Ok(None);
+        };
+        let Some(established) = &terminal.established else {
+            return Ok(None);
+        };
+        let mut facts = self.terminal_facts(terminal);
+        if !self.enrollment["age_retirement"].is_null()
+            || chrono_harness::wire::digest(&facts)? != *established
+        {
+            return Err("terminal handoff binding changed; preserve originals".into());
+        }
+        facts["established"] = value!(established);
+        Ok(Some(facts))
+    }
     fn has_adopted_policy(&self) -> bool {
         migration::policy_state_present(
             self.adopted_policy.is_some(),
@@ -1643,6 +1670,7 @@ impl Observation<'_> {
         }
         for entry in &ledger.entries {
             entry.check_agents()?;
+            entry.terminal_handoff()?;
         }
         for pending in &ledger.retired_leases {
             pending.check_agent()?;
@@ -1896,7 +1924,8 @@ impl Observation<'_> {
                 "metadata_retirement_pending":metadata_retirement_pending,
                 "ledger_path":record_directory(&self.directory, &path)?.join("ledger.json"),
                 "physical_present":physical.is_ok(),"git_registered":git.is_some(),
-                "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),
+                "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).filter(|t| t.established.is_none()).map(|t| &t.receipt),
+                "terminal_handoff":entry.map(Entry::terminal_handoff).transpose()?.flatten(),
                 "cleanup_receipt":entry.and_then(|e| e.attempts.last()).and_then(|a| a.receipt.as_ref()),
                 "git_observation":git,"error":error}));
             if let Some(ledger) = snapshot.as_ref().ok().and_then(Option::as_ref) {
@@ -2257,7 +2286,9 @@ impl Manager {
                 }
             }
             if let Some(terminal) = &e.terminal {
-                paths.insert(terminal.receipt.path.clone());
+                if e.terminal_handoff()?.is_none() {
+                    paths.insert(terminal.receipt.path.clone());
+                }
             }
             for attempt in &e.attempts {
                 paths.insert(attempt.path.clone());
@@ -2389,6 +2420,62 @@ impl Manager {
                     }
                 }
             }
+        }
+        self.reconcile_terminal_handoffs()?;
+        Ok(())
+    }
+
+    fn reconcile_terminal_handoffs(&mut self) -> Result<(), String> {
+        let role = self.original_role()?;
+        let root = &self.inputs.policy.coordinator_root;
+        for i in 0..self.ledger.entries.len() {
+            let e = &self.ledger.entries[i];
+            if e.terminal_handoff()?.is_some() || !e.enrollment["age_retirement"].is_null() {
+                continue;
+            }
+            let Some(terminal) = &e.terminal else {
+                continue;
+            };
+            let _input = chrono_harness::retained_artifacts::retention::consumer_read_guard(
+                root,
+                &terminal.receipt.path,
+                &role,
+            )?;
+            let bytes = self.receipt(&terminal.receipt)?;
+            let original = json(&bytes)?;
+            if original["schema"] != "chrono-worktree-terminal/v1"
+                || original["path"] != value!(e.path)
+                || original["attachment"] != value!(e.attachment)
+                || original["head"] != terminal.head
+                || original["retained_commit"] != terminal.retained_commit
+                || original["dispose_evidence"] != terminal.dispose_evidence
+                || original["artifacts_only"] != terminal.artifacts_only
+                || original["handoff"] != "caller-joined-owned-jobs-and-established-completion"
+            {
+                return Err(
+                    "terminal original does not establish this attachment's handoff".into(),
+                );
+            }
+            if let Some(inventory) =
+                chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+            {
+                if !inventory.published_original(
+                    &terminal.receipt.path,
+                    &terminal.receipt.sha256,
+                    bytes.len() as u64,
+                )? {
+                    return Err("terminal original publication is not established".into());
+                }
+            }
+            let binding = chrono_harness::wire::digest(&e.terminal_facts(terminal))?;
+            self.ledger.entries[i]
+                .terminal
+                .as_mut()
+                .unwrap()
+                .established = Some(binding);
+            // Keep the read capability and the old domain role until the
+            // smaller ledger is durable. A later open prunes stale members.
+            self.save_result_handoff()?;
         }
         Ok(())
     }
@@ -3760,7 +3847,7 @@ impl Manager {
             "handoff":"caller-joined-owned-jobs-and-established-completion","report_path":report["report_path"]
         }))?;
         self.stable(r)?;
-        if let Some(old) = &e.terminal {
+        if let Some(old) = e.terminal.as_ref().filter(|old| old.established.is_none()) {
             let history = self.ledger.entries[i]
                 .enrollment
                 .as_object_mut()
@@ -3772,13 +3859,16 @@ impl Manager {
                 .ok_or("terminal history")?
                 .push(value!(old.receipt));
         }
-        self.ledger.entries[i].terminal = Some(Terminal {
+        let mut terminal = Terminal {
             head,
             retained_commit,
             dispose_evidence,
             artifacts_only,
             receipt: receipt.clone(),
-        });
+            established: None,
+        };
+        terminal.established = Some(chrono_harness::wire::digest(&e.terminal_facts(&terminal))?);
+        self.ledger.entries[i].terminal = Some(terminal);
         self.ledger.entries[i].status = "terminal".into();
         self.progress(
             i,
@@ -4274,13 +4364,20 @@ impl Manager {
                     .and_then(|attempt| attempt.receipt.as_ref())
                     .ok_or("disposed history lacks its original cleanup result")?;
                 let original = json(&self.receipt(receipt)?)?;
-                let handoff = json(&self.receipt(&terminal.receipt)?)?;
-                if original["terminal_receipt"] != value!(terminal.receipt)
+                let handoff = entry.terminal_handoff()?;
+                let matches_handoff = if let Some(handoff) = handoff {
+                    original["terminal_handoff"] == handoff
+                        || original["terminal_receipt"] == value!(terminal.receipt)
+                } else {
+                    let handoff = json(&self.receipt(&terminal.receipt)?)?;
+                    original["terminal_receipt"] == value!(terminal.receipt)
+                        && handoff["path"] == value!(entry.path)
+                        && handoff["attachment"] == value!(entry.attachment)
+                        && handoff["head"] == terminal.head
+                };
+                if !matches_handoff
                     || original["destination"] != value!(entry.path)
                     || original["head"] != terminal.head
-                    || handoff["path"] != value!(entry.path)
-                    || handoff["attachment"] != value!(entry.attachment)
-                    || handoff["head"] != terminal.head
                     || entry.cleanup.as_ref().is_none_or(|progress| {
                         progress.stage != crate::verified_lifecycle::CleanupStage::Disposed
                             || progress.report_path.as_deref() != Some(receipt.path.as_str())
@@ -4401,9 +4498,9 @@ impl Manager {
             .as_ref()
             .ok_or("missing terminal handoff")?
             .clone();
-        report["terminal_receipt"] = value!(t.receipt);
-        report["terminal_input"] =
-            self.retained_input(&t.receipt.path, &self.receipt(&t.receipt)?, "receipt");
+        report["terminal_handoff"] = e
+            .terminal_handoff()?
+            .ok_or("terminal facts have not been transferred")?;
         if self.policy_binding(&e)?.policy_sha256 != sha256(&self.inputs.policy_bytes) {
             return Err("enrolled policy changed; preserve terminal work".into());
         }
