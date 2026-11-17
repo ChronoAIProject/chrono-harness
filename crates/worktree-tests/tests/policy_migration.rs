@@ -1555,6 +1555,11 @@ fn checkout_migration_hands_off_a_sealed_result_without_maintaining_other_worktr
 
 #[cfg(not(verus_keep_ghost))]
 fn checkout_result_fixture() -> (Host, PathBuf, Value) {
+    checkout_result_fixture_with_retention(false)
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn checkout_result_fixture_with_retention(finite: bool) -> (Host, PathBuf, Value) {
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -1566,6 +1571,12 @@ fn checkout_result_fixture() -> (Host, PathBuf, Value) {
             ".chrono-harness/state/automatic-cleanup/"
         ]);
         policy["max_related_outputs"] = value!(512);
+        if finite {
+            policy["max_lifetime_seconds"] = value!(86400);
+            policy["keep_seconds"] = value!(0);
+            policy["diagnostic_keep_seconds"] = value!(0);
+            policy["metadata_keep_seconds"] = value!(0);
+        }
     });
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
@@ -1596,6 +1607,103 @@ fn checkout_result_fixture() -> (Host, PathBuf, Value) {
         )
         .unwrap();
     (h, target, used)
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn expired_completed_result_handoff_releases_originals_without_renewal() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, read_guard};
+    let (h, target, used) = checkout_result_fixture_with_retention(true);
+    let paths = [
+        used["managed_use_receipt"]["path"].as_str().unwrap(),
+        used["report_path"].as_str().unwrap(),
+    ];
+    let originals = paths.map(|path| fs::read(h.root.join(path)).unwrap());
+    let state = retention_state::snapshot(&h.root);
+    let mut pending = paths
+        .iter()
+        .map(|path| {
+            state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["path"] == *path)
+                .unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
+    let mut seen = std::collections::BTreeSet::new();
+    while let Some(id) = pending.pop() {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        let mut output = state["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["id"] == id)
+            .unwrap()
+            .clone();
+        pending.extend(
+            output["references"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|id| id.as_str().unwrap().to_owned()),
+        );
+        output["lifetime"] = value!({"created_at":1,"deadline":2});
+        output["expires"] = value!(2);
+        retention_state::replace_output(&h.root, &output);
+    }
+    for path in paths {
+        assert!(read_guard(&h.root, path).is_err());
+    }
+    let adopted = migrate(&h, &target);
+    assert_eq!(adopted["checkout_migration"]["status"], "already-current");
+    let ledger = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap();
+    assert!(ledger["entries"][0]["enrollment"]["completed_uses"].is_null());
+    let after = retention_state::snapshot(&h.root);
+    for (path, bytes) in paths.into_iter().zip(originals) {
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), bytes);
+        let output = after["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["path"] == path)
+            .unwrap();
+        assert_eq!(output["lifetime"], value!({"created_at":1,"deadline":2}));
+        assert_eq!(output["expires"], 2);
+        assert!(read_guard(&h.root, path).is_err());
+    }
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .release("fixture-use-report")
+        .unwrap();
+    for _ in 0..8 {
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .maintain()
+            .unwrap();
+        let state = retention_state::snapshot(&h.root);
+        if paths.iter().all(|path| {
+            !h.root.join(path).exists()
+                && state["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|output| output["path"] != *path)
+        }) {
+            return;
+        }
+    }
+    panic!("completed result originals and metadata must retire after the final reader releases");
 }
 
 // Reproduce interruption after publishing the original use result but before
