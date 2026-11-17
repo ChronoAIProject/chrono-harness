@@ -990,7 +990,11 @@ fn terminal_original_fixture(fault: &str) -> EnrollmentOriginalsFixture {
         "worktree-enrollment:{}",
         sha256(h.target.to_str().unwrap().as_bytes())
     );
-    inventory.reference_paths(&role, &[path.into()]).unwrap();
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .reference_paths(&role, &[path.into()])
+        .unwrap();
     if fault == "changed" {
         fs::write(h.root.join(path), b"changed original\n").unwrap();
     } else if fault == "missing" {
