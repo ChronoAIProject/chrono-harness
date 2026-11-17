@@ -31,7 +31,6 @@ pub fn bounded_expiry(requested: u64, deadline: u64) -> (expires: u64)
 {
     if requested < deadline { requested } else { deadline }
 }
-
 }
 
 #[cfg(not(verus_keep_ghost))]
