@@ -310,7 +310,8 @@ impl Manager {
         // ordinary attachment check still verifies inventory, HEAD and Git locks
         // against this exact candidate; ordinary use never follows a new branch.
         self.check_attachment(r, &current, &head, None)?;
-        self.birth_ready(&e)?;
+        let _birth_original = self.birth_original_guard(&e)?;
+        let adopted_birth = self.birth_fact(&e)?;
         let checkout_report = (!e.cache_only).then(|| {
             value!({
                 "status":if checkout_changed {"adopted"} else {"already-current"},
@@ -377,6 +378,14 @@ impl Manager {
         if !decision.proceed {
             self.check_entry(r, &e, &head, None)?;
             lease.stable()?;
+            if e.adopted_birth.is_none() && adopted_birth.is_some() {
+                self.ledger.entries[i].adopted_birth = adopted_birth;
+                self.save()?;
+                self.release_birth_recovery(i, &lease)?;
+                report["birth_state_handoff"] = value!({"status":"adopted",
+                    "owner":"worktree-enrollment","state":self.ledger.entries[i].adopted_birth,
+                    "terminal_handoff":"not-claimed","disposal":"not-performed"});
+            }
             if let Some(checkout_report) = checkout_report {
                 report["checkout_migration"] = checkout_report;
             }
@@ -448,6 +457,7 @@ impl Manager {
         }
         let mut updated = self.ledger.entries[i].clone();
         updated.checkout_branch = current.checkout_branch;
+        updated.adopted_birth = adopted_birth;
         if decision.store_current {
             // Transfer only the state required for future operations to the
             // existing durable enrollment owner. Audit originals retain their
@@ -484,6 +494,7 @@ impl Manager {
         }
         self.ledger.entries[i] = updated;
         self.save()?;
+        self.release_birth_recovery(i, &lease)?;
         if let Some(checkout_report) = checkout_report {
             report["checkout_migration"] = checkout_report;
         }
