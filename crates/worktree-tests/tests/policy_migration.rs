@@ -138,6 +138,86 @@ fn cache(target: &Path) {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn policy_migration_original_retires_after_audit_without_losing_current_policy() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::retained("payload");
+    h.kernel_cleanup();
+    automatic::native_consumer(&h, "ordinary");
+    adopt_lifecycle_retention(&h);
+    edit(&h.root, POLICY_PATH, |policy| {
+        policy["producers"]["lifecycle-original"] = value!([
+            ".chrono-harness/state/worktrees/",
+            ".chrono-harness/state/automatic-cleanup/"
+        ]);
+        policy["max_related_outputs"] = value!(512);
+        policy["keep_seconds"] = value!(0);
+        policy["diagnostic_keep_seconds"] = value!(0);
+        policy["metadata_keep_seconds"] = value!(0);
+        policy["max_lifetime_seconds"] = value!(86400);
+    });
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("finite-policy-original");
+    let (code, created, error) = h.invoke("integration", "finite-policy-original", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let payload = fs::read(target.join("payload")).unwrap();
+    advance(&h);
+    adopt(&h, &target);
+    let migrated = migrate(&h, &target);
+    let path = migrated["policy_migration"]["receipt"]["path"]
+        .as_str()
+        .unwrap();
+    let original = h.root.join(path);
+    let bytes = fs::read(&original).unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .reference_paths("fixture-policy-auditor", &[path.into()])
+        .unwrap();
+
+    // Admission must finish the previous report handoff independently of the
+    // diagnostic reader. The active policy is needed after that reader ends.
+    assert_eq!(
+        migrate(&h, &target)["policy_migration"]["status"],
+        "already-current"
+    );
+    inventory.maintain_explicit().unwrap();
+    assert_eq!(fs::read(&original).unwrap(), bytes);
+    inventory
+        .reference_paths("fixture-policy-auditor", &[])
+        .unwrap();
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        rounds.push(inventory.maintain_explicit().unwrap());
+        if !original.exists() {
+            break;
+        }
+    }
+    assert!(
+        !original.exists(),
+        "completed migration must not keep its original forever through the active enrollment: {rounds:?}"
+    );
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(
+        code, 0,
+        "current adopted policy must survive original retirement: {used} {error}"
+    );
+    assert_eq!(used["managed_process"]["exit_code"], 0);
+    assert_eq!(fs::read(target.join("payload")).unwrap(), payload);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_adopts_new_registered_outputs_without_disposal_or_rewriting_birth() {
     if !chrono_git_boundary::isolated_git() {
         return;
