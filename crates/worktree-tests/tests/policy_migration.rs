@@ -387,6 +387,43 @@ fn interrupted_birth_originals_retire_without_claiming_creation_success() {
     birth_original_retirement(false, true);
 }
 
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn invalid_current_birth_fact_refuses_use_and_preserves_outputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = Host::retained("payload");
+    h.kernel_cleanup();
+    automatic::native_consumer(&h, "ordinary");
+    let target = h.parent.join("invalid-current-birth");
+    let (code, created, error) = h.invoke("integration", "invalid-current-birth", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    cache(&target);
+    let ledger = h.ledger_path(&target);
+    let original = fs::read(&ledger).unwrap();
+    let mut invalid = json(&original).unwrap();
+    invalid["entries"][0]["adopted_birth"] = value!("unverified-success");
+    let invalid = serde_json::to_vec(&invalid).unwrap();
+    fs::write(&ledger, &invalid).unwrap();
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_ne!(code, 0, "{used} {error}");
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{maintained} {error}");
+    assert_eq!(fs::read(&ledger).unwrap(), invalid);
+    assert!(target.join("output λ/cache").is_file());
+    assert_eq!(fs::read(target.join("payload")).unwrap(), b"payload");
+    fs::write(ledger, original).unwrap();
+}
+
 #[cfg(not(verus_keep_ghost))]
 fn birth_original_retirement(legacy: bool, interrupted: bool) {
     if !chrono_git_boundary::isolated_git() {

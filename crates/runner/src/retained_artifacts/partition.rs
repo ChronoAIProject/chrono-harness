@@ -1302,6 +1302,23 @@ impl Inventory {
                         continue;
                     }
                 };
+                // An earlier component in this sweep can retire a related
+                // declaration which ReadDir has already buffered. Absence is
+                // an observation, not permission to reconstruct its metadata
+                // or a failure of the later component's original program.
+                if matches!(fs::symlink_metadata(entry.path()),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+                {
+                    let observation = json!({"reason":"declaration disappeared after enumeration; no effects attempted"});
+                    if let Some(observer) = observer.as_deref_mut() {
+                        observer(
+                            &json!({"kind":"declaration-unavailable","namespace":namespace,
+                            "address":address,"availability":"absent","action":"not-attempted"}),
+                        )?;
+                    }
+                    sweep.observation(namespace, Some(&address), "protected", observation)?;
+                    continue;
+                }
                 if let Some(observer) = observer.as_deref_mut() {
                     let mut declaration = json!({"kind":"declaration","namespace":namespace,
                         "address":address,"observed_unix_seconds":observed,

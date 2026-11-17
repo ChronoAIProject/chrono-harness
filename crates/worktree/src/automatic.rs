@@ -535,6 +535,15 @@ struct CacheAttempt {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     completed_at: Option<u64>,
 }
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
+enum AdoptedBirth {
+    #[serde(rename = "established")]
+    Established,
+    #[serde(rename = "interrupted-not-established")]
+    InterruptedNotEstablished,
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg(not(verus_keep_ghost))]
@@ -562,6 +571,8 @@ struct Entry {
     policy_migrations: Vec<Receipt>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     adopted_policy: Option<migration::PolicyBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    adopted_birth: Option<AdoptedBirth>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     main_cache_adoptions: Vec<Receipt>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -2201,15 +2212,20 @@ impl Manager {
     fn original_paths(&self, ledger: &Ledger) -> Result<BTreeSet<String>, String> {
         let mut paths = BTreeSet::new();
         for e in &ledger.entries {
-            if e.enrollment["receipt"]["source_root"].is_null()
-                || e.enrollment["receipt"]["source_root"]
-                    == value!(self.inputs.policy.coordinator_root)
+            let consumes_birth = e.enrollment["kind"] != "birth" || e.adopted_birth.is_none();
+            if consumes_birth
+                && (e.enrollment["receipt"]["source_root"].is_null()
+                    || e.enrollment["receipt"]["source_root"]
+                        == value!(self.inputs.policy.coordinator_root))
             {
                 if let Some(path) = e.enrollment["receipt"]["report_path"].as_str() {
                     paths.insert(path.into());
                 }
             }
             for field in ["sealed_receipt", "recovered_receipt", "cache_release"] {
+                if !consumes_birth && field != "cache_release" {
+                    continue;
+                }
                 if !e.enrollment[field].is_null() {
                     let receipt: Receipt = serde_json::from_value(e.enrollment[field].clone())
                         .map_err(|error| format!("invalid enrollment {field}: {error}"))?;
@@ -3027,6 +3043,7 @@ impl Manager {
             cache_attempts: vec![],
             policy_migrations: vec![],
             adopted_policy: None,
+            adopted_birth: None,
             main_cache_adoptions: vec![],
             cache_only,
             cleanup: None,
@@ -3083,6 +3100,32 @@ impl Manager {
         binding
     }
     fn birth_ready(&self, e: &Entry) -> Result<(), String> {
+        self.birth_fact(e).map(|_| ())
+    }
+    fn birth_original_guard(&self, e: &Entry) -> Result<Option<Lease>, String> {
+        if e.enrollment["kind"] != "birth" || e.adopted_birth.is_some() {
+            return Ok(None);
+        }
+        let field = if e.enrollment["sealed_receipt"].is_null() {
+            "recovered_receipt"
+        } else {
+            "sealed_receipt"
+        };
+        let receipt: Receipt = serde_json::from_value(e.enrollment[field].clone())
+            .map_err(|_| "birth has no completed original receipt; preserve it")?;
+        chrono_harness::retained_artifacts::retention::consumer_read_guard(
+            &self.inputs.policy.coordinator_root,
+            &receipt.path,
+            &self.original_role()?,
+        )
+    }
+    fn birth_fact(&self, e: &Entry) -> Result<Option<AdoptedBirth>, String> {
+        if let Some(fact) = &e.adopted_birth {
+            if e.enrollment["kind"] != "birth" {
+                return Err("current birth fact belongs to another enrollment kind".into());
+            }
+            return Ok(Some(fact.clone()));
+        }
         if e.enrollment["kind"] == "birth" {
             if e.enrollment["sealed_receipt"].is_null()
                 && !e.enrollment["recovered_receipt"].is_null()
@@ -3098,7 +3141,7 @@ impl Manager {
                 {
                     return Err("recovered birth receipt does not establish this enrollment".into());
                 }
-                return Ok(());
+                return Ok(Some(AdoptedBirth::InterruptedNotEstablished));
             }
             let receipt: Receipt =
                 serde_json::from_value(e.enrollment["sealed_receipt"].clone())
@@ -3112,11 +3155,44 @@ impl Manager {
             {
                 return Err("birth receipt does not establish this enrollment".into());
             }
+            return Ok(Some(AdoptedBirth::Established));
         }
-        Ok(())
+        Ok(None)
+    }
+    fn release_birth_recovery(&self, i: usize, lease: &Lease) -> Result<(), String> {
+        let e = &self.ledger.entries[i];
+        if !matches!(
+            e.adopted_birth,
+            Some(AdoptedBirth::InterruptedNotEstablished)
+        ) {
+            return Ok(());
+        }
+        // The original producer and its registered descendants have been
+        // excluded. The durable fact preserves its unknown outcome; releasing
+        // this recovery role does not manufacture a creation or task result.
+        lease.stable()?;
+        let source = Path::new(
+            e.enrollment["receipt"]["source_root"]
+                .as_str()
+                .ok_or("birth original source root")?,
+        );
+        let report = e.enrollment["receipt"]["report_path"]
+            .as_str()
+            .ok_or("birth original report path")?;
+        relative_path(report)?;
+        if let Some(inventory) =
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(source)?
+        {
+            inventory.reference_paths(&format!("recovery:{report}"), &[])?;
+        }
+        lease.stable()
     }
     fn reconcile_birth(&mut self, r: &mut Runner, i: usize, lease: &Lease) -> Result<(), String> {
         let e = self.ledger.entries[i].clone();
+        if e.adopted_birth.is_some() {
+            self.birth_ready(&e)?;
+            return self.release_birth_recovery(i, lease);
+        }
         if e.enrollment["kind"] != "birth"
             || !e.enrollment["sealed_receipt"].is_null()
             || !e.enrollment["recovered_receipt"].is_null()
@@ -3206,7 +3282,9 @@ impl Manager {
         self.check_entry(r, &e, &head, None)?;
         lease.stable()?;
         self.ledger.entries[i].enrollment["recovered_receipt"] = value!(receipt);
-        self.save()
+        self.ledger.entries[i].adopted_birth = Some(AdoptedBirth::InterruptedNotEstablished);
+        self.save()?;
+        self.release_birth_recovery(i, lease)
     }
     fn immutable(&self, name: &str, v: &Value) -> Result<Receipt, String> {
         relative_path(name)?;
@@ -4541,8 +4619,15 @@ pub(crate) fn seal_birth(
     {
         return Err("birth enrollment changed before receipt publication".into());
     }
+    if !matches!(report["status"].as_str(), Some("created" | "reconstructed"))
+        || report["destination"] != value!(target)
+        || report["branch_ref"] != manager.ledger.entries[i].branch
+    {
+        return Err("birth receipt does not establish this enrollment".into());
+    }
     let receipt = manager.immutable(&format!("birth-{token}.json"), report)?;
     manager.ledger.entries[i].enrollment["sealed_receipt"] = value!(receipt);
+    manager.ledger.entries[i].adopted_birth = Some(AdoptedBirth::Established);
     manager.save()
 }
 
