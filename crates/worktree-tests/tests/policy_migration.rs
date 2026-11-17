@@ -190,20 +190,64 @@ fn cache(target: &Path) {
     fs::write(target.join("output λ/cache"), "rebuildable").unwrap();
 }
 
+// Reconstruct only the old data still used by enrolled hosts. New migration
+// reports bind committed inputs and must not produce this temporary copy.
+#[cfg(not(verus_keep_ghost))]
+fn legacy_policy_snapshot(h: &Host, receipt: &Value) -> (Value, PathBuf) {
+    let path = receipt["path"].as_str().unwrap();
+    let mut record = json(&fs::read(h.root.join(path)).unwrap()).unwrap();
+    let phase = if record["migration_inputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|row| row["phase"] == "next-policy-source")
+    {
+        "next-policy-source"
+    } else {
+        "next"
+    };
+    let source = record["migration_inputs"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|row| row["path"] == CLEANUP && row["phase"] == phase)
+        .unwrap();
+    let bytes = fs::read(h.root.join(CLEANUP)).unwrap();
+    let digest = chrono_harness::sha256(&bytes);
+    assert_eq!(source["sha256"], digest);
+    let input = format!(".chrono-harness/state/automatic-cleanup/legacy-input-{digest}.bin");
+    fs::write(h.root.join(&input), &bytes).unwrap();
+    source["input"] = value!({"schema":"chrono-worktree-retained-input/v1",
+        "source_root":h.root,"path":input,"sha256":digest,
+        "byte_length":bytes.len(),"format":"bytes"});
+    let bytes = serde_json::to_vec_pretty(&record).unwrap();
+    fs::write(h.root.join(path), &bytes).unwrap();
+    (
+        value!({"path":path,"sha256":chrono_harness::sha256(&bytes)}),
+        h.root.join(input),
+    )
+}
+
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn policy_migration_original_retires_after_audit_without_losing_current_policy() {
-    policy_original_retirement(false);
+    policy_original_retirement(false, false);
 }
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn expired_policy_original_transfers_from_its_existing_owner_without_renewal() {
-    policy_original_retirement(true);
+    policy_original_retirement(true, false);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn expired_policy_inputs_do_not_block_adopting_changed_policy() {
+    policy_original_retirement(true, true);
 }
 
 #[cfg(not(verus_keep_ghost))]
-fn policy_original_retirement(expired: bool) {
+fn policy_original_retirement(expired: bool, change_policy: bool) {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
@@ -311,10 +355,39 @@ fn policy_original_retirement(expired: bool) {
             expired_originals.push(output);
         }
     }
+    if change_policy {
+        edit(&h.root, CLEANUP, |policy| {
+            policy["allow_evidence_disposal"] = value!(true);
+        });
+        commit(&h.root);
+        adopt(&h, &target);
+    }
     let compacted = migrate(&h, &target);
-    assert_eq!(compacted["policy_migration"]["status"], "already-current");
-    assert!(compacted["policy_migration"]["receipt"].is_null());
-    assert_eq!(h.ledger()["entries"][0]["adopted_policy"], current);
+    if change_policy {
+        assert_eq!(compacted["policy_migration"]["status"], "adopted");
+        assert_eq!(
+            h.ledger()["entries"][0]["adopted_policy"]["policy_sha256"],
+            chrono_harness::sha256(&fs::read(target.join(CLEANUP)).unwrap())
+        );
+        let receipt = h.root.join(
+            compacted["policy_migration"]["receipt"]["path"]
+                .as_str()
+                .unwrap(),
+        );
+        let record = json(&fs::read(receipt).unwrap()).unwrap();
+        assert!(
+            record["migration_inputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|input| input.get("input").is_none()),
+            "committed policy bytes must not acquire a new temporary copy or dependency"
+        );
+    } else {
+        assert_eq!(compacted["policy_migration"]["status"], "already-current");
+        assert!(compacted["policy_migration"]["receipt"].is_null());
+        assert_eq!(h.ledger()["entries"][0]["adopted_policy"], current);
+    }
     assert!(h.ledger()["entries"][0]["policy_migrations"].is_null());
     if expired {
         let state = retention_state::snapshot(&h.root);
@@ -926,24 +999,8 @@ fn explicit_cleanup_adoption_preserves_changed_inputs_and_corrupt_source_evidenc
         &["--path", target.to_str().unwrap(), "--adopt-cleanup-policy"],
     );
     assert_eq!(code, 0, "{adopted} {error}");
-    let record = json(
-        &fs::read(
-            h.root.join(
-                adopted["policy_migration"]["receipt"]["path"]
-                    .as_str()
-                    .unwrap(),
-            ),
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    let source = record["migration_inputs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|row| row["phase"] == "next-policy-source" && row["path"] == CLEANUP)
-        .unwrap();
-    let original = h.root.join(source["input"]["path"].as_str().unwrap());
+    let (legacy_receipt, original) =
+        legacy_policy_snapshot(&h, &adopted["policy_migration"]["receipt"]);
     // This evidence is authority only for a still-enrolled old chain. New
     // current bindings read their committed source independently of this copy.
     edit(
@@ -958,7 +1015,7 @@ fn explicit_cleanup_adoption_preserves_changed_inputs_and_corrupt_source_evidenc
                 .as_object_mut()
                 .unwrap()
                 .remove("adopted_policy");
-            v["entries"][0]["policy_migrations"] = value!([adopted["policy_migration"]["receipt"]]);
+            v["entries"][0]["policy_migrations"] = value!([legacy_receipt]);
         },
     );
     fs::write(original, b"changed retained source bytes").unwrap();
@@ -1121,6 +1178,8 @@ fn unconverted_policy_migration_history_rejects_corrupt_receipt_or_retained_poli
             .as_str()
             .unwrap(),
     );
+    let (legacy_receipt, input) =
+        legacy_policy_snapshot(&h, &result["policy_migration"]["receipt"]);
     let original = fs::read(&receipt).unwrap();
     // Existing enrolled hosts still need an exact, explicit data migration.
     // Restore that old representation to test its qualification before the
@@ -1137,7 +1196,7 @@ fn unconverted_policy_migration_history_rejects_corrupt_receipt_or_retained_poli
                 .as_object_mut()
                 .unwrap()
                 .remove("adopted_policy");
-            v["entries"][0]["policy_migrations"] = value!([result["policy_migration"]["receipt"]]);
+            v["entries"][0]["policy_migrations"] = value!([legacy_receipt]);
         },
     );
     cache(&target);
@@ -1145,12 +1204,6 @@ fn unconverted_policy_migration_history_rejects_corrupt_receipt_or_retained_poli
     assert_ne!(h.auto("maintain", &[]).0, 0);
     assert!(target.join("output λ/cache").exists());
     fs::write(receipt, &original).unwrap();
-    let record = json(&original).unwrap();
-    let input = h.root.join(
-        record["migration_inputs"][0]["input"]["path"]
-            .as_str()
-            .unwrap(),
-    );
     fs::write(input, "different original input").unwrap();
     let (code, report, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{report} {error}");

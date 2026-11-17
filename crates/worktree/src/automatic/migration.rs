@@ -228,7 +228,11 @@ impl Manager {
             let mut row = value!({"phase":phase,"path":path,"head":binding.head,
                 "presence":if bytes.is_some() {"present"} else {"absent"}});
             if let Some(bytes) = bytes {
-                row["input"] = self.retain_bytes(&bytes)?;
+                // The exact committed blob is already the durable input owner.
+                // A second temporary copy would either renew old evidence or
+                // prevent the next migration once its creation window closes.
+                row["sha256"] = value!(sha256(&bytes));
+                row["byte_length"] = value!(bytes.len());
             }
             retained.push(row);
         }
