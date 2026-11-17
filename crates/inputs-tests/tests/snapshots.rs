@@ -1367,18 +1367,19 @@ fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
             .unwrap();
     };
     release(&first);
+    let mut rounds = Vec::new();
     for _ in 0..8 {
-        owner.maintain_at(u64::MAX).unwrap();
+        rounds.push(owner.maintain_at(u64::MAX).unwrap());
     }
     assert!(!host.path().join(path).exists());
     assert!(host.path().join(second_path).is_file());
     assert!(host.path().join(&blob).is_file());
     release(&second);
     for _ in 0..8 {
-        owner.maintain_at(u64::MAX).unwrap();
+        rounds.push(owner.maintain_at(u64::MAX).unwrap());
     }
-    assert!(!host.path().join(second_path).exists());
-    assert!(!host.path().join(&blob).exists());
+    assert!(!host.path().join(second_path).exists(), "{rounds:?}");
+    assert!(!host.path().join(&blob).exists(), "{rounds:?}");
     for id in ids {
         assert!(
             !host
@@ -1386,7 +1387,7 @@ fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
                 .join(".chrono-harness/state/output-retention-v1/objects")
                 .join(id)
                 .exists(),
-            "released input metadata did not retire"
+            "released input metadata did not retire: {rounds:?}"
         );
     }
 }
@@ -1446,11 +1447,12 @@ fn adopted_input_cli_requires_and_returns_its_real_caller_handoff() {
             &sha256(&serde_json::to_vec(&receipt).unwrap()),
         )
         .unwrap();
+    let mut rounds = Vec::new();
     for _ in 0..8 {
-        owner.maintain_at(u64::MAX).unwrap();
+        rounds.push(owner.maintain_at(u64::MAX).unwrap());
     }
-    assert!(!host.path().join(path).exists());
-    assert!(!host.path().join(blob).exists());
+    assert!(!host.path().join(path).exists(), "{rounds:?}");
+    assert!(!host.path().join(blob).exists(), "{rounds:?}");
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]

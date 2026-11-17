@@ -4188,7 +4188,7 @@ pub fn directory_adopted(publication: Option<&Publication>, output: &Path) -> Re
 /// A registered reader protects an enrolled original. Unknown legacy evidence retains old semantics.
 #[cfg(not(verus_keep_ghost))]
 pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
-    read_guard_for(root, path, None)
+    read_guard_for(root, path, None, &mut |_| {})
 }
 
 /// An existing domain owner may finish transferring its already protected,
@@ -4200,7 +4200,19 @@ pub fn consumer_read_guard(
     path: &str,
     consumer: &str,
 ) -> Result<Option<Lease>, String> {
-    read_guard_for(root, path, Some(consumer))
+    read_guard_for(root, path, Some(consumer), &mut |_| {})
+}
+
+#[cfg(feature = "retention-test")]
+#[doc(hidden)]
+#[cfg(not(verus_keep_ghost))]
+pub fn consumer_read_observed(
+    root: &Path,
+    path: &str,
+    consumer: &str,
+    mut observe: impl FnMut(&str),
+) -> Result<Option<Lease>, String> {
+    read_guard_for(root, path, Some(consumer), &mut observe)
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -4208,6 +4220,7 @@ fn read_guard_for(
     root: &Path,
     path: &str,
     consumer: Option<&str>,
+    observe: &mut dyn FnMut(&str),
 ) -> Result<Option<Lease>, String> {
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
@@ -4230,7 +4243,9 @@ fn read_guard_for(
         })
     }) {
         drop(gate);
-        return inventory.partition_consumer_read(consumer, o).map(Some);
+        return inventory
+            .partition_consumer_read(consumer, o, observe)
+            .map(Some);
     }
     o.admit(observed)?;
     let lease = Lease::acquire(

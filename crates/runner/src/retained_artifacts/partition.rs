@@ -373,6 +373,7 @@ impl Inventory {
         &self,
         consumer: &str,
         original: &Output,
+        observe: &mut dyn FnMut(&str),
     ) -> Result<Lease, String> {
         let directory = self.role_directory(consumer)?;
         self.read_role(consumer)?
@@ -443,6 +444,8 @@ impl Inventory {
                 }
             }
             self.stable(&guard)?;
+            drop(guard);
+            observe(&id);
             if role.ids.contains(&id) {
                 if !record.roles.contains(consumer) {
                     return Err("existing consumer membership is not reciprocal".into());

@@ -286,10 +286,15 @@ fn existing_consumer_can_transfer_expired_originals_without_new_report_dependenc
         retention_state::replace_output(h.path(), &output);
     }
     let report_path = ".chrono-harness/state/fixtures/new-report";
-    let report =
-        retained_artifacts::retention::create_adopted(h.path(), "fixture", report_path, json!({}))
-            .unwrap()
-            .unwrap();
+    let report = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(report_path),
+        false,
+        json!({}),
+    )
+    .unwrap()
+    .unwrap();
     fs::write(h.path().join(report_path), b"new observation").unwrap();
     let scope = retained_artifacts::retention::publication_read_scope(&report).unwrap();
     let before = ledger(h.path());
@@ -413,6 +418,74 @@ fn existing_consumer_read_rejects_stale_incoming_edges_and_unsealed_originals() 
     .err()
     .unwrap();
     assert!(error.contains("not a sealed released output"), "{error}");
+}
+
+#[test]
+fn consumer_recovery_requires_one_simultaneously_valid_reference_path() {
+    if !isolated_capability_test(
+        "consumer_recovery_requires_one_simultaneously_valid_reference_path",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let paths = [
+        ".chrono-harness/state/fixtures/leaf",
+        ".chrono-harness/state/fixtures/a",
+        ".chrono-harness/state/fixtures/b",
+        ".chrono-harness/state/fixtures/root",
+    ];
+    let inv = inventory(h.path());
+    let mut ids = Vec::new();
+    for path in paths {
+        fs::write(h.path().join(path), path.as_bytes()).unwrap();
+        let output = inv.begin("fixture", path, json!({})).unwrap();
+        ids.push(output.id().to_owned());
+        output.complete_sealed(json!({"exit_code":0})).unwrap();
+    }
+    inv.dependencies_paths(&ids[1], &[paths[0].into()]).unwrap();
+    inv.dependencies_paths(&ids[2], &[paths[1].into()]).unwrap();
+    inv.reference("original-owner", &ids[3..]).unwrap();
+    let mut leaf = ledger(h.path())["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["id"] == ids[0])
+        .unwrap()
+        .clone();
+    leaf["lifetime"] = json!({"created_at":1,"deadline":2});
+    leaf["expires"] = json!(2);
+    retention_state::replace_output(h.path(), &leaf);
+
+    let mut changed = false;
+    let read = retained_artifacts::retention::consumer_read_observed(
+        h.path(),
+        paths[0],
+        "original-owner",
+        |id| {
+            if id == ids[1] {
+                assert!(!changed);
+                // Break A -> leaf before connecting root -> B. At no point
+                // does the owner have a complete path to the expired leaf.
+                inv.dependencies_paths(&ids[1], &[]).unwrap();
+                inv.dependencies_paths(&ids[3], &[paths[2].into()]).unwrap();
+                changed = true;
+            }
+        },
+    );
+    assert!(changed, "the interleaving did not execute");
+    assert!(
+        read.is_err(),
+        "observations from different graph states cannot authorize recovery"
+    );
+    assert_eq!(
+        ledger(h.path())["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["id"] == ids[0])
+            .unwrap()["lifetime"],
+        leaf["lifetime"]
+    );
 }
 
 #[test]
