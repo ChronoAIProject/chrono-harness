@@ -410,8 +410,15 @@ impl Manager {
                     "task_completion":"not-claimed","age_policy":report["age_policy"],"prior_terminal":e.terminal
                 });
                 if let Some(t) = &e.terminal {
-                    record["prior_terminal_input"] =
-                        self.retained_input(&t.receipt.path, &self.receipt(&t.receipt)?, "receipt");
+                    if let Some(handoff) = e.terminal_handoff()? {
+                        record["prior_terminal_handoff"] = handoff;
+                    } else {
+                        record["prior_terminal_input"] = self.retained_input(
+                            &t.receipt.path,
+                            &self.receipt(&t.receipt)?,
+                            "receipt",
+                        );
+                    }
                 }
                 let intent = self.immutable(&format!("age-retirement-{token}.json"), &record)?;
                 self.ledger.entries[i].enrollment["age_retirement"] = value!(intent);
@@ -421,6 +428,7 @@ impl Manager {
                     dispose_evidence: false,
                     artifacts_only: false,
                     receipt: intent,
+                    established: None,
                 });
                 self.ledger.entries[i].status = "terminal".into();
                 self.save()?;
