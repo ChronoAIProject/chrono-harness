@@ -912,7 +912,9 @@ fn retired_metadata_recovers_a_path_unlinked_before_cursor_checkpoint() {
     let owner = inventory(h.path());
     let path = ".chrono-harness/state/fixtures/interrupted-path-prune";
     fs::write(h.path().join(path), b"rebuildable").unwrap();
-    let publication = owner.begin("fixture", path, json!(null)).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!(null))
+        .unwrap();
     let id = publication.id().to_owned();
     publication.complete(json!({"exit":0})).unwrap();
     let round = owner.maintain_originals(std::slice::from_ref(&id)).unwrap();
