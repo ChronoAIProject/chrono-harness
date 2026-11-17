@@ -2303,6 +2303,7 @@ impl Manager {
     /// A full original accepting this receipt ends only its interim ledger
     /// reference. The report's own consumers and dependency edges remain.
     fn reconcile_published_results(&mut self) -> Result<(), String> {
+        let role = self.original_role()?;
         for i in 0..self.ledger.entries.len() {
             for (field, binding) in [
                 ("completed_uses", "managed_use_receipt"),
@@ -2315,18 +2316,22 @@ impl Manager {
                     serde_json::from_value(self.ledger.entries[i].enrollment[field].clone())
                         .map_err(|e| format!("invalid pending result handoff: {e}"))?;
                 for receipt in receipts {
-                    let _receipt_input = chrono_harness::retained_artifacts::retention::read_guard(
-                        &self.inputs.policy.coordinator_root,
-                        &receipt.path,
-                    )?;
+                    let _receipt_input =
+                        chrono_harness::retained_artifacts::retention::consumer_read_guard(
+                            &self.inputs.policy.coordinator_root,
+                            &receipt.path,
+                            &role,
+                        )?;
                     let original = json(&self.receipt(&receipt)?)?;
                     if let Some(path) = original["report_path"].as_str() {
                         let physical =
                             no_symlink_parents(&self.inputs.policy.coordinator_root, path)?;
-                        let _input = chrono_harness::retained_artifacts::retention::read_guard(
-                            &self.inputs.policy.coordinator_root,
-                            path,
-                        )?;
+                        let _input =
+                            chrono_harness::retained_artifacts::retention::consumer_read_guard(
+                                &self.inputs.policy.coordinator_root,
+                                path,
+                                &role,
+                            )?;
                         match fs::read(physical) {
                             Ok(bytes) => {
                                 if let Ok(report) = json(&bytes) {
@@ -2344,9 +2349,10 @@ impl Manager {
                                     }
                                     }
                                     if matches {
-                                        crate::recovery::bind_report_inputs(
+                                        crate::recovery::bind_report_inputs_for_consumer(
                                             &self.inputs.policy.coordinator_root,
                                             &report,
+                                            Some(&role),
                                         )?;
                                         let pending = self.ledger.entries[i].enrollment[field]
                                             .as_array_mut()

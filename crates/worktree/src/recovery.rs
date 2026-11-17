@@ -709,6 +709,16 @@ pub(crate) fn release_managed_process_original(root: &Path, report: &Value) -> R
 /// an original which its still-unpublished report must consume.
 #[cfg(not(verus_keep_ghost))]
 pub(crate) fn bind_report_inputs(root: &Path, report: &Value) -> Result<(), String> {
+    bind_report_inputs_for_consumer(root, report, None)
+}
+
+/// Complete an existing domain's report handoff without admitting new readers.
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn bind_report_inputs_for_consumer(
+    root: &Path,
+    report: &Value,
+    consumer: Option<&str>,
+) -> Result<(), String> {
     if let Some(inventory) =
         chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
     {
@@ -716,7 +726,7 @@ pub(crate) fn bind_report_inputs(root: &Path, report: &Value) -> Result<(), Stri
             .as_str()
             .ok_or("lifecycle result path")?;
         inventory.dependencies_paths(path, &original_paths(root, report)?)?;
-        bind_result_handoffs(&inventory, root, report)?;
+        bind_result_handoffs(&inventory, root, report, consumer)?;
     }
     Ok(())
 }
@@ -728,10 +738,11 @@ fn bind_result_handoffs(
     inventory: &chrono_harness::retained_artifacts::retention::Inventory,
     root: &Path,
     report: &Value,
+    consumer: Option<&str>,
 ) -> Result<(), String> {
     for binding in ["managed_use_receipt", "main_cache_release"] {
         if let Some(path) = report[binding]["path"].as_str() {
-            let bytes = state_bytes(root, path)?;
+            let bytes = state_bytes_for_consumer(root, path, consumer)?;
             if report[binding]["sha256"] != sha256(&bytes) {
                 return Err("pending report handoff original changed".into());
             }
@@ -761,7 +772,7 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
     if let Some(original) = report["complete_inventory"]["receipt"]["path"].as_str() {
         inventory.reference_paths(&format!("recovery:{original}"), &[])?;
     }
-    bind_result_handoffs(&inventory, root, report)?;
+    bind_result_handoffs(&inventory, root, report, None)?;
     if report["managed_process_original"]["joined"] == true {
         release_managed_process_original(root, report)?;
     }
