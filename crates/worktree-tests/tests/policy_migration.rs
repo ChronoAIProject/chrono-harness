@@ -371,6 +371,232 @@ fn policy_original_retirement(expired: bool) {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn completed_birth_originals_retire_without_losing_current_admission() {
+    birth_original_retirement(false, false);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn expired_birth_originals_transfer_from_existing_enrollment_without_renewal() {
+    birth_original_retirement(true, false);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn interrupted_birth_originals_retire_without_claiming_creation_success() {
+    birth_original_retirement(false, true);
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn birth_original_retirement(legacy: bool, interrupted: bool) {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH, read_guard};
+    let h = Host::retained("payload");
+    h.kernel_cleanup();
+    automatic::native_consumer(&h, "ordinary");
+    adopt_lifecycle_retention(&h);
+    edit(&h.root, POLICY_PATH, |policy| {
+        policy["producers"]["lifecycle-original"] = value!([
+            ".chrono-harness/state/worktrees/",
+            ".chrono-harness/state/automatic-cleanup/"
+        ]);
+        policy["max_related_outputs"] = value!(512);
+        policy["keep_seconds"] = value!(0);
+        policy["diagnostic_keep_seconds"] = value!(0);
+        policy["metadata_keep_seconds"] = value!(0);
+        policy["max_lifetime_seconds"] = value!(86400);
+    });
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("finite-birth-original");
+    if interrupted {
+        use std::os::unix::process::ExitStatusExt;
+        let ledger = h.ledger_path(&target);
+        automatic::native_git(&h, "birth-interrupt", value!({"ledger":ledger}));
+        fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
+        let output = CapturedChild::spawn(
+            Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"))).args([
+                "start",
+                "--host-root",
+                h.root.to_str().unwrap(),
+                "--config",
+                POLICY,
+                "--kind",
+                "integration",
+                "--name",
+                "finite-birth-original",
+                "--path",
+                target.to_str().unwrap(),
+            ]),
+            &h.root,
+        )
+        .wait_with_output()
+        .unwrap();
+        assert_eq!(output.status.signal(), Some(9), "{output:?}");
+        h.received(output);
+        fs::remove_file(h.parent.join("interrupt-birth")).unwrap();
+        let (code, used, error) = h.auto(
+            "use",
+            &[
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
+        );
+        assert_eq!(code, 0, "{used} {error}");
+    } else {
+        let (code, created, error) = h.invoke("integration", "finite-birth-original", &target);
+        assert_eq!(code, 0, "{created} {error}");
+    }
+    let payload = fs::read(target.join("payload")).unwrap();
+    let entry = h.ledger()["entries"][0].clone();
+    let paths = [
+        entry["enrollment"][if interrupted {
+            "recovered_receipt"
+        } else {
+            "sealed_receipt"
+        }]["path"]
+            .as_str()
+            .unwrap(),
+        entry["enrollment"]["receipt"]["report_path"]
+            .as_str()
+            .unwrap(),
+    ];
+    let originals = paths.map(|path| fs::read(h.root.join(path)).unwrap());
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .reference_paths("fixture-birth-auditor", &paths.map(str::to_owned))
+        .unwrap();
+    if legacy {
+        // Restore the prior representation while its original bytes and exact
+        // enrollment role are still available. Production data is never edited.
+        let ledger_path = h.ledger_path(&target);
+        let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        ledger["entries"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("adopted_birth");
+        fs::write(ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
+        inventory
+            .reference_paths(
+                &format!(
+                    "worktree-enrollment:{}",
+                    chrono_harness::sha256(target.to_str().unwrap().as_bytes())
+                ),
+                &paths.map(str::to_owned),
+            )
+            .unwrap();
+    }
+    let state = retention_state::snapshot(&h.root);
+    let mut pending = paths
+        .iter()
+        .map(|path| {
+            state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|output| output["path"] == *path)
+                .unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
+    let mut seen = std::collections::BTreeSet::new();
+    while let Some(id) = pending.pop() {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        let mut output = state["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["id"] == id)
+            .unwrap()
+            .clone();
+        pending.extend(
+            output["references"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|id| id.as_str().unwrap().to_owned()),
+        );
+        output["lifetime"] = value!({"created_at":1,"deadline":2});
+        output["expires"] = value!(2);
+        retention_state::replace_output(&h.root, &output);
+    }
+    for path in paths {
+        assert!(read_guard(&h.root, path).is_err());
+    }
+    if legacy {
+        migrate(&h, &target);
+    }
+    let after = retention_state::snapshot(&h.root);
+    for (path, bytes) in paths.into_iter().zip(originals) {
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), bytes);
+        let output = after["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["path"] == path)
+            .unwrap();
+        assert_eq!(output["lifetime"], value!({"created_at":1,"deadline":2}));
+        assert_eq!(output["expires"], 2);
+        assert!(read_guard(&h.root, path).is_err());
+    }
+    inventory.maintain_explicit().unwrap();
+    assert!(paths.iter().all(|path| h.root.join(path).is_file()));
+    inventory
+        .reference_paths("fixture-birth-auditor", &[])
+        .unwrap();
+    for _ in 0..8 {
+        if interrupted {
+            let (code, maintained, error) = h.auto("maintain", &[]);
+            assert_eq!(code, 0, "{maintained} {error}");
+        } else {
+            inventory.maintain_explicit().unwrap();
+        }
+        let state = retention_state::snapshot(&h.root);
+        if paths.iter().all(|path| {
+            !h.root.join(path).exists()
+                && state["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|output| output["path"] != *path)
+        }) {
+            let (code, used, error) = h.auto(
+                "use",
+                &[
+                    "--path",
+                    target.to_str().unwrap(),
+                    "--operation",
+                    "use.consumer",
+                ],
+            );
+            assert_eq!(
+                code, 0,
+                "current birth acceptance must survive original retirement: {used} {error}"
+            );
+            assert_eq!(used["managed_process"]["exit_code"], 0);
+            assert_eq!(fs::read(target.join("payload")).unwrap(), payload);
+            let current = h.ledger()["entries"][0].clone();
+            assert_eq!(current["status"], "active");
+            assert!(current["terminal"].is_null());
+            if interrupted {
+                assert_eq!(current["adopted_birth"], "interrupted-not-established");
+            }
+            return;
+        }
+    }
+    panic!("completed birth originals and metadata must retire after the final auditor releases");
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn adopted_current_policy_rejects_invalid_binding_and_changed_committed_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
