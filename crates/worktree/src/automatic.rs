@@ -177,6 +177,17 @@ pub fn missing_cache_observation() -> (observation: MissingCacheObservation)
     }
 }
 
+/// Settled terminal cleanup history has only one current recovery owner.
+/// Age retirement and unknown results keep their separate obligations.
+pub fn retain_cleanup_attempt(age_retirement: bool, pending: bool, current: bool)
+    -> (retain: bool)
+    ensures retain == (age_retirement || pending || current),
+        !age_retirement && !pending ==> retain == current,
+        age_retirement || pending ==> retain,
+{
+    age_retirement || pending || current
+}
+
 }
 
 #[cfg(verus_keep_ghost)]
@@ -2290,8 +2301,15 @@ impl Manager {
                     paths.insert(terminal.receipt.path.clone());
                 }
             }
-            for attempt in &e.attempts {
-                paths.insert(attempt.path.clone());
+            for (index, attempt) in e.attempts.iter().enumerate() {
+                if retain_cleanup_attempt(
+                    !e.enrollment["age_retirement"].is_null(),
+                    attempt.receipt.is_none()
+                        || e.attempts.last().is_some_and(|last| last.receipt.is_none()),
+                    index + 1 == e.attempts.len(),
+                ) {
+                    paths.insert(attempt.path.clone());
+                }
             }
             for attempt in &e.cache_attempts {
                 paths.insert(attempt.intent.path.clone());
@@ -4594,9 +4612,6 @@ impl Manager {
                 .receipt
                 .as_ref()
                 .ok_or("interrupted cleanup has no original result; explicit recovery required")?;
-            let b = self.receipt(receipt)?;
-            let prior_report = json(&b)?;
-            report["prior_report"] = value!({"receipt":receipt,"input":self.retained_input(&receipt.path, &b, "receipt")});
             if e.path.exists() {
                 let locked = r
                     .inventory(&self.inputs.policy.coordinator_root)?
@@ -4604,6 +4619,8 @@ impl Manager {
                     .find(|row| row.get("worktree").is_some_and(|p| Path::new(p) == e.path))
                     .and_then(|row| row.get("locked").cloned());
                 if locked.as_deref() == Some(prior.token.as_str()) {
+                    let b = self.receipt(receipt)?;
+                    let prior_report = json(&b)?;
                     self.check_entry(r, &e, &t.head, Some(&prior.token))?;
                     let tree = r.oid(&e.path, &format!("{}^{{tree}}", t.head))?;
                     maintenance::release_reconciled(
@@ -4615,6 +4632,17 @@ impl Manager {
                         &tree,
                         || self.receipt(receipt).map(|_| ()),
                     )?;
+                    // The new original receives the established recovery facts.
+                    // The old address describes their source, not another
+                    // runtime dependency on all prior cleanup attempts.
+                    report["cleanup_lock_recovery"] = value!({
+                        "schema":"chrono-worktree-cleanup-lock-handoff/v1",
+                        "source_root":self.inputs.policy.coordinator_root,
+                        "source":receipt,"lock_reason":prior.token,
+                        "path":e.path,"attachment":e.attachment,
+                        "head":t.head,"index_tree":tree,
+                        "handoff":"prior-lock-released-under-original-exclusion"
+                    });
                 }
             }
         }
@@ -4673,6 +4701,12 @@ impl Manager {
                 "enrolled checkout disappeared without an original disposal attempt".into(),
             );
         }
+        // The current attempt takes the recovery responsibility only after
+        // the previous lock has been reconciled and all current checks pass.
+        // Preserve unknown originals; their outcome has not been handed off.
+        self.ledger.entries[i]
+            .attempts
+            .retain(|attempt| retain_cleanup_attempt(false, attempt.receipt.is_none(), false));
         self.ledger.entries[i].attempts.push(Attempt {
             path: report["report_path"].as_str().ok_or("report path")?.into(),
             token: token.into(),

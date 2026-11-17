@@ -50,6 +50,18 @@ fn require_absence_expectation(actual: bool)
     if !actual { panic!(); }
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cleanup_attempt_selection_keeps_unknown_age_and_current_responsibilities() {
+    require_absence_expectation(!absence_policy::retain_cleanup_attempt(false, false, false));
+    require_absence_expectation(absence_policy::retain_cleanup_attempt(false, false, true));
+    require_absence_expectation(absence_policy::retain_cleanup_attempt(false, true, false));
+    require_absence_expectation(absence_policy::retain_cleanup_attempt(false, true, true));
+    require_absence_expectation(absence_policy::retain_cleanup_attempt(true, false, false));
+    require_absence_expectation(absence_policy::retain_cleanup_attempt(true, false, true));
+    require_absence_expectation(absence_policy::retain_cleanup_attempt(true, true, false));
+    require_absence_expectation(absence_policy::retain_cleanup_attempt(true, true, true));
+}
+
 fn handoff_trace_step(trace: Vec<u8>, stage: u8, result: Result<(), String>)
     -> (out: (Vec<u8>, Result<(), String>))
     ensures out.0@ == trace@.push(stage), out.1 == result,
@@ -1349,6 +1361,88 @@ fn invalid_cleanup_result_preserves_pending_receipt_and_original_consumer() {
             symlink,
             "{fault}"
         );
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn superseded_cleanup_original_retires_only_after_its_independent_reader_releases() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, read_guard};
+    for pending in [false, true] {
+        let h = cleanup_result_handoff_fixture("");
+        let path = ".chrono-harness/state/worktrees/cleanup-superseded.json";
+        let raw = b"original cleanup failure retained for its actual reader\n";
+        fs::write(h.root.join(path), raw).unwrap();
+        let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+        inventory
+            .begin("lifecycle-original", path, value!(null))
+            .unwrap()
+            .complete(value!({"status":"failed"}))
+            .unwrap();
+        let role = format!(
+            "worktree-enrollment:{}",
+            sha256(h.target.to_str().unwrap().as_bytes())
+        );
+        inventory
+            .reference_paths(
+                &role,
+                &[
+                    ".chrono-harness/state/terminal-original.json".into(),
+                    ".chrono-harness/state/worktrees/cleanup-published.json".into(),
+                    path.into(),
+                ],
+            )
+            .unwrap();
+        let ledger_path = h.record.join("ledger.json");
+        let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        let attempts = ledger["entries"][0]["attempts"].as_array_mut().unwrap();
+        attempts.insert(
+            0,
+            value!({"path":path,"token":"cleanup-superseded",
+                "receipt":if pending { value!(null) } else { value!({"path":path,"sha256":sha256(raw)}) }}),
+        );
+        fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
+        let reader = read_guard(&h.root, path).unwrap();
+        let mut output = retention_state::snapshot(&h.root)["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["path"] == path)
+            .unwrap()
+            .clone();
+        output["lifetime"] = value!({"created_at":1,"deadline":2});
+        output["expires"] = value!(2);
+        retention_state::replace_output(&h.root, &output);
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{pending}: {report}");
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), raw);
+        let snapshot = retention_state::snapshot(&h.root);
+        let referenced = snapshot["roots"][&role]
+            .as_array()
+            .is_some_and(|ids| ids.contains(&output["id"]));
+        assert_eq!(referenced, pending, "unknown attempts keep their responsibility");
+        let observed = snapshot["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["id"] == output["id"])
+            .unwrap();
+        assert_eq!(observed["lifetime"], output["lifetime"]);
+        assert_eq!(observed["expires"], output["expires"]);
+        drop(reader);
+        if pending {
+            inventory.maintain_explicit().unwrap();
+            assert_eq!(fs::read(h.root.join(path)).unwrap(), raw);
+        } else {
+            maintain_original_until_absent(&inventory, &h.root.join(path));
+            for _ in 0..8 {
+                inventory.maintain_explicit().unwrap();
+            }
+            assert!(!retention_state::object_path(&h.root, output["id"].as_str().unwrap()).exists());
+        }
     }
 }
 
@@ -5185,6 +5279,17 @@ fn automatic_retries_transfer_lock_recovery_without_rooting_old_attempts() {
         let bound = original.len() * 3;
         let mut originals = vec![(original_path, original)];
         for retry in 0..3 {
+            let previous = json(&originals.last().unwrap().1).unwrap();
+            git(
+                &h.root,
+                &[
+                    "worktree",
+                    "lock",
+                    "--reason",
+                    previous["lock_reason"].as_str().unwrap(),
+                    target.to_str().unwrap(),
+                ],
+            );
             let (code, failed, error) = h.auto("maintain", &[]);
             assert_ne!(code, 0, "{failed} {error}");
             let report = &drain_report(&failed["drain"][0]);
@@ -5236,6 +5341,17 @@ fn automatic_retries_transfer_lock_recovery_without_rooting_old_attempts() {
             originals.push((path, bytes));
         }
         fs::remove_file(h.parent.join("fail-remove")).unwrap();
+        let previous = json(&originals.last().unwrap().1).unwrap();
+        git(
+            &h.root,
+            &[
+                "worktree",
+                "lock",
+                "--reason",
+                previous["lock_reason"].as_str().unwrap(),
+                target.to_str().unwrap(),
+            ],
+        );
         for fault in ["latest", "absent", "symlink"] {
             let (path, bytes) = originals.last().unwrap();
             match fault {
