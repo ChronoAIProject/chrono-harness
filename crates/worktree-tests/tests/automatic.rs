@@ -1423,7 +1423,10 @@ fn superseded_cleanup_original_retires_only_after_its_independent_reader_release
         let referenced = snapshot["roots"][&role]
             .as_array()
             .is_some_and(|ids| ids.contains(&output["id"]));
-        assert_eq!(referenced, pending, "unknown attempts keep their responsibility");
+        assert_eq!(
+            referenced, pending,
+            "unknown attempts keep their responsibility"
+        );
         let observed = snapshot["outputs"]
             .as_array()
             .unwrap()
@@ -1441,7 +1444,9 @@ fn superseded_cleanup_original_retires_only_after_its_independent_reader_release
             for _ in 0..8 {
                 inventory.maintain_explicit().unwrap();
             }
-            assert!(!retention_state::object_path(&h.root, output["id"].as_str().unwrap()).exists());
+            assert!(
+                !retention_state::object_path(&h.root, output["id"].as_str().unwrap()).exists()
+            );
         }
     }
 }
