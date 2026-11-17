@@ -638,6 +638,7 @@ pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>,
     for pointer in [
         "/owner_deployment/receipt/path",
         "/owner_deployment/stage_result",
+        "/policy_migration/receipt/path",
     ] {
         if let Some(path) = report.pointer(pointer).and_then(Value::as_str) {
             originals.push(path.into());

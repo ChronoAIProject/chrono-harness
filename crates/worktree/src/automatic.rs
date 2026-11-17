@@ -560,6 +560,8 @@ struct Entry {
     cache_attempts: Vec<CacheAttempt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     policy_migrations: Vec<Receipt>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    adopted_policy: Option<migration::PolicyBinding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     main_cache_adoptions: Vec<Receipt>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -571,6 +573,9 @@ struct Entry {
 }
 #[cfg(not(verus_keep_ghost))]
 impl Entry {
+    fn has_adopted_policy(&self) -> bool {
+        self.adopted_policy.is_some() || !self.policy_migrations.is_empty()
+    }
     // Creation evidence keeps `branch`; only explicit migrate adopts a new checkout.
     fn current_branch(&self) -> &str {
         self.checkout_branch.as_deref().unwrap_or(&self.branch)
@@ -2396,7 +2401,7 @@ impl Manager {
             let entry = &self.ledger.entries[i];
             crate::verified_lifecycle::imported_policy_required(
                 entry.enrollment["kind"].as_str().unwrap_or(""),
-                !entry.policy_migrations.is_empty(),
+                entry.has_adopted_policy(),
             )
         });
         // An optional retention owner supplies the identity-bound original.
@@ -2446,7 +2451,7 @@ impl Manager {
         } else {
             match crate::verified_lifecycle::adopted_policy_source(
                 entry.enrollment["kind"].as_str().unwrap_or(""),
-                !entry.policy_migrations.is_empty(),
+                entry.has_adopted_policy(),
                 &binding.head,
                 &self.inputs.source_head,
                 &binding.policy_sha256,
@@ -2752,7 +2757,7 @@ impl Manager {
                 .map(|a| a.path.as_str())
                 .collect();
             if owned.iter().collect::<BTreeSet<_>>().len() != owned.len()
-                || (e.policy_migrations.is_empty() && declared != registered)
+                || (!e.has_adopted_policy() && declared != registered)
             {
                 return Err(
                     "main cache ownership does not match its exact artifact registration".into(),
@@ -3018,6 +3023,7 @@ impl Manager {
             ownership,
             cache_attempts: vec![],
             policy_migrations: vec![],
+            adopted_policy: None,
             main_cache_adoptions: vec![],
             cache_only,
             cleanup: None,

@@ -66,6 +66,13 @@ impl Manager {
     }
 
     pub(super) fn policy_binding(&self, e: &Entry) -> Result<PolicyBinding, String> {
+        if let Some(binding) = &e.adopted_policy {
+            if !e.policy_migrations.is_empty() {
+                return Err("current policy binding cannot retain a migration chain".into());
+            }
+            self.validate_adopted_binding(binding)?;
+            return Ok(binding.clone());
+        }
         let mut binding = PolicyBinding {
             policy_sha256: e.policy_sha256.clone(),
             head: e.enrollment["observed_head"]
@@ -100,6 +107,44 @@ impl Manager {
             }
         }
         Ok(binding)
+    }
+
+    fn validate_adopted_binding(&self, binding: &PolicyBinding) -> Result<(), String> {
+        facts::full_oid(&binding.head)?;
+        if !chrono_harness::wire::is_digest(&binding.policy_sha256)
+            || binding.inputs.keys().ne(BTreeMap::from([
+                (self.inputs.config_path.clone(), ()),
+                (self.inputs.policy_path.clone(), ()),
+            ])
+            .keys())
+            || binding
+                .inputs
+                .values()
+                .flatten()
+                .any(|digest| !chrono_harness::wire::is_digest(digest))
+        {
+            return Err("invalid current adopted policy binding".into());
+        }
+        let source_inputs = if let Some(source) = &binding.policy_source {
+            facts::full_oid(&source.head)?;
+            if source.inputs.keys().ne(binding.inputs.keys())
+                || source
+                    .inputs
+                    .values()
+                    .flatten()
+                    .any(|digest| !chrono_harness::wire::is_digest(digest))
+            {
+                return Err("adopted cleanup source does not bind policy inputs".into());
+            }
+            &source.inputs
+        } else {
+            &binding.inputs
+        };
+        if source_inputs.get(&self.inputs.policy_path) != Some(&Some(binding.policy_sha256.clone()))
+        {
+            return Err("current adopted policy digest differs from its committed inputs".into());
+        }
+        Ok(())
     }
 
     fn migration_inputs(
@@ -264,7 +309,8 @@ impl Manager {
         let policy_changed = previous.policy_sha256 != next.policy_sha256
             || previous.inputs != next.inputs
             || previous.policy_source != next.policy_source;
-        if !policy_changed && !checkout_changed {
+        let checkpoint_required = e.adopted_policy.is_none() && !e.policy_migrations.is_empty();
+        if !policy_changed && !checkout_changed && !checkpoint_required {
             self.check_entry(r, &e, &head, None)?;
             lease.stable()?;
             if let Some(checkout_report) = checkout_report {
@@ -292,6 +338,15 @@ impl Manager {
         } else {
             None
         };
+        let _migration_original = receipt
+            .as_ref()
+            .map(|receipt| {
+                chrono_harness::retained_artifacts::retention::read_guard(
+                    &self.inputs.policy.coordinator_root,
+                    &receipt.path,
+                )
+            })
+            .transpose()?;
         // A published receipt alone is not adoption. Admission and the original
         // lease remain held until the ledger references the complete transition.
         self.check_attachment(r, &current, &head, None)?;
@@ -329,8 +384,16 @@ impl Manager {
         }
         let mut updated = self.ledger.entries[i].clone();
         updated.checkout_branch = current.checkout_branch;
-        if let Some(receipt) = &receipt {
-            updated.policy_migrations.push(receipt.clone());
+        if policy_changed || checkpoint_required {
+            // Transfer only the state required for future operations to the
+            // existing durable enrollment owner. Audit originals retain their
+            // own finite publication lifetime; they are not runtime authority.
+            updated.adopted_policy = Some(if policy_changed {
+                next.clone()
+            } else {
+                previous
+            });
+            updated.policy_migrations.clear();
         }
         let owner = updated
             .ownership
@@ -343,17 +406,26 @@ impl Manager {
         owner.cache_pending = updated.status == "active";
         self.check_entry(r, &updated, &head, None)?;
         lease.stable()?;
+        report["policy_migration"] = value!({
+            "status":"pending","path":target,
+            "terminal_handoff":"not-claimed","disposal":"not-performed"});
+        if let Some(receipt) = &receipt {
+            report["policy_migration"]["receipt"] = value!(receipt);
+            // Protect the exact audit original through the actual report before
+            // the smaller durable enrollment relinquishes its temporary role.
+            crate::recovery::bind_report_inputs(&self.inputs.policy.coordinator_root, report)?;
+        }
         self.ledger.entries[i] = updated;
         self.save()?;
         if let Some(checkout_report) = checkout_report {
             report["checkout_migration"] = checkout_report;
         }
-        report["policy_migration"] = value!({
-            "status":if policy_changed {"adopted"} else {"already-current"},"path":target,
-            "terminal_handoff":"not-claimed","disposal":"not-performed"});
-        if let Some(receipt) = receipt {
-            report["policy_migration"]["receipt"] = value!(receipt);
-        }
+        report["policy_migration"]["status"] = value!(if policy_changed {
+            "adopted"
+        } else {
+            "already-current"
+        });
+        report["policy_migration"]["policy_state_owner"] = value!("worktree-enrollment");
         Ok(())
     }
 }
