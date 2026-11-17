@@ -1030,9 +1030,38 @@ impl Inventory {
         let Some(gate) = DirectoryLease::acquire_local(directory, true, None)? else {
             return Ok(false);
         };
-        let initial: Role = self
-            .read_metadata(&no_symlink_parents(directory, "record.json")?)?
-            .ok_or("unattached consumer birth; preserve metadata")?;
+        let record_path = no_symlink_parents(directory, "record.json")?;
+        let initial: Role = match self.read_metadata(&record_path)? {
+            Some(record) => record,
+            None => {
+                let pending_path = no_symlink_parents(directory, "record.pending")?;
+                let pending: Role = self
+                    .read_metadata(&pending_path)?
+                    .ok_or("unattached consumer birth; preserve metadata")?;
+                self.validate_role(&pending.role, directory, &pending)?;
+                // Only the initial declaration can precede record.json. A
+                // replacement of an existing role leaves the old record in
+                // place until rename, so nonempty residue is unresolved.
+                if !pending.ids.is_empty()
+                    || !pending.attached.is_empty()
+                    || !pending.summaries.is_empty()
+                    || pending.observation.is_some()
+                {
+                    return Err(
+                        "consumer pending record is not an empty birth; preserve metadata".into(),
+                    );
+                }
+                if *nodes + 4 > self.policy.max_nodes_per_round || !self.metadata_room() {
+                    return Ok(false);
+                }
+                self.stable(&gate)?;
+                // Preserve the exact original bytes and deadline. The role's
+                // original exclusion remains held through publication/pruning.
+                fs::rename(&pending_path, &record_path).map_err(|error| error.to_string())?;
+                *nodes += 1;
+                pending
+            }
+        };
         if self.role_directory(&initial.role)? != directory {
             return Err("consumer record address changed".into());
         }
@@ -1776,25 +1805,31 @@ impl Inventory {
     fn read_role(&self, role: &str) -> Result<Option<Role>, String> {
         let directory = self.role_directory(role)?;
         let record: Option<Role> = self.read_metadata(&directory.join("record.json"))?;
-        if record.as_ref().is_some_and(|r| {
-            r.schema != "chrono-retained-role/v2"
-                || r.role != role
-                || r.ids.len() > self.policy.max_related_outputs
-                || r.summaries.len() > self.policy.max_summaries
-                || r.observation.as_ref().is_some_and(|o| {
-                    !verified::observation_order(
-                        o.epoch.len(),
-                        o.issued,
-                        o.accepted,
-                        o.current.is_some(),
-                        o.current.as_ref().is_some_and(|id| r.ids.contains(id)),
-                    )
-                })
-                || identity(&directory).as_ref() != Ok(&r.directory_identity)
-        }) {
-            return Err("retained consumer declaration changed".into());
+        if let Some(record) = &record {
+            self.validate_role(role, &directory, record)?;
         }
         Ok(record)
+    }
+    fn validate_role(&self, role: &str, directory: &Path, r: &Role) -> Result<(), String> {
+        if self.role_directory(role)? != directory
+            || r.schema != "chrono-retained-role/v2"
+            || r.role != role
+            || r.ids.len() > self.policy.max_related_outputs
+            || r.summaries.len() > self.policy.max_summaries
+            || r.observation.as_ref().is_some_and(|o| {
+                !verified::observation_order(
+                    o.epoch.len(),
+                    o.issued,
+                    o.accepted,
+                    o.current.is_some(),
+                    o.current.as_ref().is_some_and(|id| r.ids.contains(id)),
+                )
+            })
+            || identity(directory).as_ref() != Ok(&r.directory_identity)
+        {
+            return Err("retained consumer declaration changed".into());
+        }
+        Ok(())
     }
     fn path_directory(&self, path: &str) -> Result<PathBuf, String> {
         crate::relative_path(path)?;

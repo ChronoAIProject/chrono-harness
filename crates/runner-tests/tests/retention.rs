@@ -2559,30 +2559,17 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
     }
 }
 #[test]
-fn interrupted_role_birth_recovers_exact_members_and_deadline_then_retires() {
+fn interrupted_empty_role_birth_recovers_original_deadline_then_retires() {
     if !isolated_capability_test(
-        "interrupted_role_birth_recovers_exact_members_and_deadline_then_retires",
+        "interrupted_empty_role_birth_recovers_original_deadline_then_retires",
     ) {
         return;
     }
-    for (consumed, expires) in [(false, 1u64), (false, u64::MAX), (true, u64::MAX)] {
+    for expires in [1u64, u64::MAX] {
         let h = host(256, 16);
         let owner = inventory(h.path());
         let name = "consumer:interrupted-birth";
-        let path = tree(h.path(), "role-birth-member");
-        let publication = inventory(h.path()).begin("fixture", &path, json!(null)).unwrap();
-        let id = publication.id().to_owned();
-        publication.complete(json!({"exit": 0})).unwrap();
-        owner
-            .reference(
-                name,
-                if consumed {
-                    std::slice::from_ref(&id)
-                } else {
-                    &[]
-                },
-            )
-            .unwrap();
+        owner.reference(name, &[]).unwrap();
         let record = retention_state::role_path(h.path(), name);
         let pending = record.with_extension("pending");
         let mut role: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
@@ -2603,15 +2590,6 @@ fn interrupted_role_birth_recovers_exact_members_and_deadline_then_retires() {
                 "resume must not renew or reconstruct the declaration: {round}"
             );
             assert!(!pending.exists());
-            if consumed {
-                let round = owner.maintain_explicit().unwrap();
-                assert!(
-                    h.path().join(&path).exists(),
-                    "recovered member must remain protected: {round}"
-                );
-                assert!(retention_state::object_path(h.path(), &id).exists());
-                assert_eq!(fs::read(&record).unwrap(), raw);
-            }
         }
     }
 }
@@ -2630,6 +2608,10 @@ fn interrupted_role_birth_preserves_unknown_busy_and_authoritative_records() {
         "identity",
         "role",
         "schema",
+        "members",
+        "attached",
+        "summaries",
+        "observation",
         "link",
         "busy",
         "published",
@@ -2659,6 +2641,22 @@ fn interrupted_role_birth_preserves_unknown_busy_and_authoritative_records() {
             }
             "schema" => {
                 role["schema"] = json!("unknown");
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "members" => {
+                role["ids"] = json!(["output-unresolved"]);
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "attached" => {
+                role["attached"] = json!(["output-unresolved"]);
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "summaries" => {
+                role["summaries"] = json!([{"unresolved":"original"}]);
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "observation" => {
+                role["observation"] = json!({});
                 fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
             }
             "link" => {
