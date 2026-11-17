@@ -193,6 +193,17 @@ fn cache(target: &Path) {
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn policy_migration_original_retires_after_audit_without_losing_current_policy() {
+    policy_original_retirement(false);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn expired_policy_original_transfers_from_its_existing_owner_without_renewal() {
+    policy_original_retirement(true);
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn policy_original_retirement(expired: bool) {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
@@ -256,11 +267,45 @@ fn policy_migration_original_retires_after_audit_without_losing_current_policy()
                 value!([migrated["policy_migration"]["receipt"]]);
         },
     );
+    let mut expired_originals = Vec::new();
+    if expired {
+        let role = format!(
+            "worktree-enrollment:{}",
+            chrono_harness::sha256(target.to_str().unwrap().as_bytes())
+        );
+        inventory.reference_paths(&role, &[path.into()]).unwrap();
+        let state = retention_state::snapshot(&h.root);
+        let mut pending = vec![state["outputs"].as_array().unwrap().iter()
+            .find(|o| o["path"] == path).unwrap()["id"].as_str().unwrap().to_owned()];
+        let mut seen = std::collections::BTreeSet::new();
+        while let Some(id) = pending.pop() {
+            if !seen.insert(id.clone()) { continue; }
+            let mut output = state["outputs"].as_array().unwrap().iter()
+                .find(|o| o["id"] == id).unwrap().clone();
+            pending.extend(output["references"].as_array().unwrap().iter()
+                .map(|id| id.as_str().unwrap().to_owned()));
+            output["lifetime"] = value!({"created_at":1,"deadline":2});
+            output["expires"] = value!(2);
+            retention_state::replace_output(&h.root, &output);
+            expired_originals.push(output);
+        }
+    }
     let compacted = migrate(&h, &target);
     assert_eq!(compacted["policy_migration"]["status"], "already-current");
     assert!(compacted["policy_migration"]["receipt"].is_null());
     assert_eq!(h.ledger()["entries"][0]["adopted_policy"], current);
     assert!(h.ledger()["entries"][0]["policy_migrations"].is_null());
+    if expired {
+        let state = retention_state::snapshot(&h.root);
+        for original in &expired_originals {
+            let retained = state["outputs"].as_array().unwrap().iter()
+                .find(|o| o["id"] == original["id"]).unwrap();
+            assert_eq!(retained["lifetime"], original["lifetime"]);
+            assert_eq!(retained["expires"], original["expires"]);
+            assert!(chrono_harness::retained_artifacts::retention::read_guard(
+                &h.root, original["path"].as_str().unwrap()).is_err());
+        }
+    }
     inventory.maintain_explicit().unwrap();
     assert_eq!(fs::read(&original).unwrap(), bytes);
     inventory
