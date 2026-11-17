@@ -5152,7 +5152,7 @@ fn automatic_partial_failure_preserves_independent_start_and_explicit_retry() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn automatic_retries_keep_original_evidence_without_recursive_growth() {
+fn automatic_retries_transfer_lock_recovery_without_rooting_old_attempts() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
@@ -5205,25 +5205,24 @@ fn automatic_retries_keep_original_evidence_without_recursive_growth() {
                 "retry {retry}, kernel={kernel}: {} bytes exceeds current-operation bound {bound}",
                 bytes.len()
             );
-            let input = &report["prior_report"]["input"];
-            assert_eq!(input["schema"], "chrono-worktree-retained-input/v1");
-            assert_eq!(input["source_root"], value!(h.root));
-            let retained = fs::read(h.root.join(input["path"].as_str().unwrap())).unwrap();
-            assert_eq!(retained, originals.last().unwrap().1);
-            assert_eq!(input["sha256"], sha256(&retained));
-            assert_eq!(input["byte_length"], retained.len());
+            assert!(report["prior_report"].is_null());
+            let recovered = &report["cleanup_lock_recovery"];
+            assert_eq!(recovered["source"]["path"],
+                originals.last().unwrap().0.strip_prefix(&h.root).unwrap().to_str().unwrap());
+            assert_eq!(recovered["source"]["sha256"], sha256(&originals.last().unwrap().1));
+            assert_eq!(recovered["path"], value!(target));
+            assert_eq!(recovered["handoff"], "prior-lock-released-under-original-exclusion");
+            let attempts = h.ledger()["entries"][0]["attempts"].clone();
+            assert_eq!(attempts.as_array().unwrap().len(), 1);
+            assert_eq!(attempts[0]["path"], report["report_path"]);
             for (path, bytes) in &originals {
                 assert_eq!(fs::read(path).unwrap(), *bytes);
             }
             originals.push((path, bytes));
         }
         fs::remove_file(h.parent.join("fail-remove")).unwrap();
-        for fault in ["latest", "ancestor", "absent", "symlink"] {
-            let (path, bytes) = if fault == "latest" {
-                originals.last().unwrap()
-            } else {
-                &originals[0]
-            };
+        for fault in ["latest", "absent", "symlink"] {
+            let (path, bytes) = originals.last().unwrap();
             match fault {
                 "absent" => fs::remove_file(path).unwrap(),
                 "symlink" => {
@@ -5240,7 +5239,7 @@ fn automatic_retries_keep_original_evidence_without_recursive_growth() {
             }
             let (code, refused, error) = h.auto("maintain", &[]);
             assert_ne!(code, 0, "{fault}: {refused} {error}");
-            if matches!(fault, "latest" | "ancestor") {
+            if fault == "latest" {
                 assert!(
                     refused["error"]
                         .as_str()
@@ -5257,7 +5256,13 @@ fn automatic_retries_keep_original_evidence_without_recursive_growth() {
             }
             fs::write(path, bytes).unwrap();
         }
-        assert_eq!(h.auto("maintain", &[]).0, 0);
+        let (ancestor, ancestor_bytes) = &originals[0];
+        fs::remove_file(ancestor).unwrap();
+        assert_eq!(h.auto("maintain", &[]).0, 0,
+            "a transferred ancestor is no longer a recovery input");
+        assert!(!ancestor.exists());
+        fs::write(ancestor, ancestor_bytes).unwrap();
+
         assert!(!target.exists());
         for (path, bytes) in originals {
             assert_eq!(fs::read(path).unwrap(), bytes);
