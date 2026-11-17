@@ -1126,6 +1126,193 @@ fn invalid_terminal_original_handoff_preserves_ledger_and_existing_consumer() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
+fn cleanup_result_handoff_fixture(fault: &str) -> EnrollmentOriginalsFixture {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let h = terminal_original_fixture("");
+    let path = ".chrono-harness/state/worktrees/cleanup-published.json";
+    fs::create_dir_all(h.root.join(".chrono-harness/state/worktrees")).unwrap();
+    let ledger_path = h.record.join("ledger.json");
+    let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    let e = &mut ledger["entries"][0];
+    e["attempts"] = value!([{"path":path,"token":"cleanup-published","receipt":null}]);
+    let mut report = value!({
+        "schema":"chrono-worktree-report/v1","operation":"cleanup","status":"failed",
+        "source_root":h.root,"config_path":POLICY,"report_path":path,
+        "lock_reason":"cleanup-published","automatic_cleanup":true,
+        "terminal_receipt":e["terminal"]["receipt"],"error":"original cleanup failure"
+    });
+    match fault {
+        "schema" => report["schema"] = value!("other/v1"),
+        "operation" => report["operation"] = value!("finish"),
+        "source" => report["source_root"] = value!(h.target),
+        "path" => report["report_path"] = value!(".chrono-harness/state/other.json"),
+        "token" => report["lock_reason"] = value!("cleanup-other"),
+        "automatic" => report["automatic_cleanup"] = value!(false),
+        "terminal" => report["terminal_receipt"]["sha256"] = value!("0".repeat(64)),
+        "status" => report["status"] = value!("unfinished"),
+        "cleaned" => {
+            report["status"] = value!("cleaned");
+            report["worktree_removal"] = value!("removed");
+        }
+        "input" => {
+            report["original_result"] = value!({"input":{
+                "schema":"chrono-worktree-retained-input/v1","source_root":h.root,
+                "path":".chrono-harness/state/absent-input.bin","sha256":"0".repeat(64),
+                "byte_length":0,"format":"bytes"
+            }})
+        }
+        _ => (),
+    }
+    fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
+    let raw = serde_json::to_vec(&report).unwrap();
+    fs::write(h.root.join(path), &raw).unwrap();
+    let publication = Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .begin("lifecycle-original", path, value!(null))
+        .unwrap();
+    if fault != "unsealed" {
+        publication
+            .complete(value!({"status":report["status"]}))
+            .unwrap();
+    }
+    let role = format!(
+        "worktree-enrollment:{}",
+        sha256(h.target.to_str().unwrap().as_bytes())
+    );
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .reference_paths(
+            &role,
+            &[
+                ".chrono-harness/state/terminal-original.json".into(),
+                path.into(),
+            ],
+        )
+        .unwrap();
+    match fault {
+        "changed" => fs::write(h.root.join(path), b"changed original\n").unwrap(),
+        "partial" => fs::write(h.root.join(path), b"{").unwrap(),
+        "missing" => fs::remove_file(h.root.join(path)).unwrap(),
+        "symlink" => {
+            fs::remove_file(h.root.join(path)).unwrap();
+            fs::write(h.root.join("outside-original.json"), &raw).unwrap();
+            std::os::unix::fs::symlink(h.root.join("outside-original.json"), h.root.join(path))
+                .unwrap();
+        }
+        _ => (),
+    }
+    h
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn sealed_cleanup_result_recovers_expired_pending_receipt_without_promoting_state() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::read_guard;
+    for outcome in ["", "cleaned"] {
+        let h = cleanup_result_handoff_fixture(outcome);
+        let path = ".chrono-harness/state/worktrees/cleanup-published.json";
+        let raw = fs::read(h.root.join(path)).unwrap();
+        let ledger_path = h.record.join("ledger.json");
+        let before = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        let mut output = retention_state::snapshot(&h.root)["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["path"] == path)
+            .unwrap()
+            .clone();
+        output["lifetime"] = value!({"created_at":1,"deadline":2});
+        output["expires"] = value!(2);
+        retention_state::replace_output(&h.root, &output);
+        assert!(
+            read_guard(&h.root, path).is_err(),
+            "new readers cannot renew expired output"
+        );
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "{outcome}: {report}");
+        let after = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        assert_eq!(
+            after["entries"][0]["attempts"][0]["receipt"],
+            value!({"path":path,"sha256":sha256(&raw)})
+        );
+        let mut unchanged = after;
+        unchanged["entries"][0]["attempts"][0]["receipt"] = value!(null);
+        unchanged["entries"][0]["terminal"]
+            .as_object_mut()
+            .unwrap()
+            .remove("established");
+        assert_eq!(
+            unchanged, before,
+            "receipt recovery must not manufacture a cleanup outcome"
+        );
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), raw);
+        let snapshot = retention_state::snapshot(&h.root);
+        let observed = snapshot["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["id"] == output["id"])
+            .unwrap();
+        assert_eq!(observed["lifetime"], output["lifetime"]);
+        assert_eq!(observed["expires"], output["expires"]);
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn invalid_cleanup_result_preserves_pending_receipt_and_original_consumer() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for fault in [
+        "schema",
+        "operation",
+        "source",
+        "path",
+        "token",
+        "automatic",
+        "terminal",
+        "status",
+        "input",
+        "unsealed",
+        "changed",
+        "partial",
+        "missing",
+        "symlink",
+    ] {
+        let h = cleanup_result_handoff_fixture(fault);
+        let ledger_path = h.record.join("ledger.json");
+        // Settle the independent terminal transfer before measuring this handoff.
+        // Its valid facts are unrelated to the invalid cleanup original.
+        let mut before = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        let e = &before["entries"][0];
+        let t = &e["terminal"];
+        let facts = value!({"schema":"chrono-worktree-terminal-handoff/v1", "path":e["path"],
+            "attachment":e["attachment"],"head":t["head"],"retained_commit":t["retained_commit"],
+            "dispose_evidence":t["dispose_evidence"],"artifacts_only":t["artifacts_only"],"source":t["receipt"]});
+        before["entries"][0]["terminal"]["established"] =
+            value!(chrono_harness::wire::digest(&facts).unwrap());
+        let before = serde_json::to_vec(&before).unwrap();
+        fs::write(&ledger_path, &before).unwrap();
+        let role = format!(
+            "worktree-enrollment:{}",
+            sha256(h.target.to_str().unwrap().as_bytes())
+        );
+        let role_path = retention_state::role_path(&h.root, &role);
+        let role_bytes = fs::read(&role_path).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_ne!(code, 0, "{fault}: {report}");
+        assert_eq!(fs::read(&ledger_path).unwrap(), before, "{fault}");
+        assert_eq!(fs::read(&role_path).unwrap(), role_bytes, "{fault}");
+    }
+}
+
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn failed_terminal_handoff_write_preserves_original_roots_then_resumes() {
