@@ -2559,6 +2559,147 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
     }
 }
 #[test]
+fn interrupted_empty_role_birth_recovers_original_deadline_then_retires() {
+    if !isolated_capability_test(
+        "interrupted_empty_role_birth_recovers_original_deadline_then_retires",
+    ) {
+        return;
+    }
+    for expires in [1u64, u64::MAX] {
+        let h = host(256, 16);
+        let owner = inventory(h.path());
+        let name = "consumer:interrupted-birth";
+        owner.reference(name, &[]).unwrap();
+        let record = retention_state::role_path(h.path(), name);
+        let pending = record.with_extension("pending");
+        let mut role: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+        role["metadata_expires"] = json!(expires);
+        let raw = serde_json::to_vec(&role).unwrap();
+        fs::write(&record, &raw).unwrap();
+        fs::rename(&record, &pending).unwrap();
+        let round = owner.maintain_explicit().unwrap();
+        if expires == 1 {
+            assert!(
+                !record.parent().unwrap().exists(),
+                "expired empty birth must retire: {round}"
+            );
+        } else {
+            assert_eq!(
+                fs::read(&record).unwrap(),
+                raw,
+                "resume must not renew or reconstruct the declaration: {round}"
+            );
+            assert!(!pending.exists());
+        }
+    }
+}
+
+#[test]
+fn interrupted_role_birth_preserves_unknown_busy_and_authoritative_records() {
+    if !isolated_capability_test(
+        "interrupted_role_birth_preserves_unknown_busy_and_authoritative_records",
+    ) {
+        return;
+    }
+    for fault in [
+        "missing",
+        "empty",
+        "partial",
+        "identity",
+        "role",
+        "schema",
+        "members",
+        "attached",
+        "summaries",
+        "observation",
+        "link",
+        "busy",
+        "published",
+    ] {
+        let h = host(256, 16);
+        let owner = inventory(h.path());
+        let name = "consumer:interrupted-birth-boundary";
+        owner.reference(name, &[]).unwrap();
+        let record = retention_state::role_path(h.path(), name);
+        let pending = record.with_extension("pending");
+        let mut role: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+        role["metadata_expires"] = json!(u64::MAX);
+        let authoritative = serde_json::to_vec(&role).unwrap();
+        fs::write(&record, &authoritative).unwrap();
+        fs::rename(&record, &pending).unwrap();
+        match fault {
+            "missing" => fs::remove_file(&pending).unwrap(),
+            "empty" => fs::write(&pending, b"").unwrap(),
+            "partial" => fs::write(&pending, b"{\"schema\":").unwrap(),
+            "identity" => {
+                role["directory_identity"] = json!("changed");
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "role" => {
+                role["role"] = json!("consumer:other-address");
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "schema" => {
+                role["schema"] = json!("unknown");
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "members" => {
+                role["ids"] = json!(["output-unresolved"]);
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "attached" => {
+                role["attached"] = json!(["output-unresolved"]);
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "summaries" => {
+                role["summaries"] = json!([{"unresolved":"original"}]);
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "observation" => {
+                role["observation"] = json!({});
+                fs::write(&pending, serde_json::to_vec(&role).unwrap()).unwrap();
+            }
+            "link" => {
+                fs::rename(&pending, h.path().join("other-original")).unwrap();
+                std::os::unix::fs::symlink(h.path().join("other-original"), &pending).unwrap();
+            }
+            "published" => {
+                fs::write(&record, &authoritative).unwrap();
+                fs::write(&pending, b"partial replacement").unwrap();
+            }
+            _ => (),
+        }
+        let original_pending = fs::read(&pending).ok();
+        let gate = (fault == "busy").then(|| {
+            chrono_harness::ownership::DirectoryLease::acquire(record.parent().unwrap(), true, None)
+                .unwrap()
+                .unwrap()
+        });
+        let round = owner.maintain_explicit().unwrap();
+        assert!(
+            record.parent().unwrap().exists(),
+            "unknown or protected birth must remain: {fault}: {round}"
+        );
+        assert_eq!(
+            fs::read(&pending).ok(),
+            original_pending,
+            "{fault}: {round}"
+        );
+        if fault == "published" {
+            assert_eq!(fs::read(&record).unwrap(), authoritative);
+        } else {
+            assert!(
+                !record.exists(),
+                "must not publish an unqualified pending: {fault}: {round}"
+            );
+        }
+        if let Some(gate) = gate {
+            gate.stable().unwrap();
+        }
+    }
+}
+
+#[test]
 fn interrupted_consumer_attachment_recovers_and_expired_addressed_metadata_retires() {
     if !isolated_capability_test(
         "interrupted_consumer_attachment_recovers_and_expired_addressed_metadata_retires",
