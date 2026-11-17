@@ -1146,11 +1146,22 @@ fn cleanup_result_handoff_fixture(fault: &str) -> EnrollmentOriginalsFixture {
         "schema" => report["schema"] = value!("other/v1"),
         "operation" => report["operation"] = value!("finish"),
         "source" => report["source_root"] = value!(h.target),
+        "config" => report["config_path"] = value!(AUTO_POLICY),
         "path" => report["report_path"] = value!(".chrono-harness/state/other.json"),
         "token" => report["lock_reason"] = value!("cleanup-other"),
         "automatic" => report["automatic_cleanup"] = value!(false),
         "terminal" => report["terminal_receipt"]["sha256"] = value!("0".repeat(64)),
         "status" => report["status"] = value!("unfinished"),
+        "handoff" => report["terminal_handoff"] = value!(null),
+        "current" => {
+            let t = &e["terminal"];
+            let mut handoff = value!({"schema":"chrono-worktree-terminal-handoff/v1", "path":e["path"],
+                "attachment":e["attachment"],"head":t["head"],"retained_commit":t["retained_commit"],
+                "dispose_evidence":t["dispose_evidence"],"artifacts_only":t["artifacts_only"],"source":t["receipt"]});
+            handoff["established"] = value!(chrono_harness::wire::digest(&handoff).unwrap());
+            report["terminal_handoff"] = handoff;
+            report.as_object_mut().unwrap().remove("terminal_receipt");
+        }
         "cleaned" => {
             report["status"] = value!("cleaned");
             report["worktree_removal"] = value!("removed");
@@ -1214,7 +1225,7 @@ fn sealed_cleanup_result_recovers_expired_pending_receipt_without_promoting_stat
         return;
     }
     use chrono_harness::retained_artifacts::retention::read_guard;
-    for outcome in ["", "cleaned"] {
+    for outcome in ["", "cleaned", "current"] {
         let h = cleanup_result_handoff_fixture(outcome);
         let path = ".chrono-harness/state/worktrees/cleanup-published.json";
         let raw = fs::read(h.root.join(path)).unwrap();
@@ -1241,7 +1252,7 @@ fn sealed_cleanup_result_recovers_expired_pending_receipt_without_promoting_stat
             after["entries"][0]["attempts"][0]["receipt"],
             value!({"path":path,"sha256":sha256(&raw)})
         );
-        let mut unchanged = after;
+        let mut unchanged = after.clone();
         unchanged["entries"][0]["attempts"][0]["receipt"] = value!(null);
         unchanged["entries"][0]["terminal"]
             .as_object_mut()
@@ -1261,6 +1272,9 @@ fn sealed_cleanup_result_recovers_expired_pending_receipt_without_promoting_stat
             .unwrap();
         assert_eq!(observed["lifetime"], output["lifetime"]);
         assert_eq!(observed["expires"], output["expires"]);
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 0, "repeated handoff: {report}");
+        assert_eq!(json(&fs::read(&ledger_path).unwrap()).unwrap(), after);
     }
 }
 
@@ -1274,11 +1288,13 @@ fn invalid_cleanup_result_preserves_pending_receipt_and_original_consumer() {
         "schema",
         "operation",
         "source",
+        "config",
         "path",
         "token",
         "automatic",
         "terminal",
         "status",
+        "handoff",
         "input",
         "unsealed",
         "changed",
@@ -1304,12 +1320,35 @@ fn invalid_cleanup_result_preserves_pending_receipt_and_original_consumer() {
             "worktree-enrollment:{}",
             sha256(h.target.to_str().unwrap().as_bytes())
         );
+        chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .prune_reference_paths(
+                &role,
+                &[".chrono-harness/state/worktrees/cleanup-published.json".into()],
+            )
+            .unwrap();
         let role_path = retention_state::role_path(&h.root, &role);
         let role_bytes = fs::read(&role_path).unwrap();
+        let original_path = h
+            .root
+            .join(".chrono-harness/state/worktrees/cleanup-published.json");
+        let original = fs::read(&original_path).ok();
+        let symlink = fs::symlink_metadata(&original_path)
+            .ok()
+            .map(|m| m.file_type().is_symlink());
         let (code, report) = h.invoke("maintain", false);
         assert_ne!(code, 0, "{fault}: {report}");
         assert_eq!(fs::read(&ledger_path).unwrap(), before, "{fault}");
         assert_eq!(fs::read(&role_path).unwrap(), role_bytes, "{fault}");
+        assert_eq!(fs::read(&original_path).ok(), original, "{fault}");
+        assert_eq!(
+            fs::symlink_metadata(&original_path)
+                .ok()
+                .map(|m| m.file_type().is_symlink()),
+            symlink,
+            "{fault}"
+        );
     }
 }
 
