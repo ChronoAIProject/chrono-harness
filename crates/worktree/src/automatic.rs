@@ -2215,6 +2215,11 @@ impl Manager {
             let kind = e.enrollment["kind"].as_str().unwrap_or("");
             let consumes_birth = kind != "birth" || e.adopted_birth.is_none();
             let consumes_enrollment = if kind == "import" {
+                // A malformed or conflicting current binding cannot justify
+                // pruning the original role before restoration rejects it.
+                if e.has_adopted_policy() {
+                    self.policy_binding(e)?;
+                }
                 crate::verified_lifecycle::imported_policy_required(kind, e.has_adopted_policy())
             } else {
                 consumes_birth
@@ -2504,7 +2509,11 @@ impl Manager {
                             path,
                             &self.original_role()?,
                         )?;
-                    let bytes = crate::recovery::state_bytes(&root, path)?;
+                    let bytes = crate::recovery::state_bytes_for_consumer(
+                        &root,
+                        path,
+                        Some(&self.original_role()?),
+                    )?;
                     let inventory =
                         chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
                             .ok_or("import policy restoration requires its published original")?;
