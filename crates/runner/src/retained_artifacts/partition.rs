@@ -2244,14 +2244,19 @@ impl Inventory {
         self.stable(gate)?;
         let digest = sha256(&self.policy_bytes);
         for record in gate.objects.borrow_mut().values_mut() {
+            let mut changed = record.policy_sha256 != digest;
             if let Some(output) = record.output.as_mut() {
-                output.lifetime = lifetimes
+                let lifetime = lifetimes
                     .get(&output.id)
                     .ok_or("migration original lifetime missing")?
                     .clone();
-                output.expires = output.bound_expiry(output.expires);
+                changed |= output.lifetime != lifetime;
+                output.lifetime = lifetime;
+                let expires = output.bound_expiry(output.expires);
+                changed |= output.expires != expires;
+                output.expires = expires;
             }
-            if record.policy_sha256 != digest {
+            if changed {
                 record.policy_sha256 = digest.clone();
                 self.write_metadata(
                     &self.object_directory(&record.id)?.join("record.json"),
