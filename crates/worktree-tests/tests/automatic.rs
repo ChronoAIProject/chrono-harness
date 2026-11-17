@@ -729,7 +729,13 @@ fn published_result_handoffs_recover_a_full_enrollment_without_raising_capacity(
         "sealed report handoffs must not deadlock behind capacity: {maintained}"
     );
     let snapshot = retention_state::snapshot(&h.root);
-    assert_eq!(snapshot["roots"][&role].as_array().unwrap().len(), 2);
+    let pending = snapshot["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["path"] == receipts[3]["path"])
+        .unwrap();
+    assert_eq!(snapshot["roots"][&role], value!([pending["id"]]));
     assert!(
         !maintained
             .to_string()
@@ -850,6 +856,87 @@ fn assert_import_policy_handoff(h: &EnrollmentOriginalsFixture, before: &Value) 
             }}
         })
     );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn invalid_import_policy_handoff_preserves_original_role_and_ledger() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    for fault in [
+        "digest",
+        "input-keys",
+        "source-policy",
+        "migration-conflict",
+    ] {
+        let h = EnrollmentOriginalsFixture::imported();
+        let role = format!(
+            "worktree-enrollment:{}",
+            sha256(h.target.to_str().unwrap().as_bytes())
+        );
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .reference_paths(&role, &[h.original.clone()])
+            .unwrap();
+        let ledger_path = h.record.join("ledger.json");
+        let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        let entry = &mut ledger["entries"][0];
+        let original = fs::read(h.root.join(&h.original)).unwrap();
+        let report = json(&original).unwrap();
+        entry["adopted_policy"] = value!({
+            "policy_sha256":entry["policy_sha256"],
+            "head":entry["enrollment"]["observed_head"],
+            "inputs":entry["enrollment"]["policy_inputs"],
+            "policy_source":{"head":"c".repeat(64),"inputs":{
+                (POLICY):report["config_sha256"],(AUTO_POLICY):entry["policy_sha256"]
+            }}
+        });
+        let expected_error = match fault {
+            "digest" => {
+                entry["adopted_policy"]["policy_sha256"] = value!("invalid");
+                "invalid current adopted policy binding"
+            }
+            "input-keys" => {
+                entry["adopted_policy"]["inputs"]["unexpected"] = value!(null);
+                "invalid current adopted policy binding"
+            }
+            "source-policy" => {
+                entry["adopted_policy"]["policy_source"]["inputs"][AUTO_POLICY] =
+                    value!("0".repeat(64));
+                "adopted cleanup source does not bind policy inputs"
+            }
+            "migration-conflict" => {
+                entry["policy_migrations"] =
+                    value!([{"path":h.original,"sha256":sha256(&original)}]);
+                "current policy binding cannot retain a migration chain"
+            }
+            _ => unreachable!(),
+        };
+        let ledger = serde_json::to_vec(&ledger).unwrap();
+        fs::write(&ledger_path, &ledger).unwrap();
+        let role_path = retention_state::role_path(&h.root, &role);
+        let previous_role = fs::read(&role_path).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_ne!(code, 0, "{fault}: {report}");
+        assert!(
+            report.to_string().contains(expected_error),
+            "{fault}: {report}"
+        );
+        assert_eq!(
+            fs::read(&role_path).ok(),
+            Some(previous_role),
+            "invalid handoff must not release the original role: {fault}"
+        );
+        assert_eq!(fs::read(&ledger_path).unwrap(), ledger, "{fault}");
+        assert_eq!(
+            fs::read(h.root.join(&h.original)).unwrap(),
+            original,
+            "{fault}"
+        );
+    }
 }
 
 #[test]
