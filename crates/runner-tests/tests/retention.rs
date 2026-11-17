@@ -323,19 +323,6 @@ fn existing_consumer_can_transfer_expired_originals_without_new_report_dependenc
     drop(scope);
     report.complete_sealed(json!({"exit_code":0})).unwrap();
 
-    // A replacement with the same bytes still lacks the original inode.
-    let saved = h.path().join("saved-original");
-    fs::rename(h.path().join(leaf), &saved).unwrap();
-    fs::write(h.path().join(leaf), leaf.as_bytes()).unwrap();
-    assert!(
-        retained_artifacts::retention::consumer_read_guard(h.path(), leaf, "original-owner")
-            .err()
-            .unwrap()
-            .contains("identity changed")
-    );
-    fs::remove_file(h.path().join(leaf)).unwrap();
-    fs::rename(saved, h.path().join(leaf)).unwrap();
-
     let guard =
         retained_artifacts::retention::consumer_read_guard(h.path(), leaf, "original-owner")
             .unwrap()
@@ -421,6 +408,38 @@ fn existing_consumer_read_rejects_stale_incoming_edges_and_unsealed_originals() 
 }
 
 #[test]
+fn consumer_recovery_rejects_an_original_replaced_with_identical_bytes() {
+    if !isolated_capability_test(
+        "consumer_recovery_rejects_an_original_replaced_with_identical_bytes",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let path = ".chrono-harness/state/fixtures/replaced";
+    fs::write(h.path().join(path), b"same bytes").unwrap();
+    let output = inventory(h.path())
+        .begin("fixture", path, json!({}))
+        .unwrap();
+    let id = output.id().to_owned();
+    output.complete_sealed(json!({"exit_code":0})).unwrap();
+    inventory(h.path())
+        .reference("original-owner", &[id])
+        .unwrap();
+    let mut output = ledger(h.path())["outputs"][0].clone();
+    output["lifetime"] = json!({"created_at":1,"deadline":2});
+    output["expires"] = json!(2);
+    retention_state::replace_output(h.path(), &output);
+    fs::rename(h.path().join(path), h.path().join("saved-original")).unwrap();
+    fs::write(h.path().join(path), b"same bytes").unwrap();
+    assert!(
+        retained_artifacts::retention::consumer_read_guard(h.path(), path, "original-owner")
+            .err()
+            .unwrap()
+            .contains("identity changed")
+    );
+}
+
+#[test]
 fn consumer_recovery_requires_one_simultaneously_valid_reference_path() {
     if !isolated_capability_test(
         "consumer_recovery_requires_one_simultaneously_valid_reference_path",
@@ -444,9 +463,24 @@ fn consumer_recovery_requires_one_simultaneously_valid_reference_path() {
         ids.push(output.id().to_owned());
         output.complete_sealed(json!({"exit_code":0})).unwrap();
     }
-    inv.dependencies_paths(&ids[1], &[paths[0].into()]).unwrap();
-    inv.dependencies_paths(&ids[2], &[paths[1].into()]).unwrap();
+    inv.dependencies_paths(paths[1], &[paths[0].into()])
+        .unwrap();
+    inv.dependencies_paths(paths[2], &[paths[1].into()])
+        .unwrap();
     inv.reference("original-owner", &ids[3..]).unwrap();
+    let before = ledger(h.path());
+    for (source, target) in [(1, 0), (2, 1)] {
+        assert_eq!(
+            before["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|output| output["id"] == ids[source])
+                .unwrap()["references"],
+            json!([ids[target]]),
+            "the fixture must install its actual reference edges"
+        );
+    }
     let mut leaf = ledger(h.path())["outputs"]
         .as_array()
         .unwrap()
@@ -468,13 +502,18 @@ fn consumer_recovery_requires_one_simultaneously_valid_reference_path() {
                 assert!(!changed);
                 // Break A -> leaf before connecting root -> B. At no point
                 // does the owner have a complete path to the expired leaf.
-                inv.dependencies_paths(&ids[1], &[]).unwrap();
-                inv.dependencies_paths(&ids[3], &[paths[2].into()]).unwrap();
+                inv.dependencies_paths(paths[1], &[]).unwrap();
+                inv.dependencies_paths(paths[3], &[paths[2].into()])
+                    .unwrap();
                 changed = true;
             }
         },
     );
-    assert!(changed, "the interleaving did not execute");
+    assert!(
+        changed,
+        "the interleaving did not execute: {:?}",
+        read.as_ref().err()
+    );
     assert!(
         read.is_err(),
         "observations from different graph states cannot authorize recovery"
