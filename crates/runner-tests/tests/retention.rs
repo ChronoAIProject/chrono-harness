@@ -370,8 +370,7 @@ fn absent_terminal_migration_preserves_unknown_roots_and_excludes_readers() {
     let h = host(256, 16);
     let path = ".chrono-harness/state/fixtures/unknown-absent";
     fs::write(h.path().join(path), b"unknown producer result").unwrap();
-    let inv = inventory(h.path());
-    let publication = inv
+    let publication = inventory(h.path())
         .begin_rooted(
             "fixture",
             path,
@@ -384,7 +383,7 @@ fn absent_terminal_migration_preserves_unknown_roots_and_excludes_readers() {
     let mut output = ledger(h.path())["outputs"][0].clone();
     output["phase"] = json!("sealing");
     retention_state::replace_output(h.path(), &output);
-    let reader = inv.consume(&id).unwrap();
+    let reader = inventory(h.path()).consume(&id).unwrap();
     fs::remove_file(h.path().join(path)).unwrap();
     let before = ledger(h.path());
     let policy_path = h.path().join(POLICY_PATH);
@@ -392,7 +391,6 @@ fn absent_terminal_migration_preserves_unknown_roots_and_excludes_readers() {
     let mut policy: Value = serde_json::from_slice(&previous).unwrap();
     policy["max_lifetime_seconds"] = json!(60);
     fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
-    let inv = inventory(h.path());
     assert!(
         inventory(h.path())
             .migrate_policy(&previous, Some(std::slice::from_ref(&id)))
