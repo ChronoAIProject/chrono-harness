@@ -906,7 +906,7 @@ fn invalid_import_policy_handoff_preserves_original_role_and_ledger() {
             "source-policy" => {
                 entry["adopted_policy"]["policy_source"]["inputs"][AUTO_POLICY] =
                     value!("0".repeat(64));
-                "adopted cleanup source does not bind policy inputs"
+                "current adopted policy digest differs from its committed inputs"
             }
             "migration-conflict" => {
                 entry["policy_migrations"] =
