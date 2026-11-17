@@ -1683,7 +1683,7 @@ fn expired_completed_result_handoff_releases_originals_without_renewal() {
     Inventory::adopted(&h.root)
         .unwrap()
         .unwrap()
-        .release("fixture-use-report")
+        .reference_paths("fixture-use-report", &[])
         .unwrap();
     for _ in 0..8 {
         Inventory::adopted(&h.root)
