@@ -859,13 +859,15 @@ fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_in
         return;
     }
     let h = EnrollmentOriginalsFixture::imported();
-    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let ledger = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
     let original = fs::read(h.root.join(&h.original)).unwrap();
+    let _reader =
+        chrono_harness::retained_artifacts::retention::read_guard(&h.root, &h.original).unwrap();
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 0, "{report}");
     assert_eq!(report["cleanup_failures"], value!([]), "{report}");
     assert_eq!(attention_row(&report, &h.target)["work_state"], "unknown");
-    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_import_policy_handoff(&h, &ledger);
     assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
 }
 
@@ -877,12 +879,14 @@ fn present_import_restores_adopted_caller_policy_without_reinterpreting_target_i
     }
     let h = EnrollmentOriginalsFixture::imported();
     h.make_present();
-    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let ledger = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
     let original = fs::read(h.root.join(&h.original)).unwrap();
+    let _reader =
+        chrono_harness::retained_artifacts::retention::read_guard(&h.root, &h.original).unwrap();
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 0, "{report}");
     assert_eq!(report["cleanup_failures"], value!([]), "{report}");
-    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_import_policy_handoff(&h, &ledger);
     assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
     for (path, expected) in [
         (POLICY, "target original configuration is raw data"),
@@ -909,12 +913,15 @@ fn import_uses_original_fixed_caller_source_only_when_policy_field_is_absent() {
         if present {
             h.make_present();
         }
-        let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+        let ledger = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
         let original = fs::read(h.root.join(&h.original)).unwrap();
+        let _reader =
+            chrono_harness::retained_artifacts::retention::read_guard(&h.root, &h.original)
+                .unwrap();
         let (code, report) = h.invoke("maintain", false);
         assert_eq!(code, 0, "{report}");
         assert_eq!(report["cleanup_failures"], value!([]), "{report}");
-        assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+        assert_import_policy_handoff(&h, &ledger);
         assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
         assert_eq!(h.target.exists(), present);
         if present {
@@ -977,6 +984,8 @@ fn absent_import_after_explicit_migration_uses_the_last_target_binding() {
     let ledger_bytes = serde_json::to_vec(&ledger).unwrap();
     fs::write(&ledger_path, &ledger_bytes).unwrap();
     let original = fs::read(h.root.join(&h.original)).unwrap();
+    let _reader =
+        chrono_harness::retained_artifacts::retention::read_guard(&h.root, &h.original).unwrap();
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 0, "{report}");
     assert_eq!(report["cleanup_failures"], value!([]), "{report}");
@@ -4203,6 +4212,23 @@ fn observational_import_binds_original_inputs_without_adopting_format_or_disposa
         assert_eq!(
             entry["enrollment"]["policy_inputs"][POLICY],
             sha256(&config_bytes)
+        );
+        assert_eq!(entry["adopted_policy"]["head"], head);
+        assert_eq!(
+            entry["adopted_policy"]["inputs"],
+            entry["enrollment"]["policy_inputs"]
+        );
+        assert_eq!(
+            entry["adopted_policy"]["policy_source"]["head"],
+            imported["policy_source_commit"]
+        );
+        assert_eq!(
+            entry["adopted_policy"]["policy_source"]["inputs"][POLICY],
+            sha256(&fs::read(h.root.join(POLICY)).unwrap())
+        );
+        assert_eq!(
+            entry["adopted_policy"]["policy_source"]["inputs"][AUTO_POLICY],
+            entry["policy_sha256"]
         );
         assert!(entry["terminal"].is_null());
         let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);

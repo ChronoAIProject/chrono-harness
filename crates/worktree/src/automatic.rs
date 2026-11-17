@@ -2212,8 +2212,14 @@ impl Manager {
     fn original_paths(&self, ledger: &Ledger) -> Result<BTreeSet<String>, String> {
         let mut paths = BTreeSet::new();
         for e in &ledger.entries {
-            let consumes_birth = e.enrollment["kind"] != "birth" || e.adopted_birth.is_none();
-            if consumes_birth
+            let kind = e.enrollment["kind"].as_str().unwrap_or("");
+            let consumes_birth = kind != "birth" || e.adopted_birth.is_none();
+            let consumes_enrollment = if kind == "import" {
+                crate::verified_lifecycle::imported_policy_required(kind, e.has_adopted_policy())
+            } else {
+                consumes_birth
+            };
+            if consumes_enrollment
                 && (e.enrollment["receipt"]["source_root"].is_null()
                     || e.enrollment["receipt"]["source_root"]
                         == value!(self.inputs.policy.coordinator_root))
@@ -2389,6 +2395,12 @@ impl Manager {
                 .policy_source
                 .is_some()
             {
+                // Persisting an import's caller source does not adopt the
+                // target's executable format or authorize its output scopes.
+                // Ordinary live operations keep their current-target check.
+                if self.ledger.entries[i].enrollment["kind"] == "import" {
+                    self.adopt_target_policy(r)?;
+                }
                 return self.restore_adopted_policy(r);
             }
         }
@@ -2422,13 +2434,9 @@ impl Manager {
     }
 
     fn adopt_cleanup_policy(&mut self, r: &mut Runner, maintenance: bool) -> Result<(), String> {
-        let imported = self.current_entry(&self.scope).is_some_and(|i| {
-            let entry = &self.ledger.entries[i];
-            crate::verified_lifecycle::imported_policy_required(
-                entry.enrollment["kind"].as_str().unwrap_or(""),
-                entry.has_adopted_policy(),
-            )
-        });
+        let imported = self
+            .current_entry(&self.scope)
+            .is_some_and(|i| self.ledger.entries[i].enrollment["kind"] == "import");
         // An optional retention owner supplies the identity-bound original.
         // Other hosts retain their existing current-target validation path.
         let managed_originals = if imported && maintenance {
@@ -2465,7 +2473,9 @@ impl Manager {
             return Ok(());
         };
         let entry = &self.ledger.entries[i];
-        let mut binding = self.policy_binding(entry)?;
+        let original_binding = self.policy_binding(entry)?;
+        let mut binding = original_binding.clone();
+        let mut import_handoff = false;
         let root = self.inputs.policy.coordinator_root.clone();
         // An import adopts the caller's policy while retaining the target's raw
         // input bindings. Those are separate sources until an explicit migration.
@@ -2489,7 +2499,11 @@ impl Manager {
                         .as_str()
                         .ok_or("import enrollment lacks its original report path")?;
                     _original_guard =
-                        chrono_harness::retained_artifacts::retention::read_guard(&root, path)?;
+                        chrono_harness::retained_artifacts::retention::consumer_read_guard(
+                            &root,
+                            path,
+                            &self.original_role()?,
+                        )?;
                     let bytes = crate::recovery::state_bytes(&root, path)?;
                     let inventory =
                         chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
@@ -2533,6 +2547,7 @@ impl Manager {
                             Some(binding.policy_sha256.clone()),
                         ),
                     ]);
+                    import_handoff = true;
                 }
             }
         }
@@ -2591,6 +2606,19 @@ impl Manager {
         )?;
         for path in expected.keys() {
             start::registered_policy(&registrations, path, &policy.state_directory)?;
+        }
+        if import_handoff {
+            // The original target bindings remain raw observations. Transfer
+            // only the fully verified caller policy source to the existing
+            // durable owner before its temporary report dependency shrinks.
+            let mut current = original_binding;
+            current.policy_source = Some(migration::PolicySource {
+                head: binding.head.clone(),
+                inputs: binding.inputs.clone(),
+            });
+            self.validate_adopted_binding(&current)?;
+            self.ledger.entries[i].adopted_policy = Some(current);
+            self.save_result_handoff()?;
         }
         self.inputs.policy = policy;
         self.inputs.policy_bytes = policy_bytes;
@@ -2958,6 +2986,16 @@ impl Manager {
             attachment(r, &target)?
         };
         let policy_inputs = self.target_policy_inputs(r, &target, &head)?;
+        let adopted_policy = if kind == "import" {
+            Some(migration::PolicyBinding {
+                policy_sha256: sha256(&self.inputs.policy_bytes),
+                head: head.clone(),
+                inputs: policy_inputs.clone(),
+                policy_source: Some(self.committed_policy_source(r)?),
+            })
+        } else {
+            None
+        };
         if kind == "birth"
             && (policy_inputs.get(&self.inputs.config_path)
                 != Some(&Some(sha256(&self.inputs.config_bytes)))
@@ -3048,7 +3086,7 @@ impl Manager {
             ownership,
             cache_attempts: vec![],
             policy_migrations: vec![],
-            adopted_policy: None,
+            adopted_policy,
             adopted_birth: None,
             main_cache_adoptions: vec![],
             cache_only,
