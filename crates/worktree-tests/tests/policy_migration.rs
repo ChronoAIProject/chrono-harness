@@ -275,15 +275,36 @@ fn policy_original_retirement(expired: bool) {
         );
         inventory.reference_paths(&role, &[path.into()]).unwrap();
         let state = retention_state::snapshot(&h.root);
-        let mut pending = vec![state["outputs"].as_array().unwrap().iter()
-            .find(|o| o["path"] == path).unwrap()["id"].as_str().unwrap().to_owned()];
+        let mut pending = vec![
+            state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["path"] == path)
+                .unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+        ];
         let mut seen = std::collections::BTreeSet::new();
         while let Some(id) = pending.pop() {
-            if !seen.insert(id.clone()) { continue; }
-            let mut output = state["outputs"].as_array().unwrap().iter()
-                .find(|o| o["id"] == id).unwrap().clone();
-            pending.extend(output["references"].as_array().unwrap().iter()
-                .map(|id| id.as_str().unwrap().to_owned()));
+            if !seen.insert(id.clone()) {
+                continue;
+            }
+            let mut output = state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["id"] == id)
+                .unwrap()
+                .clone();
+            pending.extend(
+                output["references"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|id| id.as_str().unwrap().to_owned()),
+            );
             output["lifetime"] = value!({"created_at":1,"deadline":2});
             output["expires"] = value!(2);
             retention_state::replace_output(&h.root, &output);
@@ -298,12 +319,21 @@ fn policy_original_retirement(expired: bool) {
     if expired {
         let state = retention_state::snapshot(&h.root);
         for original in &expired_originals {
-            let retained = state["outputs"].as_array().unwrap().iter()
-                .find(|o| o["id"] == original["id"]).unwrap();
+            let retained = state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["id"] == original["id"])
+                .unwrap();
             assert_eq!(retained["lifetime"], original["lifetime"]);
             assert_eq!(retained["expires"], original["expires"]);
-            assert!(chrono_harness::retained_artifacts::retention::read_guard(
-                &h.root, original["path"].as_str().unwrap()).is_err());
+            assert!(
+                chrono_harness::retained_artifacts::retention::read_guard(
+                    &h.root,
+                    original["path"].as_str().unwrap()
+                )
+                .is_err()
+            );
         }
     }
     inventory.maintain_explicit().unwrap();
