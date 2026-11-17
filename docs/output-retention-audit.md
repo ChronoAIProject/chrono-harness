@@ -113,6 +113,14 @@ U ≜ ∀o∈O. ∃T<∞. ∀t≥T. ¬P(o,t) ∧ ¬M(o,t)
 
 **U 在当前程序／政策下为假。** 取 O1 中一个已成功发布、后来不再需要的独立快照 `s`，不再执行 inputs，持续只调用现役 maintain。`s` 没有输出声明；maintenance 只枚举声明，顶层 state 保留；不存在该对象的 Delete 转移。因此可构造无限轨迹 `∀t≥t₀.P(s,t)`，直接否定 U。即使把 O1 排除，取 O4 在最后一次成功写日志后不再写入的轨迹，同样没有按时间删除的转移。取始终保留的有效消费者，还可同时满足安全规则且使 U 为假。
 
+24 小时不可续长窗口也没有消除最后一个反例。在候选 `a60c3681` 中，令已封存对象
+`o` 在到期前取得具名消费者根 `c`，随后只运行维护，不执行该消费者的释放或持久转存。
+`reference_locked` 仅对新增引用检查准入；维护仍把已有根及其闭包加入 `rooted`，
+到期时只记录 `deadline_missed:true`。以维护轮次归纳：初态 `c→o`；每轮不删除这个
+消费者根，且有根对象不进入删除，故下一轮仍有 `c→o ∧ P(o)`。这给出时间持续前进、
+维护持续运行、对象仍永久存在的合法无限轨迹。它不依赖 IO 失败或未登记文件，
+说明局部窗口证明不能替代消费者在窗口内交接及最终退休的进度证明。
+
 O9 给出独立的目录反例：调用方在此前不存在的 `state/output-N/` 中发布一个文件，
 随后释放该文件的全部使用方，维护删除文件及其元数据。令 `d` 为此次新建的父目录；
 在继续运行现役 maintain、没有其他目录所有者接管的轨迹中，`d` 不在文件声明里，
@@ -254,6 +262,68 @@ runner 的实际摘要 `d9891811d8248f6eb3fe290b6d9e38812d9c9177aacf8c8777bcd57b
 从当前新分支执行宿主登记的 `.chrono-harness/bin/chrono-harness check` 也以退出码 `2` 失败：旧参与程序在读取已采用 policy 时拒绝 `max_lifetime_seconds`（`unknown field max_lifetime_seconds`），并报告无法保留原 participation。该失败原文的 stdout／stderr 摘要由程序输出，不能把本地文档变更误报为通过；候选 runner 的局部测试与 Verus 结果仍只覆盖上段所列源码候选。
 
 正式维护的最近已读原件仍不是完成证据：`maintain-after-19-migration-20261117.stdout` 报告 `scope.complete:false`、`accounting_errors:5`、`disposed:80`、`removed_logical_bytes:1942179`、`physical_bytes_reclaimed:null`。上述两项分别有未解依赖和未交接领域角色；不能都归因为活读者。未知、损坏、过期引用和报告交接未完成时继续保留。必须先完成 owner adoption、解决真实使用方交接，再用同一候选程序连续取得至少三轮真实定时完成结果，并核对报告元数据、实际物理回收、恢复和同范围占用，才可重新评估全称目标。
+
+## 政策输入副本的后续修复与验证（2026-11-17）
+
+协调宿主的真实 `migrate` 曾因 `output-66572-1794263173320876000-2` 超期退出 2；
+该对象是固定 Git 政策字节的临时副本。候选
+`a60c3681e6300819176654e95d32d7cb1073ff77` 改用 Git 持久保存的原输入，
+新迁移回执只记录提交、路径、存在性、摘要及长度，不再复制或新引用旧副本。
+旧登记仍消费的迁移回执和输入副本继续完整校验；本次没有刷新期限、手改声明或补写完成。
+
+该候选的成功干净 bootstrap 原件在
+`/Users/macstudio2/ec91280d/expired-policy-dependencies-feature-20261117/.chrono-harness/state/bootstrap-77059-1794923142515563000-0/report.json`。
+同根的正式检查原件为
+`.chrono-harness/state/preparation/check-3948d01986583fb3f25bdcced8a0ca7241d9b077936a534c88070959be555129.json`，
+基线 `a9e5f98a17dc6455dec5a8dc8977ae5595d4afa4`，实际执行 87 项登记操作，退出 0，
+原响应 passed；265 份报告、两流及启动引用的实际字节和摘要已核。
+`test.worktree.core` 的 447 项通过，包含超期后再次改变政策的新增回归。
+登记证明 `verify.retention-release` 和 `verify.retention-release-tests` 分别报告
+`verified:122`、`verified:177`，均为 `errors:0`；它们覆盖所选保留判断及边界，
+不证明全部文件系统事务、真实消费者转存、维护公平性或全仓最终回收。
+
+另外已找回当前安装所需的不可变 stage 原件：协调宿主的
+`.chrono-harness/state/bootstrap-98102-1794405976516615000-0/report.json`，
+摘要 `49c0ab61a1922d0467f957938204f9e5dee611dbad69ed3d1791ab21df9926f5`。
+它与原 adoption 的摘要、stage 及干净来源 `c827dad6827a50d142803331854507ee6a211faa`
+匹配，两项操作退出 0，原输出流已核。adoption 仍指向被后来构建覆盖的可变
+`bootstrap-owner-stage.json`；找回原件不等于正式解析路径已经修复或新程序已经部署。
+上述代码已通过两段真实 PR：[#1359](https://github.com/ChronoAIProject/chrono-harness/pull/1359)
+合入 integration，[#1360](https://github.com/ChronoAIProject/chrono-harness/pull/1360)
+合入 dev，落地提交为 `758c209a27c579141a1409495d9255fe124423df`。
+两段 CI 均成功；落地树与受验候选的树 `eb4ac11c625b19a443de15e550957e8ca17fdf17`
+相同，dev push 检查仍在运行，不能预报其结果。
+
+使用该候选成功 bootstrap 的已核程序定向重试协调宿主 `migrate`，实际退出 0，
+原件 `.chrono-harness/state/worktrees/migrate-84434-1794926836581249000-0.json`
+摘要为 `dd0fb4a58d4a5f71801ff1235d4efa84cef9e53f3f3893a7fa87f7c299d27a85`，
+stdout 与存盘原件一致。旧 10 项迁移链已由程序核验并交接为当前政策绑定，
+`policy_migrations` 已退休；原超期输入的完整输出声明保持不变。
+迁移未执行删除，也未声明任务终态。OS 采用和三次连续定时回收仍未完成。
+
+另一次协调宿主元数据的只读观察，在 Unix 时间 `1794925516.182251` 至
+`1794925517.515738` 间读取到 5,139 份消费者角色声明，其中 4,173 份的 `ids` 为空。
+这是约 1.33 秒的非原子盘点；空成员不等于已过元数据期限或可以立即删除。
+另有 3 个角色地址缺少 `record.json`：
+`cbc04ee2903c7579d49d56c60ccf87290c20eb3df3dda9cc097d22b6b4d8c082`
+保留了 275 字节完整 `record.pending`，原角色为
+`recovery:.chrono-harness/state/worktrees/producer-finish-73510-1794472297849584000-54.json`，
+`ids`／`attached` 为空，原元数据期限为 `1794558698`；
+`bb52c4f8b16fae30b62caf6f2014c3addbc53943763b60e3b90405a5537ddbdc`
+只剩零字节 pending；`3f0635da9cef4a0d6fff1c64276f51fcb2af9e6c6c815bda25a288fe10a0d803`
+为空目录。现役 `prune_role` 只接受正式记录，因而继续报
+`unattached consumer birth; preserve metadata`。完整 pending 的恢复与后两项未知状态
+须分别处理；本次未补造正式记录、删目录或把这些错误改为已回收。
+
+Unix 时间 `1794925983` 的另一次只读观察发现 303 个非空 `consumer:` 角色，
+310 条成员引用所指声明均已超过创建期限；引用未按输出去重，不证明仍有真实消费者。
+按角色名称分组为 bootstrap 40 个、lifecycle 254 个、disk 6 个、maintenance 1 个、
+launchd 1 个、native 1 个。`lifecycle-recheck` 的生产代码已在
+`1218464d46769b005bfac1f48b23d2f7bee83e9b` 被有限诊断窗口替代，该改动已在当前 dev；
+它不再新建这个永久消费者，但已有角色仍在。为限制本次读取成本，只解码不超过
+1 MiB 的普通原文件，其中 152 个均报告 failed；另 102 个未解码，结果保持未知。
+仍需由原生命周期所有者核原报告、实际完成和当前需求后交接这些旧角色；代码已退役
+和到期本身不授予直接删除原件的资格，其余消费者也须沿各自实际使用链核实。
 
 ## 达成目标还需要什么
 
