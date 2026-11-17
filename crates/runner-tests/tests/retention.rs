@@ -2570,7 +2570,7 @@ fn interrupted_role_birth_recovers_exact_members_and_deadline_then_retires() {
         let owner = inventory(h.path());
         let name = "consumer:interrupted-birth";
         let path = tree(h.path(), "role-birth-member");
-        let publication = owner.begin("fixture", &path, json!(null)).unwrap();
+        let publication = inventory(h.path()).begin("fixture", &path, json!(null)).unwrap();
         let id = publication.id().to_owned();
         publication.complete(json!({"exit": 0})).unwrap();
         owner
