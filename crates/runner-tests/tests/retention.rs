@@ -438,7 +438,9 @@ fn consumer_recovery_requires_one_simultaneously_valid_reference_path() {
     let mut ids = Vec::new();
     for path in paths {
         fs::write(h.path().join(path), path.as_bytes()).unwrap();
-        let output = inv.begin("fixture", path, json!({})).unwrap();
+        let output = inventory(h.path())
+            .begin("fixture", path, json!({}))
+            .unwrap();
         ids.push(output.id().to_owned());
         output.complete_sealed(json!({"exit_code":0})).unwrap();
     }
