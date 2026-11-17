@@ -1,6 +1,6 @@
 # 程序输出、使用方与滚动清理审计
 
-本次审计的目标是：每项输出都有实际用途和负责方；使用结束后，可再生成的文件及其保管元数据能在有限时间内回收，不能让报告、失败现场或清理本身持续积累垃圾。使用方是本仓维护者、CI／发布调用方和安装本产品的宿主。
+本次审计的目标是：每项程序输出及其保管元数据从创建时起都有有限清理窗口；有价值的内容在窗口内转存到独立持久存储，实际消费者改用持久地址，临时原件到期清除。报告、失败现场和清理自身的输出也须遵守这个合同。使用方是本仓维护者、CI／发布调用方和安装本产品的宿主。
 
 **当前结论：不能证明所有最终产物都能按时间滚动清理。** 有确定的覆盖缺口和反例，也缺少维护进度、外部交接的证明。当前仍有用途的源码、安装程序、固定报告和公开发行资产不能直接当作垃圾。下文区分有界存储、到期资格、实际删除和仍未知的使用方。
 
@@ -240,20 +240,20 @@ runner 的实际摘要 `d9891811d8248f6eb3fe290b6d9e38812d9c9177aacf8c8777bcd57b
 
 ## 当前候选迁移与验证（2026-11-17）
 
-本次将当前 policy `39c88afc330a2542ec0b768e1362fc2e21d61d75be6ca7cc7629b61ce9a5433f` 与旧 policy `c56d8a9449df752c5c095c9b0ad66962d8d0b165a901c3b5a4fda2c8937d3321` 做了 19 个具名原件的定向迁移。程序实际报告 `completion:not-established`、`effects:metadata-binding-only`、`outputs_preserved:142`、`roots_preserved:63`；18 个对象已经进入可退休边界，两个对象仍受真实关系保护。迁移不删除文件、不改写 role／ledger／record，也不把缺失原件变成新的读者准入。
+以下原件和相对路径均归协调宿主 `/Users/macstudio2/chrono-harness`，不是本次关联检出自己的 state。19 项定向请求为 `.chrono-harness/state/retention-migration/migration-retryreq-20261117.json`；当前 policy 为 `39c88afc330a2542ec0b768e1362fc2e21d61d75be6ca7cc7629b61ce9a5433f`，旧 policy 为 `c56d8a9449df752c5c095c9b0ad66962d8d0b165a901c3b5a4fda2c8937d3321`。原迁移回执 `retry-19-targeted-v2.stdout` 报告 `completion:not-established`、`effects:metadata-binding-only`、`outputs_preserved:142`、`roots_preserved:63`；这些数量包含实际访问的依赖，不是请求的原件数。2026-11-17 后续逐项观察该请求：17 项为 `output:null`，另有一项 `disposing`、一项 `sealing`，共 19 项。`output:null` 只表示正文输出已退休，不证明对象地址和全部保管元数据已清除。迁移由程序写入政策绑定及适用的期限；本次没有手工改写声明，也没有由迁移删除原文件、解除恢复根或补写业务成功。
 
 两个未完成对象的原始记录如下：
 
-- `output-84690-1794738198375302000-1` 的终态为 `disposing`，原报告已经缺失，但仍有报告／引用关系。记录保留原有 `expires`，不会用当前时间重建 `created_at`，也不会因物理原件缺失删除记录。
-- `output-73145-1794735628774966000-4` 的终态为 `sealing`，原件缺失，且仍有真实 active worktree enrollment 角色 `worktree-enrollment:fcc16ca706d6390b0c1cfe02ffa11b2383d35c9f3758290739750e06d5de637e`。该使用方对应 `/Users/macstudio2/chrono-spec-current-dev`、分支 `feature/ci-generation-state-20261113`、HEAD `1412c62f2818546c2a833d2937c4b6d2aa276ea1`，下一动作是 `complete-work-and-finish`。在该使用方交接前不能退休。
+- `output-84690-1794738198375302000-1` 处于 `disposing`，原报告缺失、清单封存且为空，仍有 51 条待解除的向外依赖，入向引用和角色均为空。这是未完成的元数据退休，不能写成有外部读者保护。现存记录已有 `lifetime.created_at:1794739181`、`deadline:1794825581`，`expires` 等于该期限；重复迁移须保留它们。
+- `output-73145-1794735628774966000-4` 处于 `sealing`，原件缺失，业务完成仍为 unknown；该阶段只说明待续接封存，不能作终态成功。记录仍有 worktree enrollment 角色 `worktree-enrollment:fcc16ca706d6390b0c1cfe02ffa11b2383d35c9f3758290739750e06d5de637e`。已有使用方观察对应 `/Users/macstudio2/chrono-spec-current-dev`、分支 `feature/ci-generation-state-20261113`、HEAD `1412c62f2818546c2a833d2937c4b6d2aa276ea1`，下一动作为 `complete-work-and-finish`。现存 `created_at:1794649228`、`deadline:1794735628`，没有因本次观察刷新。领域负责方尚未交接，通用迁移不能代为释放；这仍是有限窗口目标的缺口。
 
-候选 runner 的验证原件为 `.chrono-harness/state/retention-migration/runner-tests-current-20261117-v2.*` 和 `runner-cargo-verus-current-20261117-v2.*`。登记的 runner 测试退出码为 `0`，其中一个测试进程报告 `202 passed`，另一个报告 `75 passed`；直接执行登记 Cargo-Verus 参数的退出码为 `0`，输出报告 Verus `0.2026.04.24.f8e1704`、`verified:42`、`errors:0`。这些结果证明缺失终态迁移、重复迁移、活引用保护和相应局部 Verus 条件已通过候选检查，不证明全仓输出已经纳管或宿主已采用候选。
+候选 runner 的已有验证原件为 `.chrono-harness/state/retention-migration/runner-tests-current-20261117-v2.*` 和 `runner-cargo-verus-current-20261117-v2.*`。前者退出码为 `0`，16 个测试进程合计 761 项通过、0 失败、1 忽略；三项新增回归覆盖缺失原件迁移、未知恢复根与活读者保护，以及缺失非退休阶段／替换原件的拒绝。它是行为测试结果，不是形式化证明或宿主 canonical check。后者退出码为 `0`，Verus `0.2026.04.24.f8e1704` 报告 `verified:42`、`errors:0`，但实际证明缓存 `.chrono-verus-proof.json` 绑定的是 `chrono_identifiers` 依赖，不能据此声称 retention 或新增 IO／可选出生时间逻辑已获证明。保留期限谓词的登记证明入口为 `verify.retention-release`；完整清理进度、文件系统及消费者交接仍须独立验证。
 
 正式宿主采用仍被阻断。把 `runner-build.json` 当作 bootstrap profile 被 `host-bootstrap` 拒绝（`unknown field binary`）；`bootstrap-core.json` 直接运行报告 `owner stage original report differs`；旧已部署 `chrono-worktree` 无法解析 `max_lifetime_seconds`；当前候选 bootstrap 又被 active root 引用过期输出阻断（典型错误 `output creation deadline closed: output-32354-1794196581936968000-4`），维护 socket 也曾连接拒绝。伪造 `CHRONO_PROCESS_FDS` 得到 `invalid or duplicate ownership descriptor`，因此没有绕过 owner 保护。上述原 stdout／stderr／退出码均保存在 `.chrono-harness/state/retention-migration/`，当前不能声称候选已经部署。
 
 从当前新分支执行宿主登记的 `.chrono-harness/bin/chrono-harness check` 也以退出码 `2` 失败：旧参与程序在读取已采用 policy 时拒绝 `max_lifetime_seconds`（`unknown field max_lifetime_seconds`），并报告无法保留原 participation。该失败原文的 stdout／stderr 摘要由程序输出，不能把本地文档变更误报为通过；候选 runner 的局部测试与 Verus 结果仍只覆盖上段所列源码候选。
 
-正式维护的最近结果仍不是完成证据：迁移后维护原件报告 `scope.complete:false`、`accounting_errors:5`、`disposed:80`、`removed_logical_bytes:1942179`、`physical_bytes_reclaimed:null`。两个未完成对象和 active consumer 仍由维护器保护；未知、损坏、过期引用和报告交接未完成时继续保留。必须先完成 owner adoption、解决真实使用方交接，再用同一候选程序连续取得至少三轮真实定时完成结果，并核对报告元数据、实际物理回收、恢复和同范围占用，才可重新评估全称目标。
+正式维护的最近已读原件仍不是完成证据：`maintain-after-19-migration-20261117.stdout` 报告 `scope.complete:false`、`accounting_errors:5`、`disposed:80`、`removed_logical_bytes:1942179`、`physical_bytes_reclaimed:null`。上述两项分别有未解依赖和未交接领域角色；不能都归因为活读者。未知、损坏、过期引用和报告交接未完成时继续保留。必须先完成 owner adoption、解决真实使用方交接，再用同一候选程序连续取得至少三轮真实定时完成结果，并核对报告元数据、实际物理回收、恢复和同范围占用，才可重新评估全称目标。
 
 ## 达成目标还需要什么
 

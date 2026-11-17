@@ -206,7 +206,11 @@ struct Creation {
 #[serde(deny_unknown_fields)]
 #[cfg(not(verus_keep_ghost))]
 struct Lifetime {
-    created_at: u64,
+    /// Missing only for a terminal record migrated after its physical original
+    /// disappeared. Its existing deadline remains authoritative; no birth is
+    /// reconstructed and no reader can be admitted through this record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    created_at: Option<u64>,
     deadline: u64,
 }
 #[cfg(not(verus_keep_ghost))]
@@ -219,7 +223,7 @@ impl Lifetime {
             return Err("output lifetime must be positive".into());
         }
         Ok(Self {
-            created_at,
+            created_at: Some(created_at),
             deadline,
         })
     }
@@ -268,7 +272,9 @@ impl Output {
     }
     fn admit(&self, observed: u64) -> Result<(), String> {
         if self.lifetime.as_ref().is_some_and(|window| {
-            !within_creation_window(window.created_at, window.deadline, observed)
+            window.created_at.is_none_or(|created_at| {
+                !within_creation_window(created_at, window.deadline, observed)
+            })
         }) {
             return Err(format!(
                 "output creation deadline closed: {}; transfer valuable bytes and consumers before expiry",
@@ -735,7 +741,13 @@ impl Inventory {
             crate::relative_path(&o.lease)?;
             if !ids.insert(o.id.clone())
                 || o.lifetime.as_ref().is_some_and(|window| {
-                    window.deadline <= window.created_at || o.expires > window.deadline
+                    window.deadline == 0
+                        || window
+                            .created_at
+                            .is_some_and(|created_at| window.deadline <= created_at)
+                        || (window.created_at.is_none()
+                            && !matches!(o.phase.as_str(), "disposing" | "sealing"))
+                        || o.expires > window.deadline
                 })
                 || (self.policy.max_lifetime_seconds.is_some()
                     && o.lifetime.is_none()
@@ -828,10 +840,34 @@ impl Inventory {
         Ok(())
     }
     fn lifetime_for_existing(&self, output: &Output) -> Result<Option<Lifetime>, String> {
-        if output.lifetime.is_some() || self.policy.max_lifetime_seconds.is_none() {
+        if self.policy.max_lifetime_seconds.is_none() {
+            return Ok(output.lifetime.clone());
+        }
+        // A previously migrated lifetime is authoritative. Re-running policy
+        // migration must not erase its birth evidence or change its deadline,
+        // including when the physical original has since disappeared.
+        if output.lifetime.is_some() {
             return Ok(output.lifetime.clone());
         }
         let path = no_symlink_parents(&self.root, &output.path)?;
+        // This is a deadline for terminal accounting, not evidence of birth or
+        // domain completion. Keep the old boundary and forbid new consumers.
+        if matches!(output.phase.as_str(), "disposing" | "sealing")
+            && matches!(
+                fs::symlink_metadata(&path),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound
+            )
+        {
+            if output.expires == 0 {
+                return Err(
+                    "terminal original has no finite expiry; preserve before migration".into(),
+                );
+            }
+            return Ok(Some(Lifetime {
+                created_at: None,
+                deadline: output.bound_expiry(output.expires),
+            }));
+        }
         if identity(&path)? != output.identity {
             return Err("original identity changed before creation-window migration".into());
         }
