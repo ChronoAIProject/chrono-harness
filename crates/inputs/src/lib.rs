@@ -481,6 +481,28 @@ fn store(root: &Path, input: &Path) -> Result<Value, String> {
         return Err("E_INPUT_READ: not a regular file".into());
     }
     let length = file.metadata().map_err(|e| e.to_string())?.len();
+    if chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?.is_some() {
+        let (sha256, observed_length) = file_identity(input)?;
+        if observed_length != length {
+            return Err("E_INPUT_BLOB: source length changed".into());
+        }
+        let path = format!("{BLOB_DIRECTORY}/{sha256}");
+        // The blob owner already reserves before writing and verifies the
+        // bounded source copy. A second managed staging original has no caller.
+        if chrono_harness::retained_artifacts::retention::publish_owned_file(
+            root,
+            "full-original",
+            &path,
+            input,
+            &sha256,
+            length,
+            value!({"kind":"input-blob","sha256":sha256,"length":length}),
+        )
+        .map_err(|e| format!("E_INPUT_BLOB: {e}"))?
+        {
+            return Ok(value!({"blob":path,"sha256":sha256,"length":length}));
+        }
+    }
     let (stage, sha256, length) =
         custody::StagedBlob::write(root, length, |output| copy_hashed(file, output))?;
     publish_blob(root, &stage.path, sha256, length)

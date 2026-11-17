@@ -1339,6 +1339,13 @@ fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
     assert_eq!(second_snapshot["files"]["data"]["blob"], blob);
     let second = second_snapshot.handoff("input-retention-second").unwrap();
     drop(second_snapshot);
+    assert_eq!(
+        fs::read_dir(host.path().join(".chrono-harness/state/inputs/blobs"))
+            .unwrap()
+            .count(),
+        1,
+        "two snapshots of the same input need one shared blob and no staging copies"
+    );
     let records = owner.producer_status("full-original", None).unwrap();
     assert_eq!(records["scope_complete"], true, "{records}");
     let ids: Vec<_> = records["records"]

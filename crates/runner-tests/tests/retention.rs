@@ -926,7 +926,9 @@ fn retired_metadata_recovers_a_path_unlinked_before_cursor_checkpoint() {
     let sibling = ".chrono-harness/state/fixtures/current-path-sibling";
     fs::write(h.path().join(sibling), b"current original").unwrap();
     let current = owner.begin("fixture", sibling, json!(null)).unwrap();
-    let mut address = h.path().join(".chrono-harness/state/output-retention-v1/paths");
+    let mut address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
     for component in path.split('/') {
         address.push(chrono_harness::sha256(component.as_bytes()));
     }
@@ -936,17 +938,22 @@ fn retired_metadata_recovers_a_path_unlinked_before_cursor_checkpoint() {
     fs::remove_dir(&address).unwrap();
     assert_eq!(fs::read(&object).unwrap(), before);
     let parent = address.parent().unwrap();
-    let sibling_reader =
-        chrono_harness::ownership::DirectoryLease::acquire(parent, false, None)
-            .unwrap()
-            .unwrap();
+    let sibling_reader = chrono_harness::ownership::DirectoryLease::acquire(parent, false, None)
+        .unwrap()
+        .unwrap();
     let round = inventory(h.path())
         .maintain_originals_at(std::slice::from_ref(&id), u64::MAX)
         .unwrap();
-    assert!(round["accounting_errors"].as_array().unwrap().is_empty(), "{round}");
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
     assert!(!object.parent().unwrap().exists(), "{round}");
     assert!(parent.join("address.json").is_file());
-    assert_eq!(fs::read(h.path().join(sibling)).unwrap(), b"current original");
+    assert_eq!(
+        fs::read(h.path().join(sibling)).unwrap(),
+        b"current original"
+    );
     sibling_reader.stable().unwrap();
     drop(sibling_reader);
     current.complete(json!({"exit":0})).unwrap();
