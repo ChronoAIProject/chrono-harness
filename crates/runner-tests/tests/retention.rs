@@ -312,6 +312,168 @@ fn explicit_lifetime_adoption_uses_physical_birth_and_never_renews_it() {
 }
 
 #[test]
+fn terminal_policy_migration_uses_existing_expiry_after_original_is_absent() {
+    if !isolated_capability_test(
+        "terminal_policy_migration_uses_existing_expiry_after_original_is_absent",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/absent-terminal";
+    fs::write(h.path().join(path), b"already disposed").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!({"exit": 0}))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete_sealed(json!({"exit": 0})).unwrap();
+    let mut output = ledger(h.path())["outputs"][0].clone();
+    output["phase"] = json!("disposing");
+    let expiry = output["expires"].as_u64().unwrap();
+    retention_state::replace_output(h.path(), &output);
+    fs::remove_file(h.path().join(path)).unwrap();
+
+    let policy_path = h.path().join(POLICY_PATH);
+    let previous = fs::read(&policy_path).unwrap();
+    let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+    policy["max_lifetime_seconds"] = json!(60);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+
+    let migration = inventory(h.path())
+        .migrate_policy(&previous, Some(std::slice::from_ref(&id)))
+        .unwrap();
+    assert_eq!(migration["completion"], "not-established");
+    let migrated = ledger(h.path())["outputs"][0].clone();
+    assert_eq!(migrated["lifetime"]["deadline"], expiry);
+    assert!(migrated["lifetime"]["created_at"].is_null());
+    assert_eq!(migrated["expires"], expiry);
+
+    let round = inventory(h.path())
+        .maintain_originals_at(std::slice::from_ref(&id), u64::MAX)
+        .unwrap();
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
+    assert!(
+        !retention_state::object_path(h.path(), &id).exists() || output_retired(h.path(), &id),
+        "{round}"
+    );
+}
+
+#[test]
+fn absent_terminal_migration_preserves_unknown_roots_and_excludes_readers() {
+    if !isolated_capability_test(
+        "absent_terminal_migration_preserves_unknown_roots_and_excludes_readers",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/unknown-absent";
+    fs::write(h.path().join(path), b"unknown producer result").unwrap();
+    let publication = inventory(h.path())
+        .begin_rooted(
+            "fixture",
+            path,
+            json!({"completion":"not-established"}),
+            &["actual-recovery".into()],
+        )
+        .unwrap();
+    let id = publication.id().to_owned();
+    drop(publication);
+    let mut output = ledger(h.path())["outputs"][0].clone();
+    output["phase"] = json!("sealing");
+    retention_state::replace_output(h.path(), &output);
+    let reader = inventory(h.path()).consume(&id).unwrap();
+    fs::remove_file(h.path().join(path)).unwrap();
+    let before = ledger(h.path());
+    let policy_path = h.path().join(POLICY_PATH);
+    let previous = fs::read(&policy_path).unwrap();
+    let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+    policy["max_lifetime_seconds"] = json!(60);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    assert!(
+        inventory(h.path())
+            .migrate_policy(&previous, Some(std::slice::from_ref(&id)))
+            .is_err()
+    );
+    assert_eq!(ledger(h.path())["outputs"], before["outputs"]);
+    drop(reader);
+    let inv = inventory(h.path());
+    inv.migrate_policy(&previous, Some(std::slice::from_ref(&id)))
+        .unwrap();
+    let migrated = ledger(h.path());
+    assert_eq!(migrated["roots"], before["roots"]);
+    assert_eq!(
+        migrated["outputs"][0]["outcome"],
+        before["outputs"][0]["outcome"]
+    );
+    assert_eq!(migrated["outputs"][0]["expires"], output["expires"]);
+    assert_eq!(migrated["outputs"][0]["phase"], "sealing");
+    assert!(migrated["outputs"][0]["lifetime"]["created_at"].is_null());
+    assert!(inv.consume(&id).is_err());
+    assert!(
+        inv.reference("new-reader", std::slice::from_ref(&id))
+            .is_err()
+    );
+    assert!(inv.retain_diagnostic_path(path).is_err());
+    let round = inv
+        .maintain_originals_at(std::slice::from_ref(&id), u64::MAX)
+        .unwrap();
+    assert_eq!(ledger(h.path())["roots"], before["roots"], "{round}");
+    assert!(!output_retired(h.path(), &id), "{round}");
+    inv.migrate_policy(&previous, Some(std::slice::from_ref(&id)))
+        .unwrap();
+    assert_eq!(ledger(h.path())["outputs"], migrated["outputs"]);
+}
+
+#[test]
+fn lifetime_migration_rejects_missing_nonterminal_and_replaced_terminal_originals() {
+    if !isolated_capability_test(
+        "lifetime_migration_rejects_missing_nonterminal_and_replaced_terminal_originals",
+    ) {
+        return;
+    }
+    for terminal in [false, true] {
+        let h = host(256, 16);
+        let path = ".chrono-harness/state/fixtures/changed-original";
+        fs::write(h.path().join(path), b"original").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", path, json!({}))
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete_sealed(json!({"exit":0})).unwrap();
+        if terminal {
+            let mut output = ledger(h.path())["outputs"][0].clone();
+            output["phase"] = json!("disposing");
+            retention_state::replace_output(h.path(), &output);
+        }
+        let before = ledger(h.path());
+        fs::rename(h.path().join(path), h.path().join("saved-original")).unwrap();
+        if terminal {
+            fs::write(h.path().join(path), b"replacement").unwrap();
+        }
+        let policy_path = h.path().join(POLICY_PATH);
+        let previous = fs::read(&policy_path).unwrap();
+        let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+        policy["max_lifetime_seconds"] = json!(60);
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        assert!(
+            inventory(h.path())
+                .migrate_policy(&previous, Some(std::slice::from_ref(&id)))
+                .is_err()
+        );
+        assert_eq!(ledger(h.path())["outputs"], before["outputs"]);
+        assert_eq!(
+            fs::read(h.path().join("saved-original")).unwrap(),
+            b"original"
+        );
+        if terminal {
+            assert_eq!(fs::read(h.path().join(path)).unwrap(), b"replacement");
+        }
+    }
+}
+
+#[test]
 fn exhausted_retirement_budget_reports_the_unattempted_original() {
     if !isolated_capability_test("exhausted_retirement_budget_reports_the_unattempted_original") {
         return;
