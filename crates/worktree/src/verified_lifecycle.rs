@@ -51,7 +51,10 @@ pub use automatic_verification::age::{age_preservation_required, reusable_releas
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::inventory::append_action_index;
 #[cfg(not(verus_keep_ghost))]
-pub use crate::automatic::migration::checkout_migration_ready;
+pub use crate::automatic::migration::{
+    adopted_policy_binding_error, checkout_migration_ready, policy_migration_decision,
+    policy_state_conflict, policy_state_present, store_current_policy,
+};
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::service::{
     maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,
@@ -60,7 +63,10 @@ pub use crate::automatic::service::{
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::inventory::append_action_index;
 #[cfg(verus_keep_ghost)]
-pub use automatic_verification::migration::checkout_migration_ready;
+pub use automatic_verification::migration::{
+    adopted_policy_binding_error, checkout_migration_ready, policy_migration_decision,
+    policy_state_conflict, policy_state_present, store_current_policy,
+};
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::service::{
     maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,

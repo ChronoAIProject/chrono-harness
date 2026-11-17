@@ -76,6 +76,60 @@ fn checkout_adoption_requires_active_joined_nonterminal_work() {
     expect(!policy::checkout_migration_ready("active\0", false, false, false));
     expect(!policy::checkout_migration_ready("", false, false, false));
 }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn current_policy_handoff_keeps_one_binding_and_no_original_chain() {
+    expect(!policy::policy_state_present(false, false));
+    expect(policy::policy_state_present(false, true));
+    expect(policy::policy_state_present(true, false));
+    expect(policy::policy_state_present(true, true));
+    expect(!policy::policy_state_conflict(false, false));
+    expect(!policy::policy_state_conflict(false, true));
+    expect(!policy::policy_state_conflict(true, false));
+    expect(policy::policy_state_conflict(true, true));
+    let empty = policy::policy_migration_decision(false, false, false, false);
+    expect(!empty.store_current && !empty.proceed);
+    let legacy = policy::policy_migration_decision(false, true, false, false);
+    expect(legacy.store_current && legacy.proceed);
+    let current = policy::policy_migration_decision(true, false, false, false);
+    expect(!current.store_current && !current.proceed);
+    let checkout = policy::policy_migration_decision(true, false, false, true);
+    expect(!checkout.store_current && checkout.proceed);
+    let changed = policy::policy_migration_decision(true, false, true, false);
+    expect(changed.store_current && changed.proceed);
+    let both = policy::policy_migration_decision(false, true, true, true);
+    expect(both.store_current && both.proceed);
+
+    let mut binding = None;
+    let mut originals = Vec::new();
+    originals.push(7u64);
+    originals.push(9u64);
+    policy::store_current_policy(&mut binding, &mut originals, 13u64);
+    expect(binding == Some(13u64) && originals.len() == 0);
+    policy::store_current_policy(&mut binding, &mut originals, 17u64);
+    expect(binding == Some(17u64) && originals.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn current_policy_binding_requires_exact_inputs_and_preserves_error_priority() {
+    expect(policy::adopted_policy_binding_error(true, true, true, true, true, true).is_none());
+    let digest = policy::adopted_policy_binding_error(false, true, true, true, true, true);
+    expect(policy::equal_text(digest.unwrap(), "invalid current adopted policy binding"));
+    let keys = policy::adopted_policy_binding_error(true, false, true, true, true, true);
+    expect(policy::equal_text(keys.unwrap(), "invalid current adopted policy binding"));
+    let inputs = policy::adopted_policy_binding_error(true, true, false, true, true, true);
+    expect(policy::equal_text(inputs.unwrap(), "invalid current adopted policy binding"));
+    let source_keys = policy::adopted_policy_binding_error(true, true, true, false, true, true);
+    expect(policy::equal_text(source_keys.unwrap(), "adopted cleanup source does not bind policy inputs"));
+    let source_digest = policy::adopted_policy_binding_error(true, true, true, true, false, true);
+    expect(policy::equal_text(source_digest.unwrap(), "adopted cleanup source does not bind policy inputs"));
+    let mismatch = policy::adopted_policy_binding_error(true, true, true, true, true, false);
+    expect(policy::equal_text(mismatch.unwrap(), "current adopted policy digest differs from its committed inputs"));
+    let all_invalid = policy::adopted_policy_binding_error(false, false, false, false, false, false);
+    expect(policy::equal_text(all_invalid.unwrap(), "invalid current adopted policy binding"));
+    let invalid_source = policy::adopted_policy_binding_error(true, true, true, false, false, false);
+    expect(policy::equal_text(invalid_source.unwrap(), "adopted cleanup source does not bind policy inputs"));
+}
 }
 
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
@@ -261,7 +315,7 @@ fn adopted_current_policy_rejects_invalid_binding_and_changed_committed_inputs()
         ("/head", value!("not-an-oid")),
         ("/policy_sha256", value!("a".repeat(64))),
         (
-            "/inputs/.chrono-harness~1config.json",
+            "/inputs/.chrono-harness~1worktree.json",
             value!("b".repeat(64)),
         ),
     ] {
@@ -551,6 +605,23 @@ fn explicit_cleanup_adoption_preserves_changed_inputs_and_corrupt_source_evidenc
         .find(|row| row["phase"] == "next-policy-source" && row["path"] == CLEANUP)
         .unwrap();
     let original = h.root.join(source["input"]["path"].as_str().unwrap());
+    // This evidence is authority only for a still-enrolled old chain. New
+    // current bindings read their committed source independently of this copy.
+    edit(
+        &h.root,
+        h.ledger_path(&target)
+            .strip_prefix(&h.root)
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        |v| {
+            v["entries"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("adopted_policy");
+            v["entries"][0]["policy_migrations"] = value!([adopted["policy_migration"]["receipt"]]);
+        },
+    );
     fs::write(original, b"changed retained source bytes").unwrap();
     let (code, report, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{report} {error}");

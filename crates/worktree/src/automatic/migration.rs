@@ -16,6 +16,64 @@ pub fn checkout_migration_ready(status: &str, terminal: bool, uses_pending: bool
 {
     equal_text(status, "active") && !terminal && !uses_pending && !handoff_pending
 }
+
+pub fn policy_state_present(current: bool, history: bool) -> (present: bool)
+    ensures present <==> (current || history),
+{
+    current || history
+}
+
+pub fn policy_state_conflict(current: bool, history: bool) -> (conflict: bool)
+    ensures conflict <==> (current && history),
+{
+    current && history
+}
+
+pub struct PolicyMigrationDecision {
+    pub store_current: bool,
+    pub proceed: bool,
+}
+
+pub fn policy_migration_decision(current: bool, history: bool,
+    policy_changed: bool, checkout_changed: bool) -> (decision: PolicyMigrationDecision)
+    ensures
+        decision.store_current <==> (policy_changed || (!current && history)),
+        decision.proceed <==> (policy_changed || checkout_changed || (!current && history)),
+{
+    let store_current = policy_changed || (!current && history);
+    PolicyMigrationDecision { store_current, proceed: store_current || checkout_changed }
+}
+
+/// This is the actual in-memory handoff saved by the enrollment publisher.
+/// It retains one current value and no audit-original chain.
+pub fn store_current_policy<B, R>(current: &mut Option<B>, originals: &mut Vec<R>, next: B)
+    ensures *current == Some(next), originals@.len() == 0,
+{
+    *current = Some(next);
+    originals.clear();
+}
+
+/// JSON/map and committed-byte observations are supplied by the adapter.
+/// This function owns the new binding's admission and first-error order.
+pub fn adopted_policy_binding_error(digest_valid: bool, input_keys_valid: bool,
+    input_digests_valid: bool, source_keys_valid: bool, source_digests_valid: bool,
+    policy_digest_matches: bool) -> (error: Option<&'static str>)
+    ensures error == (if !digest_valid || !input_keys_valid || !input_digests_valid {
+        Some("invalid current adopted policy binding")
+    } else if !source_keys_valid || !source_digests_valid {
+        Some("adopted cleanup source does not bind policy inputs")
+    } else if !policy_digest_matches {
+        Some("current adopted policy digest differs from its committed inputs")
+    } else { None }),
+{
+    if !digest_valid || !input_keys_valid || !input_digests_valid {
+        Some("invalid current adopted policy binding")
+    } else if !source_keys_valid || !source_digests_valid {
+        Some("adopted cleanup source does not bind policy inputs")
+    } else if !policy_digest_matches {
+        Some("current adopted policy digest differs from its committed inputs")
+    } else { None }
+}
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -67,7 +125,7 @@ impl Manager {
 
     pub(super) fn policy_binding(&self, e: &Entry) -> Result<PolicyBinding, String> {
         if let Some(binding) = &e.adopted_policy {
-            if !e.policy_migrations.is_empty() {
+            if policy_state_conflict(true, !e.policy_migrations.is_empty()) {
                 return Err("current policy binding cannot retain a migration chain".into());
             }
             self.validate_adopted_binding(binding)?;
@@ -111,38 +169,39 @@ impl Manager {
 
     fn validate_adopted_binding(&self, binding: &PolicyBinding) -> Result<(), String> {
         facts::full_oid(&binding.head)?;
-        if !chrono_harness::wire::is_digest(&binding.policy_sha256)
-            || binding.inputs.keys().ne(BTreeMap::from([
-                (self.inputs.config_path.clone(), ()),
-                (self.inputs.policy_path.clone(), ()),
-            ])
-            .keys())
-            || binding
-                .inputs
-                .values()
-                .flatten()
-                .any(|digest| !chrono_harness::wire::is_digest(digest))
-        {
-            return Err("invalid current adopted policy binding".into());
-        }
-        let source_inputs = if let Some(source) = &binding.policy_source {
-            facts::full_oid(&source.head)?;
-            if source.inputs.keys().ne(binding.inputs.keys())
-                || source
-                    .inputs
-                    .values()
-                    .flatten()
-                    .any(|digest| !chrono_harness::wire::is_digest(digest))
-            {
-                return Err("adopted cleanup source does not bind policy inputs".into());
-            }
-            &source.inputs
-        } else {
-            &binding.inputs
-        };
-        if source_inputs.get(&self.inputs.policy_path) != Some(&Some(binding.policy_sha256.clone()))
-        {
-            return Err("current adopted policy digest differs from its committed inputs".into());
+        let input_keys_valid = binding.inputs.keys().eq(BTreeMap::from([
+            (self.inputs.config_path.clone(), ()),
+            (self.inputs.policy_path.clone(), ()),
+        ])
+        .keys());
+        let input_digests_valid = binding
+            .inputs
+            .values()
+            .flatten()
+            .all(|digest| chrono_harness::verified_identifiers::valid_digest_text(digest));
+        let (source_inputs, source_keys_valid, source_digests_valid) =
+            if let Some(source) = &binding.policy_source {
+                facts::full_oid(&source.head)?;
+                (
+                    &source.inputs,
+                    source.inputs.keys().eq(binding.inputs.keys()),
+                    source.inputs.values().flatten().all(|digest| {
+                        chrono_harness::verified_identifiers::valid_digest_text(digest)
+                    }),
+                )
+            } else {
+                (&binding.inputs, true, true)
+            };
+        if let Some(error) = adopted_policy_binding_error(
+            chrono_harness::verified_identifiers::valid_digest_text(&binding.policy_sha256),
+            input_keys_valid,
+            input_digests_valid,
+            source_keys_valid,
+            source_digests_valid,
+            source_inputs.get(&self.inputs.policy_path)
+                == Some(&Some(binding.policy_sha256.clone())),
+        ) {
+            return Err(error.into());
         }
         Ok(())
     }
@@ -309,8 +368,13 @@ impl Manager {
         let policy_changed = previous.policy_sha256 != next.policy_sha256
             || previous.inputs != next.inputs
             || previous.policy_source != next.policy_source;
-        let checkpoint_required = e.adopted_policy.is_none() && !e.policy_migrations.is_empty();
-        if !policy_changed && !checkout_changed && !checkpoint_required {
+        let decision = policy_migration_decision(
+            e.adopted_policy.is_some(),
+            !e.policy_migrations.is_empty(),
+            policy_changed,
+            checkout_changed,
+        );
+        if !decision.proceed {
             self.check_entry(r, &e, &head, None)?;
             lease.stable()?;
             if let Some(checkout_report) = checkout_report {
@@ -384,16 +448,19 @@ impl Manager {
         }
         let mut updated = self.ledger.entries[i].clone();
         updated.checkout_branch = current.checkout_branch;
-        if policy_changed || checkpoint_required {
+        if decision.store_current {
             // Transfer only the state required for future operations to the
             // existing durable enrollment owner. Audit originals retain their
             // own finite publication lifetime; they are not runtime authority.
-            updated.adopted_policy = Some(if policy_changed {
-                next.clone()
-            } else {
-                previous
-            });
-            updated.policy_migrations.clear();
+            store_current_policy(
+                &mut updated.adopted_policy,
+                &mut updated.policy_migrations,
+                if policy_changed {
+                    next.clone()
+                } else {
+                    previous
+                },
+            );
         }
         let owner = updated
             .ownership

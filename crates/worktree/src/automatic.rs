@@ -574,7 +574,10 @@ struct Entry {
 #[cfg(not(verus_keep_ghost))]
 impl Entry {
     fn has_adopted_policy(&self) -> bool {
-        self.adopted_policy.is_some() || !self.policy_migrations.is_empty()
+        migration::policy_state_present(
+            self.adopted_policy.is_some(),
+            !self.policy_migrations.is_empty(),
+        )
     }
     // Creation evidence keeps `branch`; only explicit migrate adopts a new checkout.
     fn current_branch(&self) -> &str {
