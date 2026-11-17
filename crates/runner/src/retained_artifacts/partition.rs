@@ -949,13 +949,14 @@ impl Inventory {
         {
             return Ok(());
         }
+        let initial_prune_path = record.prune_path.clone();
         while let Some(path) = record.prune_path.clone() {
             if *nodes + 4 > self.policy.max_nodes_per_round
                 || !self.metadata_room()
                 || self.round_began.get().unwrap().elapsed().as_millis()
                     >= self.policy.max_millis_per_round as u128
             {
-                return Ok(());
+                break;
             }
             *nodes += 1;
             let path_directory = self.path_directory(&path)?;
@@ -970,20 +971,19 @@ impl Inventory {
                     let Some(observation) =
                         DirectoryLease::acquire_local(&path_directory, false, None)?
                     else {
-                        return Ok(());
+                        break;
                     };
                     let occupied = self.path_metadata_occupied(&path_directory, &path)?;
                     self.stable(&observation)?;
                     drop(observation);
                     if occupied {
                         record.prune_path = None;
-                        self.write_metadata(&directory.join("record.json"), &record)?;
                         break;
                     }
                     let Some(path_gate) =
                         DirectoryLease::acquire_local(&path_directory, true, None)?
                     else {
-                        return Ok(());
+                        break;
                     };
                     // The shared observation may already be stale. Recheck the
                     // actual mapping and members under the original exclusion.
@@ -1000,11 +1000,16 @@ impl Inventory {
                     }
                 }
             }
-            self.write_metadata(&directory.join("record.json"), &record)?;
         }
-        if *nodes + 3 <= self.policy.max_nodes_per_round {
+        if record.prune_path.is_none() && *nodes + 3 <= self.policy.max_nodes_per_round {
             self.remove_metadata_directory(&directory, &gate, &["record.json", "record.pending"])?;
             *nodes += 3;
+        } else if record.prune_path != initial_prune_path {
+            // Missing path declarations are recoverable from the old cursor:
+            // every resumed step checks its current identity, occupancy and
+            // exclusion again. Persist once when this bounded pass pauses;
+            // completed retirement needs no intermediate record rewrite.
+            self.write_metadata(&directory.join("record.json"), &record)?;
         }
         Ok(())
     }

@@ -898,6 +898,61 @@ fn unknown_quota_member_preserves_other_outputs_until_its_scope_is_known() {
 }
 
 #[test]
+fn retired_metadata_recovers_a_path_unlinked_before_cursor_checkpoint() {
+    if !isolated_capability_test(
+        "retired_metadata_recovers_a_path_unlinked_before_cursor_checkpoint",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["metadata_keep_seconds"] = json!(3600);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(h.path());
+    let path = ".chrono-harness/state/fixtures/interrupted-path-prune";
+    fs::write(h.path().join(path), b"rebuildable").unwrap();
+    let publication = owner.begin("fixture", path, json!(null)).unwrap();
+    let id = publication.id().to_owned();
+    publication.complete(json!({"exit":0})).unwrap();
+    let round = owner.maintain_originals(std::slice::from_ref(&id)).unwrap();
+    assert!(!h.path().join(path).exists(), "{round}");
+    let object = retention_state::object_path(h.path(), &id);
+    let before = fs::read(&object).unwrap();
+    let declaration: Value = serde_json::from_slice(&before).unwrap();
+    assert!(declaration["output"].is_null(), "{declaration}");
+    assert_eq!(declaration["prune_path"], path);
+
+    let sibling = ".chrono-harness/state/fixtures/current-path-sibling";
+    fs::write(h.path().join(sibling), b"current original").unwrap();
+    let current = owner.begin("fixture", sibling, json!(null)).unwrap();
+    let mut address = h.path().join(".chrono-harness/state/output-retention-v1/paths");
+    for component in path.split('/') {
+        address.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    // Simulate interruption after the empty address was unlinked, before the
+    // object cursor was checkpointed. Leave the actual old cursor unchanged.
+    fs::remove_file(address.join("address.json")).unwrap();
+    fs::remove_dir(&address).unwrap();
+    assert_eq!(fs::read(&object).unwrap(), before);
+    let parent = address.parent().unwrap();
+    let sibling_reader =
+        chrono_harness::ownership::DirectoryLease::acquire(parent, false, None)
+            .unwrap()
+            .unwrap();
+    let round = inventory(h.path())
+        .maintain_originals_at(std::slice::from_ref(&id), u64::MAX)
+        .unwrap();
+    assert!(round["accounting_errors"].as_array().unwrap().is_empty(), "{round}");
+    assert!(!object.parent().unwrap().exists(), "{round}");
+    assert!(parent.join("address.json").is_file());
+    assert_eq!(fs::read(h.path().join(sibling)).unwrap(), b"current original");
+    sibling_reader.stable().unwrap();
+    drop(sibling_reader);
+    current.complete(json!({"exit":0})).unwrap();
+}
+
+#[test]
 fn retired_metadata_does_not_exclude_a_populated_parent_address() {
     if !isolated_capability_test("retired_metadata_does_not_exclude_a_populated_parent_address") {
         return;
