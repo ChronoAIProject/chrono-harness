@@ -2429,6 +2429,79 @@ impl Manager {
             }
         }
         self.reconcile_terminal_handoffs()?;
+        self.reconcile_cleanup_results()?;
+        Ok(())
+    }
+
+    /// A sealed producer can outlive its caller's ledger update. Recover only
+    /// the original result reference; cleanup effects still require their own
+    /// identity, ownership and Git checks in the normal execution path.
+    fn reconcile_cleanup_results(&mut self) -> Result<(), String> {
+        let root = self.inputs.policy.coordinator_root.clone();
+        let Some(inventory) =
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
+        else {
+            return Ok(());
+        };
+        let role = self.original_role()?;
+        let config: crate::Config = decode(&self.inputs.anchor_config_bytes)?;
+        for i in 0..self.ledger.entries.len() {
+            let e = self.ledger.entries[i].clone();
+            // Age retirement and cache generations have distinct recovery
+            // contracts. This handoff consumes only a terminal cleanup result.
+            if !e.enrollment["age_retirement"].is_null() {
+                continue;
+            }
+            let Some(attempt) = e.attempts.last().filter(|a| a.receipt.is_none()) else {
+                continue;
+            };
+            let terminal = e
+                .terminal
+                .as_ref()
+                .ok_or("cleanup result has no terminal owner")?;
+            let handoff = e
+                .terminal_handoff()?
+                .ok_or("cleanup result terminal facts not established")?;
+            if attempt.path != format!("{}{}.json", config.report_directory, attempt.token) {
+                return Err("cleanup result path differs from its recorded invocation".into());
+            }
+            let _input = chrono_harness::retained_artifacts::retention::consumer_read_guard(
+                &root,
+                &attempt.path,
+                &role,
+            )?;
+            let bytes =
+                crate::recovery::state_bytes_for_consumer(&root, &attempt.path, Some(&role))?;
+            let report = json(&bytes)?;
+            let terminal_matches = if report.get("terminal_handoff").is_some() {
+                report["terminal_handoff"] == handoff
+            } else {
+                report["terminal_receipt"] == value!(terminal.receipt)
+            };
+            if report["schema"] != "chrono-worktree-report/v1"
+                || report["operation"] != "cleanup"
+                || !matches!(report["status"].as_str(), Some("cleaned" | "failed"))
+                || report["source_root"] != value!(root)
+                || report["config_path"] != self.inputs.config_path
+                || report["report_path"] != attempt.path
+                || report["lock_reason"] != attempt.token
+                || report["automatic_cleanup"] != true
+                || !terminal_matches
+            {
+                return Err("cleanup result does not bind this terminal attempt".into());
+            }
+            if !inventory.published_original(&attempt.path, &sha256(&bytes), bytes.len() as u64)? {
+                return Err("cleanup result publication is not established".into());
+            }
+            self.verify_inputs(&report)?;
+            self.ledger.entries[i].attempts.last_mut().unwrap().receipt = Some(Receipt {
+                path: attempt.path.clone(),
+                sha256: sha256(&bytes),
+            });
+            // The path was already a durable member. Preserve that capability
+            // across the atomic update without admitting a new expired reader.
+            self.save_result_handoff()?;
+        }
         Ok(())
     }
 
@@ -4084,7 +4157,11 @@ impl Manager {
                         .as_str()
                         .ok_or("cleanup report path")?
                         .to_owned();
-                    let b = crate::recovery::state_bytes(&root, &path)?;
+                    let b = crate::recovery::state_bytes_for_consumer(
+                        &root,
+                        &path,
+                        Some(&self.original_role()?),
+                    )?;
                     let crate::verified_lifecycle::CleanupOutcome {
                         cache: cache_outcome,
                         cleaned,
