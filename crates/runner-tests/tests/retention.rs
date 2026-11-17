@@ -258,6 +258,278 @@ fn expired_original_rejects_new_readers_and_edges_but_allows_exact_release() {
 }
 
 #[test]
+fn existing_consumer_can_transfer_expired_originals_without_new_report_dependencies() {
+    if !isolated_capability_test(
+        "existing_consumer_can_transfer_expired_originals_without_new_report_dependencies",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let leaf = ".chrono-harness/state/fixtures/owned-leaf";
+    let parent = ".chrono-harness/state/fixtures/owned-parent";
+    let mut ids = Vec::new();
+    for path in [leaf, parent] {
+        fs::write(h.path().join(path), path.as_bytes()).unwrap();
+        let output = inventory(h.path())
+            .begin("fixture", path, json!({}))
+            .unwrap();
+        ids.push(output.id().to_owned());
+        output.complete_sealed(json!({"exit_code":0})).unwrap();
+    }
+    let inv = inventory(h.path());
+    inv.dependencies(&ids[1], &ids[..1]).unwrap();
+    inv.reference("original-owner", &ids[1..]).unwrap();
+    inv.reference("different-owner", &[]).unwrap();
+    for mut output in ledger(h.path())["outputs"].as_array().unwrap().clone() {
+        output["lifetime"] = json!({"created_at":1,"deadline":2});
+        output["expires"] = json!(2);
+        retention_state::replace_output(h.path(), &output);
+    }
+    let report_path = ".chrono-harness/state/fixtures/new-report";
+    let report = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(report_path),
+        false,
+        json!({}),
+    )
+    .unwrap()
+    .unwrap();
+    fs::write(h.path().join(report_path), b"new observation").unwrap();
+    let scope = retained_artifacts::retention::publication_read_scope(&report).unwrap();
+    let before = ledger(h.path());
+    for path in [leaf, parent] {
+        assert!(retained_artifacts::retention::read_guard(h.path(), path).is_err());
+        assert!(
+            retained_artifacts::retention::consumer_read_guard(h.path(), path, "different-owner")
+                .is_err()
+        );
+        assert!(
+            retained_artifacts::retention::consumer_read_guard(h.path(), path, "missing-owner")
+                .is_err()
+        );
+        let guard =
+            retained_artifacts::retention::consumer_read_guard(h.path(), path, "original-owner")
+                .unwrap()
+                .unwrap();
+        assert_eq!(fs::read(h.path().join(path)).unwrap(), path.as_bytes());
+        drop(guard);
+    }
+    assert_eq!(
+        ledger(h.path()),
+        before,
+        "recovery reads cannot renew any persistent retention state"
+    );
+    drop(scope);
+    report.complete_sealed(json!({"exit_code":0})).unwrap();
+
+    let guard =
+        retained_artifacts::retention::consumer_read_guard(h.path(), leaf, "original-owner")
+            .unwrap()
+            .unwrap();
+    inv.reference("original-owner", &[]).unwrap();
+    inv.maintain_originals_at(&ids, 3).unwrap();
+    assert!(
+        h.path().join(leaf).exists(),
+        "the returned capability still excludes disposal"
+    );
+    drop(guard);
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        rounds.push(inv.maintain_originals_at(&ids, 3).unwrap());
+        if !h.path().join(leaf).exists() && !h.path().join(parent).exists() {
+            break;
+        }
+    }
+    assert!(
+        !h.path().join(leaf).exists() && !h.path().join(parent).exists(),
+        "{rounds:?}"
+    );
+}
+
+#[test]
+fn existing_consumer_read_rejects_stale_incoming_edges_and_unsealed_originals() {
+    if !isolated_capability_test(
+        "existing_consumer_read_rejects_stale_incoming_edges_and_unsealed_originals",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let mut ids = Vec::new();
+    for path in [
+        ".chrono-harness/state/fixtures/unowned",
+        ".chrono-harness/state/fixtures/owned",
+    ] {
+        fs::write(h.path().join(path), path.as_bytes()).unwrap();
+        let output = inventory(h.path())
+            .begin("fixture", path, json!({}))
+            .unwrap();
+        ids.push(output.id().to_owned());
+        output.complete_sealed(json!({"exit_code":0})).unwrap();
+    }
+    let inv = inventory(h.path());
+    inv.reference("original-owner", &ids[1..]).unwrap();
+    for mut output in ledger(h.path())["outputs"].as_array().unwrap().clone() {
+        output["lifetime"] = json!({"created_at":1,"deadline":2});
+        output["expires"] = json!(2);
+        retention_state::replace_output(h.path(), &output);
+    }
+    let path = retention_state::object_path(h.path(), &ids[0]);
+    let mut record: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    record["incoming"] = json!([ids[1]]);
+    fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
+    let error = retained_artifacts::retention::consumer_read_guard(
+        h.path(),
+        ".chrono-harness/state/fixtures/unowned",
+        "original-owner",
+    )
+    .err()
+    .unwrap();
+    assert!(error.contains("not protected"), "{error}");
+
+    let mut output = ledger(h.path())["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["id"] == ids[1])
+        .unwrap()
+        .clone();
+    output["phase"] = json!("publishing");
+    output["manifest"]["sealed"] = json!(false);
+    retention_state::replace_output(h.path(), &output);
+    let error = retained_artifacts::retention::consumer_read_guard(
+        h.path(),
+        ".chrono-harness/state/fixtures/owned",
+        "original-owner",
+    )
+    .err()
+    .unwrap();
+    assert!(error.contains("not a sealed released output"), "{error}");
+}
+
+#[test]
+fn consumer_recovery_rejects_an_original_replaced_with_identical_bytes() {
+    if !isolated_capability_test(
+        "consumer_recovery_rejects_an_original_replaced_with_identical_bytes",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let path = ".chrono-harness/state/fixtures/replaced";
+    fs::write(h.path().join(path), b"same bytes").unwrap();
+    let output = inventory(h.path())
+        .begin("fixture", path, json!({}))
+        .unwrap();
+    let id = output.id().to_owned();
+    output.complete_sealed(json!({"exit_code":0})).unwrap();
+    inventory(h.path())
+        .reference("original-owner", &[id])
+        .unwrap();
+    let mut output = ledger(h.path())["outputs"][0].clone();
+    output["lifetime"] = json!({"created_at":1,"deadline":2});
+    output["expires"] = json!(2);
+    retention_state::replace_output(h.path(), &output);
+    fs::rename(h.path().join(path), h.path().join("saved-original")).unwrap();
+    fs::write(h.path().join(path), b"same bytes").unwrap();
+    assert!(
+        retained_artifacts::retention::consumer_read_guard(h.path(), path, "original-owner")
+            .err()
+            .unwrap()
+            .contains("identity changed")
+    );
+}
+
+#[test]
+fn consumer_recovery_requires_one_simultaneously_valid_reference_path() {
+    if !isolated_capability_test(
+        "consumer_recovery_requires_one_simultaneously_valid_reference_path",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let paths = [
+        ".chrono-harness/state/fixtures/leaf",
+        ".chrono-harness/state/fixtures/a",
+        ".chrono-harness/state/fixtures/b",
+        ".chrono-harness/state/fixtures/root",
+    ];
+    let inv = inventory(h.path());
+    let mut ids = Vec::new();
+    for path in paths {
+        fs::write(h.path().join(path), path.as_bytes()).unwrap();
+        let output = inventory(h.path())
+            .begin("fixture", path, json!({}))
+            .unwrap();
+        ids.push(output.id().to_owned());
+        output.complete_sealed(json!({"exit_code":0})).unwrap();
+    }
+    inv.dependencies_paths(paths[1], &[paths[0].into()])
+        .unwrap();
+    inv.dependencies_paths(paths[2], &[paths[1].into()])
+        .unwrap();
+    inv.reference("original-owner", &ids[3..]).unwrap();
+    let before = ledger(h.path());
+    for (source, target) in [(1, 0), (2, 1)] {
+        assert_eq!(
+            before["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|output| output["id"] == ids[source])
+                .unwrap()["references"],
+            json!([ids[target]]),
+            "the fixture must install its actual reference edges"
+        );
+    }
+    let mut leaf = ledger(h.path())["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["id"] == ids[0])
+        .unwrap()
+        .clone();
+    leaf["lifetime"] = json!({"created_at":1,"deadline":2});
+    leaf["expires"] = json!(2);
+    retention_state::replace_output(h.path(), &leaf);
+
+    let mut changed = false;
+    let read = retained_artifacts::retention::consumer_read_observed(
+        h.path(),
+        paths[0],
+        "original-owner",
+        |id| {
+            if id == ids[1] {
+                assert!(!changed);
+                // Break A -> leaf before connecting root -> B. At no point
+                // does the owner have a complete path to the expired leaf.
+                inv.dependencies_paths(paths[1], &[]).unwrap();
+                inv.dependencies_paths(paths[3], &[paths[2].into()])
+                    .unwrap();
+                changed = true;
+            }
+        },
+    );
+    assert!(
+        changed,
+        "the interleaving did not execute: {:?}",
+        read.as_ref().err()
+    );
+    let error = read
+        .err()
+        .expect("observations from different graph states cannot authorize recovery");
+    assert!(error.contains("reference path changed"), "{error}");
+    assert_eq!(
+        ledger(h.path())["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["id"] == ids[0])
+            .unwrap()["lifetime"],
+        leaf["lifetime"]
+    );
+}
+
+#[test]
 fn explicit_lifetime_adoption_uses_physical_birth_and_never_renews_it() {
     if !isolated_capability_test(
         "explicit_lifetime_adoption_uses_physical_birth_and_never_renews_it",
@@ -623,6 +895,70 @@ fn unknown_quota_member_preserves_other_outputs_until_its_scope_is_known() {
         assert_eq!(fs::read(file).unwrap(), b"required original", "{round}");
     }
     fs::write(record, original).unwrap();
+}
+
+#[test]
+fn retired_metadata_recovers_a_path_unlinked_before_cursor_checkpoint() {
+    if !isolated_capability_test(
+        "retired_metadata_recovers_a_path_unlinked_before_cursor_checkpoint",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["metadata_keep_seconds"] = json!(3600);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(h.path());
+    let path = ".chrono-harness/state/fixtures/interrupted-path-prune";
+    fs::write(h.path().join(path), b"rebuildable").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!(null))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete(json!({"exit":0})).unwrap();
+    let round = owner.maintain_originals(std::slice::from_ref(&id)).unwrap();
+    assert!(!h.path().join(path).exists(), "{round}");
+    let object = retention_state::object_path(h.path(), &id);
+    let before = fs::read(&object).unwrap();
+    let declaration: Value = serde_json::from_slice(&before).unwrap();
+    assert!(declaration["output"].is_null(), "{declaration}");
+    assert_eq!(declaration["prune_path"], path);
+
+    let sibling = ".chrono-harness/state/fixtures/current-path-sibling";
+    fs::write(h.path().join(sibling), b"current original").unwrap();
+    let current = owner.begin("fixture", sibling, json!(null)).unwrap();
+    let mut address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
+    for component in path.split('/') {
+        address.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    // Simulate interruption after the empty address was unlinked, before the
+    // object cursor was checkpointed. Leave the actual old cursor unchanged.
+    fs::remove_file(address.join("address.json")).unwrap();
+    fs::remove_dir(&address).unwrap();
+    assert_eq!(fs::read(&object).unwrap(), before);
+    let parent = address.parent().unwrap();
+    let sibling_reader = chrono_harness::ownership::DirectoryLease::acquire(parent, false, None)
+        .unwrap()
+        .unwrap();
+    let round = inventory(h.path())
+        .maintain_originals_at(std::slice::from_ref(&id), u64::MAX)
+        .unwrap();
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
+    assert!(!object.parent().unwrap().exists(), "{round}");
+    assert!(parent.join("address.json").is_file());
+    assert_eq!(
+        fs::read(h.path().join(sibling)).unwrap(),
+        b"current original"
+    );
+    sibling_reader.stable().unwrap();
+    drop(sibling_reader);
+    current.complete(json!({"exit":0})).unwrap();
 }
 
 #[test]
