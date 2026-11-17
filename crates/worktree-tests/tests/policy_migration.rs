@@ -400,6 +400,7 @@ fn invalid_current_birth_fact_refuses_use_and_preserves_outputs() {
     let (code, created, error) = h.invoke("integration", "invalid-current-birth", &target);
     assert_eq!(code, 0, "{created} {error}");
     cache(&target);
+    let payload = fs::read(target.join("payload")).unwrap();
     let ledger = h.ledger_path(&target);
     let original = fs::read(&ledger).unwrap();
     let mut invalid = json(&original).unwrap();
@@ -420,7 +421,7 @@ fn invalid_current_birth_fact_refuses_use_and_preserves_outputs() {
     assert_ne!(code, 0, "{maintained} {error}");
     assert_eq!(fs::read(&ledger).unwrap(), invalid);
     assert!(target.join("output λ/cache").is_file());
-    assert_eq!(fs::read(target.join("payload")).unwrap(), b"payload");
+    assert_eq!(fs::read(target.join("payload")).unwrap(), payload);
     fs::write(ledger, original).unwrap();
 }
 
