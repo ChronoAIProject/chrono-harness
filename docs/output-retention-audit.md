@@ -204,6 +204,21 @@ runner 的实际摘要 `d9891811d8248f6eb3fe290b6d9e38812d9c9177aacf8c8777bcd57b
 
 本次源码检出开始时没有构建输出，`du -sk .` 为 14,116 KiB；卷可用空间为 178,987,352 KiB。主库 bin／state／cache 的另一次计量没有收取到完整退出和输出，保持 unknown，未将它当成零或空间收益。本次没有运行新的全库维护，也没有声称已完成三次定时验收。
 
+## 当前候选迁移与验证（2026-11-17）
+
+本次将当前 policy `39c88afc330a2542ec0b768e1362fc2e21d61d75be6ca7cc7629b61ce9a5433f` 与旧 policy `c56d8a9449df752c5c095c9b0ad66962d8d0b165a901c3b5a4fda2c8937d3321` 做了 19 个具名原件的定向迁移。程序实际报告 `completion:not-established`、`effects:metadata-binding-only`、`outputs_preserved:142`、`roots_preserved:63`；18 个对象已经进入可退休边界，两个对象仍受真实关系保护。迁移不删除文件、不改写 role／ledger／record，也不把缺失原件变成新的读者准入。
+
+两个未完成对象的原始记录如下：
+
+- `output-84690-1794738198375302000-1` 的终态为 `disposing`，原报告已经缺失，但仍有报告／引用关系。记录保留原有 `expires`，不会用当前时间重建 `created_at`，也不会因物理原件缺失删除记录。
+- `output-73145-1794735628774966000-4` 的终态为 `sealing`，原件缺失，且仍有真实 active worktree enrollment 角色 `worktree-enrollment:fcc16ca706d6390b0c1cfe02ffa11b2383d35c9f3758290739750e06d5de637e`。该使用方对应 `/Users/macstudio2/chrono-spec-current-dev`、分支 `feature/ci-generation-state-20261113`、HEAD `1412c62f2818546c2a833d2937c4b6d2aa276ea1`，下一动作是 `complete-work-and-finish`。在该使用方交接前不能退休。
+
+候选 runner 的验证原件为 `.chrono-harness/state/retention-migration/runner-tests-current-20261117-v2.*` 和 `runner-cargo-verus-current-20261117-v2.*`。登记的 runner 测试退出码为 `0`，其中一个测试进程报告 `202 passed`，另一个报告 `75 passed`；直接执行登记 Cargo-Verus 参数的退出码为 `0`，输出报告 Verus `0.2026.04.24.f8e1704`、`verified:42`、`errors:0`。这些结果证明缺失终态迁移、重复迁移、活引用保护和相应局部 Verus 条件已通过候选检查，不证明全仓输出已经纳管或宿主已采用候选。
+
+正式宿主采用仍被阻断。把 `runner-build.json` 当作 bootstrap profile 被 `host-bootstrap` 拒绝（`unknown field binary`）；`bootstrap-core.json` 直接运行报告 `owner stage original report differs`；旧已部署 `chrono-worktree` 无法解析 `max_lifetime_seconds`；当前候选 bootstrap 又被 active root 引用过期输出阻断（典型错误 `output creation deadline closed: output-32354-1794196581936968000-4`），维护 socket 也曾连接拒绝。伪造 `CHRONO_PROCESS_FDS` 得到 `invalid or duplicate ownership descriptor`，因此没有绕过 owner 保护。上述原 stdout／stderr／退出码均保存在 `.chrono-harness/state/retention-migration/`，当前不能声称候选已经部署。
+
+正式维护的最近结果仍不是完成证据：迁移后维护原件报告 `scope.complete:false`、`accounting_errors:5`、`disposed:80`、`removed_logical_bytes:1942179`、`physical_bytes_reclaimed:null`。两个未完成对象和 active consumer 仍由维护器保护；未知、损坏、过期引用和报告交接未完成时继续保留。必须先完成 owner adoption、解决真实使用方交接，再用同一候选程序连续取得至少三轮真实定时完成结果，并核对报告元数据、实际物理回收、恢复和同范围占用，才可重新评估全称目标。
+
 ## 达成目标还需要什么
 
 先处理 O1、O2、O5 的真实覆盖缺口；再由各负责方结清 O3、O6 的已结束使用，不能跳过未知和失败义务。O4 若继续要求所有临时文件按时间到期，须在原日志所有者实现并验证。O7 要补实际状态机的进度及公平性证据；O8 要验证清理自身的报告和元数据不形成无限保留链。外部 provider 和下游须给出各自有效保留／释放合同与实际采用证据。
