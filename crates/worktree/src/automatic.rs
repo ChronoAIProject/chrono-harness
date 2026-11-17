@@ -3296,7 +3296,11 @@ impl Manager {
         }
     }
     fn receipt(&self, receipt: &Receipt) -> Result<Vec<u8>, String> {
-        let b = crate::recovery::state_bytes(&self.inputs.policy.coordinator_root, &receipt.path)?;
+        let b = crate::recovery::state_bytes_for_consumer(
+            &self.inputs.policy.coordinator_root,
+            &receipt.path,
+            Some(&self.original_role()?),
+        )?;
         if sha256(&b) != receipt.sha256 {
             return Err("original lifecycle receipt changed".into());
         }
@@ -3317,7 +3321,11 @@ impl Manager {
         Ok(self.retained_input(&path, bytes, "bytes"))
     }
     fn verify_inputs(&self, report: &Value) -> Result<(), String> {
-        crate::recovery::verify_inputs(&self.inputs.policy.coordinator_root, report)
+        crate::recovery::verify_inputs_for_consumer(
+            &self.inputs.policy.coordinator_root,
+            report,
+            Some(&self.original_role()?),
+        )
     }
     fn lease(&self, e: &Entry, exclusive: bool) -> Result<Option<Lease>, String> {
         let owner = e

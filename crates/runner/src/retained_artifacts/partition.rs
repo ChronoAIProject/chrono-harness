@@ -365,6 +365,109 @@ impl Gate {
 }
 #[cfg(not(verus_keep_ghost))]
 impl Inventory {
+    /// The held role is the existing owner's authority. Follow only reciprocal
+    /// incoming edges of the requested original, preferring that role's direct
+    /// members. One local metadata descriptor is used at a time; no membership,
+    /// deadline, recovery root or caller dependency is written here.
+    pub(super) fn partition_consumer_read(
+        &self,
+        consumer: &str,
+        original: &Output,
+    ) -> Result<Lease, String> {
+        let directory = self.role_directory(consumer)?;
+        self.read_role(consumer)?
+            .ok_or("existing retention consumer unavailable")?;
+        let owner = DirectoryLease::acquire_local(&directory, false, None)?
+            .ok_or("retention consumer metadata is busy")?;
+        let role = self
+            .read_role(consumer)?
+            .ok_or("existing retention consumer disappeared")?;
+        let mut pending = BTreeMap::from([(original.id.clone(), BTreeSet::<String>::new())]);
+        let mut visited = BTreeSet::new();
+        let mut capability = None;
+        while !pending.is_empty() {
+            let id = pending
+                .keys()
+                .find(|id| role.ids.contains(id))
+                .or_else(|| pending.keys().next())
+                .unwrap()
+                .clone();
+            let children = pending.remove(&id).unwrap();
+            if visited.contains(&id) {
+                continue;
+            }
+            let directory = self.object_directory(&id)?;
+            let guard = DirectoryLease::acquire_local(&directory, false, None)?
+                .ok_or_else(|| format!("retention output metadata is busy: {id}"))?;
+            let record = self.read_object(&id, &directory)?;
+            if record.policy_sha256 != sha256(&self.policy_bytes) {
+                return Err(
+                    "retention policy migration required; original record preserved".into(),
+                );
+            }
+            let output = record
+                .output
+                .as_ref()
+                .ok_or("existing consumer original unavailable")?;
+            if !children.is_empty()
+                && !children
+                    .iter()
+                    .any(|child| output.references.contains(child))
+            {
+                continue; // Interrupted removals can leave conservative incoming edges.
+            }
+            if output.phase != "released" || !output.manifest.sealed {
+                return Err("existing consumer original is not a sealed released output".into());
+            }
+            if id == original.id {
+                if output.path != original.path
+                    || output.identity != original.identity
+                    || output.lease != original.lease
+                    || output.lease_id != original.lease_id
+                {
+                    return Err("existing consumer original address changed".into());
+                }
+                crate::relative_path(&output.lease)?;
+                capability = Some(
+                    Lease::acquire(
+                        &no_symlink_parents(&self.directory, &output.lease)?,
+                        Some(&output.lease_id),
+                        false,
+                        false,
+                        None,
+                    )?
+                    .ok_or("original evidence disposal busy")?,
+                );
+                if identity(&no_symlink_parents(&self.root, &output.path)?)? != output.identity {
+                    return Err("existing consumer original identity changed".into());
+                }
+            }
+            self.stable(&guard)?;
+            if role.ids.contains(&id) {
+                if !record.roles.contains(consumer) {
+                    return Err("existing consumer membership is not reciprocal".into());
+                }
+                self.stable(&owner)?;
+                return capability.ok_or("existing consumer read lacks original capability".into());
+            }
+            visited.insert(id.clone());
+            for parent in &record.incoming {
+                if !visited.contains(parent) {
+                    pending
+                        .entry(parent.clone())
+                        .or_default()
+                        .insert(id.clone());
+                }
+            }
+            if visited.len() + pending.len() > self.policy.max_related_outputs {
+                return Err(
+                    "existing consumer read exceeds related retention graph capacity".into(),
+                );
+            }
+        }
+        Err("original is not protected by the existing retention consumer".into())
+    }
+
     /// Keep the consumer excluded, visiting only one member at a time. Install
     /// every requested member before releasing obsolete ones; failures retain
     /// conservative protection. No file descriptor set scales with membership.

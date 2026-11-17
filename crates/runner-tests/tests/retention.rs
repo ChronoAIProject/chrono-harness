@@ -258,6 +258,164 @@ fn expired_original_rejects_new_readers_and_edges_but_allows_exact_release() {
 }
 
 #[test]
+fn existing_consumer_can_transfer_expired_originals_without_new_report_dependencies() {
+    if !isolated_capability_test(
+        "existing_consumer_can_transfer_expired_originals_without_new_report_dependencies",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let leaf = ".chrono-harness/state/fixtures/owned-leaf";
+    let parent = ".chrono-harness/state/fixtures/owned-parent";
+    let mut ids = Vec::new();
+    for path in [leaf, parent] {
+        fs::write(h.path().join(path), path.as_bytes()).unwrap();
+        let output = inventory(h.path())
+            .begin("fixture", path, json!({}))
+            .unwrap();
+        ids.push(output.id().to_owned());
+        output.complete_sealed(json!({"exit_code":0})).unwrap();
+    }
+    let inv = inventory(h.path());
+    inv.dependencies(&ids[1], &ids[..1]).unwrap();
+    inv.reference("original-owner", &ids[1..]).unwrap();
+    inv.reference("different-owner", &[]).unwrap();
+    for mut output in ledger(h.path())["outputs"].as_array().unwrap().clone() {
+        output["lifetime"] = json!({"created_at":1,"deadline":2});
+        output["expires"] = json!(2);
+        retention_state::replace_output(h.path(), &output);
+    }
+    let report_path = ".chrono-harness/state/fixtures/new-report";
+    let report =
+        retained_artifacts::retention::create_adopted(h.path(), "fixture", report_path, json!({}))
+            .unwrap()
+            .unwrap();
+    fs::write(h.path().join(report_path), b"new observation").unwrap();
+    let scope = retained_artifacts::retention::publication_read_scope(&report).unwrap();
+    let before = ledger(h.path());
+    for path in [leaf, parent] {
+        assert!(retained_artifacts::retention::read_guard(h.path(), path).is_err());
+        assert!(
+            retained_artifacts::retention::consumer_read_guard(h.path(), path, "different-owner")
+                .is_err()
+        );
+        assert!(
+            retained_artifacts::retention::consumer_read_guard(h.path(), path, "missing-owner")
+                .is_err()
+        );
+        let guard =
+            retained_artifacts::retention::consumer_read_guard(h.path(), path, "original-owner")
+                .unwrap()
+                .unwrap();
+        assert_eq!(fs::read(h.path().join(path)).unwrap(), path.as_bytes());
+        drop(guard);
+    }
+    assert_eq!(
+        ledger(h.path()),
+        before,
+        "recovery reads cannot renew any persistent retention state"
+    );
+    drop(scope);
+    report.complete_sealed(json!({"exit_code":0})).unwrap();
+
+    // A replacement with the same bytes still lacks the original inode.
+    let saved = h.path().join("saved-original");
+    fs::rename(h.path().join(leaf), &saved).unwrap();
+    fs::write(h.path().join(leaf), leaf.as_bytes()).unwrap();
+    assert!(
+        retained_artifacts::retention::consumer_read_guard(h.path(), leaf, "original-owner")
+            .err()
+            .unwrap()
+            .contains("identity changed")
+    );
+    fs::remove_file(h.path().join(leaf)).unwrap();
+    fs::rename(saved, h.path().join(leaf)).unwrap();
+
+    let guard =
+        retained_artifacts::retention::consumer_read_guard(h.path(), leaf, "original-owner")
+            .unwrap()
+            .unwrap();
+    inv.reference("original-owner", &[]).unwrap();
+    inv.maintain_originals_at(&ids, 3).unwrap();
+    assert!(
+        h.path().join(leaf).exists(),
+        "the returned capability still excludes disposal"
+    );
+    drop(guard);
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        rounds.push(inv.maintain_originals_at(&ids, 3).unwrap());
+        if !h.path().join(leaf).exists() && !h.path().join(parent).exists() {
+            break;
+        }
+    }
+    assert!(
+        !h.path().join(leaf).exists() && !h.path().join(parent).exists(),
+        "{rounds:?}"
+    );
+}
+
+#[test]
+fn existing_consumer_read_rejects_stale_incoming_edges_and_unsealed_originals() {
+    if !isolated_capability_test(
+        "existing_consumer_read_rejects_stale_incoming_edges_and_unsealed_originals",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let mut ids = Vec::new();
+    for path in [
+        ".chrono-harness/state/fixtures/unowned",
+        ".chrono-harness/state/fixtures/owned",
+    ] {
+        fs::write(h.path().join(path), path.as_bytes()).unwrap();
+        let output = inventory(h.path())
+            .begin("fixture", path, json!({}))
+            .unwrap();
+        ids.push(output.id().to_owned());
+        output.complete_sealed(json!({"exit_code":0})).unwrap();
+    }
+    let inv = inventory(h.path());
+    inv.reference("original-owner", &ids[1..]).unwrap();
+    for mut output in ledger(h.path())["outputs"].as_array().unwrap().clone() {
+        output["lifetime"] = json!({"created_at":1,"deadline":2});
+        output["expires"] = json!(2);
+        retention_state::replace_output(h.path(), &output);
+    }
+    let path = retention_state::object_path(h.path(), &ids[0]);
+    let mut record: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    record["incoming"] = json!([ids[1]]);
+    fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
+    let error = retained_artifacts::retention::consumer_read_guard(
+        h.path(),
+        ".chrono-harness/state/fixtures/unowned",
+        "original-owner",
+    )
+    .err()
+    .unwrap();
+    assert!(error.contains("not protected"), "{error}");
+
+    let mut output = ledger(h.path())["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["id"] == ids[1])
+        .unwrap()
+        .clone();
+    output["phase"] = json!("publishing");
+    output["manifest"]["sealed"] = json!(false);
+    retention_state::replace_output(h.path(), &output);
+    let error = retained_artifacts::retention::consumer_read_guard(
+        h.path(),
+        ".chrono-harness/state/fixtures/owned",
+        "original-owner",
+    )
+    .err()
+    .unwrap();
+    assert!(error.contains("not a sealed released output"), "{error}");
+}
+
+#[test]
 fn explicit_lifetime_adoption_uses_physical_birth_and_never_renews_it() {
     if !isolated_capability_test(
         "explicit_lifetime_adoption_uses_physical_birth_and_never_renews_it",

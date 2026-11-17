@@ -96,7 +96,20 @@ fn state_path(root: &Path, path: &str) -> Result<PathBuf, String> {
 }
 #[cfg(not(verus_keep_ghost))]
 pub(crate) fn state_bytes(root: &Path, path: &str) -> Result<Vec<u8>, String> {
-    let _input = chrono_harness::retained_artifacts::retention::read_guard(root, path)?;
+    state_bytes_for_consumer(root, path, None)
+}
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn state_bytes_for_consumer(
+    root: &Path,
+    path: &str,
+    consumer: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    let _input = match consumer {
+        Some(consumer) => chrono_harness::retained_artifacts::retention::consumer_read_guard(
+            root, path, consumer,
+        )?,
+        None => chrono_harness::retained_artifacts::retention::read_guard(root, path)?,
+    };
     fs::read(state_path(root, path)?).map_err(|e| e.to_string())
 }
 #[derive(Serialize, Deserialize)]
@@ -113,13 +126,16 @@ struct RetainedInput {
 #[cfg(not(verus_keep_ghost))]
 impl RetainedInput {
     fn bytes(&self, root: &Path) -> Result<Vec<u8>, String> {
+        self.bytes_for_consumer(root, None)
+    }
+    fn bytes_for_consumer(&self, root: &Path, consumer: Option<&str>) -> Result<Vec<u8>, String> {
         if self.schema != "chrono-worktree-retained-input/v1"
             || self.source_root != root
             || !matches!(self.format.as_str(), "bytes" | "receipt")
         {
             return Err("invalid retained lifecycle input binding".into());
         }
-        let bytes = state_bytes(root, &self.path)?;
+        let bytes = state_bytes_for_consumer(root, &self.path, consumer)?;
         if bytes.len() != self.byte_length || sha256(&bytes) != self.sha256 {
             return Err("original lifecycle receipt changed: retained input mismatch".into());
         }
@@ -206,6 +222,14 @@ fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(),
 }
 #[cfg(not(verus_keep_ghost))]
 pub(crate) fn verify_inputs(root: &Path, report: &Value) -> Result<(), String> {
+    verify_inputs_for_consumer(root, report, None)
+}
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn verify_inputs_for_consumer(
+    root: &Path,
+    report: &Value,
+    consumer: Option<&str>,
+) -> Result<(), String> {
     let mut inputs = Vec::new();
     let mut checked = BTreeSet::new();
     collect_inputs(report, &mut inputs)?;
@@ -224,7 +248,7 @@ pub(crate) fn verify_inputs(root: &Path, report: &Value) -> Result<(), String> {
         )) {
             continue;
         }
-        let bytes = input.bytes(root)?;
+        let bytes = input.bytes_for_consumer(root, consumer)?;
         if input.format == "receipt" {
             collect_inputs(&json(&bytes)?, &mut inputs)?;
         }
