@@ -76,6 +76,60 @@ fn checkout_adoption_requires_active_joined_nonterminal_work() {
     expect(!policy::checkout_migration_ready("active\0", false, false, false));
     expect(!policy::checkout_migration_ready("", false, false, false));
 }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn current_policy_handoff_keeps_one_binding_and_no_original_chain() {
+    expect(!policy::policy_state_present(false, false));
+    expect(policy::policy_state_present(false, true));
+    expect(policy::policy_state_present(true, false));
+    expect(policy::policy_state_present(true, true));
+    expect(!policy::policy_state_conflict(false, false));
+    expect(!policy::policy_state_conflict(false, true));
+    expect(!policy::policy_state_conflict(true, false));
+    expect(policy::policy_state_conflict(true, true));
+    let empty = policy::policy_migration_decision(false, false, false, false);
+    expect(!empty.store_current && !empty.proceed);
+    let legacy = policy::policy_migration_decision(false, true, false, false);
+    expect(legacy.store_current && legacy.proceed);
+    let current = policy::policy_migration_decision(true, false, false, false);
+    expect(!current.store_current && !current.proceed);
+    let checkout = policy::policy_migration_decision(true, false, false, true);
+    expect(!checkout.store_current && checkout.proceed);
+    let changed = policy::policy_migration_decision(true, false, true, false);
+    expect(changed.store_current && changed.proceed);
+    let both = policy::policy_migration_decision(false, true, true, true);
+    expect(both.store_current && both.proceed);
+
+    let mut binding = None;
+    let mut originals = Vec::new();
+    originals.push(7u64);
+    originals.push(9u64);
+    policy::store_current_policy(&mut binding, &mut originals, 13u64);
+    expect(binding == Some(13u64) && originals.len() == 0);
+    policy::store_current_policy(&mut binding, &mut originals, 17u64);
+    expect(binding == Some(17u64) && originals.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn current_policy_binding_requires_exact_inputs_and_preserves_error_priority() {
+    expect(policy::adopted_policy_binding_error(true, true, true, true, true, true).is_none());
+    let digest = policy::adopted_policy_binding_error(false, true, true, true, true, true);
+    expect(policy::equal_text(digest.unwrap(), "invalid current adopted policy binding"));
+    let keys = policy::adopted_policy_binding_error(true, false, true, true, true, true);
+    expect(policy::equal_text(keys.unwrap(), "invalid current adopted policy binding"));
+    let inputs = policy::adopted_policy_binding_error(true, true, false, true, true, true);
+    expect(policy::equal_text(inputs.unwrap(), "invalid current adopted policy binding"));
+    let source_keys = policy::adopted_policy_binding_error(true, true, true, false, true, true);
+    expect(policy::equal_text(source_keys.unwrap(), "adopted cleanup source does not bind policy inputs"));
+    let source_digest = policy::adopted_policy_binding_error(true, true, true, true, false, true);
+    expect(policy::equal_text(source_digest.unwrap(), "adopted cleanup source does not bind policy inputs"));
+    let mismatch = policy::adopted_policy_binding_error(true, true, true, true, true, false);
+    expect(policy::equal_text(mismatch.unwrap(), "current adopted policy digest differs from its committed inputs"));
+    let all_invalid = policy::adopted_policy_binding_error(false, false, false, false, false, false);
+    expect(policy::equal_text(all_invalid.unwrap(), "invalid current adopted policy binding"));
+    let invalid_source = policy::adopted_policy_binding_error(true, true, true, false, false, false);
+    expect(policy::equal_text(invalid_source.unwrap(), "adopted cleanup source does not bind policy inputs"));
+}
 }
 
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
@@ -138,6 +192,158 @@ fn cache(target: &Path) {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn policy_migration_original_retires_after_audit_without_losing_current_policy() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::retained("payload");
+    h.kernel_cleanup();
+    automatic::native_consumer(&h, "ordinary");
+    adopt_lifecycle_retention(&h);
+    edit(&h.root, POLICY_PATH, |policy| {
+        policy["producers"]["lifecycle-original"] = value!([
+            ".chrono-harness/state/worktrees/",
+            ".chrono-harness/state/automatic-cleanup/"
+        ]);
+        policy["max_related_outputs"] = value!(512);
+        policy["keep_seconds"] = value!(0);
+        policy["diagnostic_keep_seconds"] = value!(0);
+        policy["metadata_keep_seconds"] = value!(0);
+        policy["max_lifetime_seconds"] = value!(86400);
+    });
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("finite-policy-original");
+    let (code, created, error) = h.invoke("integration", "finite-policy-original", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let payload = fs::read(target.join("payload")).unwrap();
+    advance(&h);
+    adopt(&h, &target);
+    let migrated = migrate(&h, &target);
+    let path = migrated["policy_migration"]["receipt"]["path"]
+        .as_str()
+        .unwrap();
+    let original = h.root.join(path);
+    let bytes = fs::read(&original).unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .reference_paths("fixture-policy-auditor", &[path.into()])
+        .unwrap();
+
+    // Admission must finish the previous report handoff independently of the
+    // diagnostic reader. The active policy is needed after that reader ends.
+    assert_eq!(
+        migrate(&h, &target)["policy_migration"]["status"],
+        "already-current"
+    );
+    let current = h.ledger()["entries"][0]["adopted_policy"].clone();
+    // Explicitly migrate the still-enrolled old data representation as well;
+    // this is not permission to infer an adoption from a missing original.
+    edit(
+        &h.root,
+        h.ledger_path(&target)
+            .strip_prefix(&h.root)
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        |v| {
+            v["entries"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("adopted_policy");
+            v["entries"][0]["policy_migrations"] =
+                value!([migrated["policy_migration"]["receipt"]]);
+        },
+    );
+    let compacted = migrate(&h, &target);
+    assert_eq!(compacted["policy_migration"]["status"], "already-current");
+    assert!(compacted["policy_migration"]["receipt"].is_null());
+    assert_eq!(h.ledger()["entries"][0]["adopted_policy"], current);
+    assert!(h.ledger()["entries"][0]["policy_migrations"].is_null());
+    inventory.maintain_explicit().unwrap();
+    assert_eq!(fs::read(&original).unwrap(), bytes);
+    inventory
+        .reference_paths("fixture-policy-auditor", &[])
+        .unwrap();
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        rounds.push(inventory.maintain_explicit().unwrap());
+        if !original.exists() {
+            break;
+        }
+    }
+    assert!(
+        !original.exists(),
+        "completed migration must not keep its original forever through the active enrollment: {rounds:?}"
+    );
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(
+        code, 0,
+        "current adopted policy must survive original retirement: {used} {error}"
+    );
+    assert_eq!(used["managed_process"]["exit_code"], 0);
+    assert_eq!(fs::read(target.join("payload")).unwrap(), payload);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn adopted_current_policy_rejects_invalid_binding_and_changed_committed_inputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = Host::retained("payload");
+    h.kernel_cleanup();
+    let target = h.parent.join("checked-policy-state");
+    let (code, created, error) = h.invoke("integration", "checked-policy-state", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    advance(&h);
+    adopt(&h, &target);
+    migrate(&h, &target);
+    let ledger_path = h.ledger_path(&target);
+    let original = fs::read(&ledger_path).unwrap();
+    cache(&target);
+    for (pointer, invalid) in [
+        ("/head", value!("not-an-oid")),
+        ("/policy_sha256", value!("a".repeat(64))),
+        (
+            "/inputs/.chrono-harness~1worktree.json",
+            value!("b".repeat(64)),
+        ),
+    ] {
+        let mut ledger = json(&original).unwrap();
+        let binding = &mut ledger["entries"][0]["adopted_policy"];
+        *binding.pointer_mut(pointer).unwrap() = invalid;
+        fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_ne!(
+            code, 0,
+            "unqualified current policy must refuse disposal: {report} {error}"
+        );
+        assert!(target.join("output λ/cache").exists());
+        let observed = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        assert_eq!(
+            observed["entries"][0]["adopted_policy"],
+            ledger["entries"][0]["adopted_policy"]
+        );
+        assert_eq!(observed["entries"][0]["status"], "active");
+    }
+    fs::write(&ledger_path, &original).unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    assert!(!target.join("output λ/cache").exists());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_adopts_new_registered_outputs_without_disposal_or_rewriting_birth() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -183,7 +389,8 @@ fn policy_migration_adopts_new_registered_outputs_without_disposal_or_rewriting_
     assert_eq!(entry["ownership"]["id"], original["ownership"]["id"]);
     assert_eq!(entry["status"], "active");
     assert!(entry["terminal"].is_null());
-    assert_eq!(entry["policy_migrations"].as_array().unwrap().len(), 1);
+    assert!(entry["policy_migrations"].is_null());
+    assert!(entry["adopted_policy"].is_object());
     assert!(target.join("output λ/cache").exists());
     assert!(target.join("fresh output/data").exists());
     assert_eq!(fs::read(&birth_path).unwrap(), birth_bytes);
@@ -398,6 +605,23 @@ fn explicit_cleanup_adoption_preserves_changed_inputs_and_corrupt_source_evidenc
         .find(|row| row["phase"] == "next-policy-source" && row["path"] == CLEANUP)
         .unwrap();
     let original = h.root.join(source["input"]["path"].as_str().unwrap());
+    // This evidence is authority only for a still-enrolled old chain. New
+    // current bindings read their committed source independently of this copy.
+    edit(
+        &h.root,
+        h.ledger_path(&target)
+            .strip_prefix(&h.root)
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        |v| {
+            v["entries"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("adopted_policy");
+            v["entries"][0]["policy_migrations"] = value!([adopted["policy_migration"]["receipt"]]);
+        },
+    );
     fs::write(original, b"changed retained source bytes").unwrap();
     let (code, report, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{report} {error}");
@@ -532,29 +756,20 @@ fn policy_migration_retries_published_transition_without_growing_or_rewriting_hi
     let retry = migrate(&h, &target);
     assert_eq!(retry["policy_migration"]["receipt"], *receipt);
     assert_eq!(fs::read(path).unwrap(), bytes);
-    assert_eq!(
-        h.ledger()["entries"][0]["policy_migrations"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
+    assert!(h.ledger()["entries"][0]["policy_migrations"].is_null());
+    let adopted_policy = h.ledger()["entries"][0]["adopted_policy"].clone();
+    assert!(adopted_policy.is_object());
     fs::write(target.join("payload"), "later source edit").unwrap();
     commit(&target);
     let next = migrate(&h, &target);
     assert_eq!(next["policy_migration"]["status"], "already-current");
-    assert_eq!(
-        h.ledger()["entries"][0]["policy_migrations"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
+    assert!(h.ledger()["entries"][0]["policy_migrations"].is_null());
+    assert_eq!(h.ledger()["entries"][0]["adopted_policy"], adopted_policy);
 }
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn policy_migration_corrupt_receipt_or_retained_policy_blocks_later_disposal() {
+fn unconverted_policy_migration_history_rejects_corrupt_receipt_or_retained_policy() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
@@ -568,6 +783,24 @@ fn policy_migration_corrupt_receipt_or_retained_policy_blocks_later_disposal() {
             .unwrap(),
     );
     let original = fs::read(&receipt).unwrap();
+    // Existing enrolled hosts still need an exact, explicit data migration.
+    // Restore that old representation to test its qualification before the
+    // current binding is transferred; new adoptions do not retain this chain.
+    edit(
+        &h.root,
+        h.ledger_path(&target)
+            .strip_prefix(&h.root)
+            .unwrap()
+            .to_str()
+            .unwrap(),
+        |v| {
+            v["entries"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("adopted_policy");
+            v["entries"][0]["policy_migrations"] = value!([result["policy_migration"]["receipt"]]);
+        },
+    );
     cache(&target);
     fs::write(&receipt, [original.as_slice(), b"\n"].concat()).unwrap();
     assert_ne!(h.auto("maintain", &[]).0, 0);
@@ -808,9 +1041,21 @@ fn policy_migration_supports_policy_cycles_and_rejects_a_missing_predecessor() {
     fs::write(h.root.join(CLEANUP), original_policy).unwrap();
     commit(&h.root);
     adopt(&h, &target);
-    migrate(&h, &target);
+    let second = migrate(&h, &target);
     let entry = &h.ledger()["entries"][0];
-    assert_eq!(entry["policy_migrations"].as_array().unwrap().len(), 2);
+    assert!(entry["policy_migrations"].is_null());
+    let second_original = json(
+        &fs::read(
+            h.root.join(
+                second["policy_migration"]["receipt"]["path"]
+                    .as_str()
+                    .unwrap(),
+            ),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(entry["adopted_policy"], second_original["next"]);
     assert_eq!(entry["ownership"]["generation"], 3);
     assert_eq!(fs::read(receipt).unwrap(), first_bytes);
     cache(&target);
@@ -823,6 +1068,14 @@ fn policy_migration_supports_policy_cycles_and_rejects_a_missing_predecessor() {
             .to_str()
             .unwrap(),
         |v| {
+            v["entries"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("adopted_policy");
+            v["entries"][0]["policy_migrations"] = value!([
+                first["policy_migration"]["receipt"],
+                second["policy_migration"]["receipt"]
+            ]);
             v["entries"][0]["policy_migrations"]
                 .as_array_mut()
                 .unwrap()
@@ -979,7 +1232,8 @@ fn coordinator_input_capacity_preserves_existing_target_binding_and_fixed_source
     adopt(&h, &target);
     migrate(&h, &target);
     let original = h.ledger()["entries"][0].clone();
-    assert_eq!(original["policy_migrations"].as_array().unwrap().len(), 1);
+    assert!(original["policy_migrations"].is_null());
+    assert!(original["adopted_policy"].is_object());
     let head = git(&target, &["rev-parse", "HEAD"]);
     let policy = fs::read(target.join(POLICY)).unwrap();
     h.policy(|p| {
@@ -997,6 +1251,7 @@ fn coordinator_input_capacity_preserves_existing_target_binding_and_fixed_source
     let entry = h.ledger()["entries"][0].clone();
     assert_eq!(entry["enrollment"], original["enrollment"]);
     assert_eq!(entry["policy_migrations"], original["policy_migrations"]);
+    assert_eq!(entry["adopted_policy"], original["adopted_policy"]);
     assert_eq!(entry["status"], "active");
     assert!(entry["terminal"].is_null());
 }
@@ -1651,13 +1906,8 @@ fn checkout_and_policy_adoption_share_one_generation_and_cleanup_uses_current_br
         h.ledger()["entries"][0]["ownership"]["generation"],
         original_generation + 1
     );
-    assert_eq!(
-        h.ledger()["entries"][0]["policy_migrations"]
-            .as_array()
-            .unwrap()
-            .len(),
-        1
-    );
+    assert!(h.ledger()["entries"][0]["policy_migrations"].is_null());
+    assert!(h.ledger()["entries"][0]["adopted_policy"].is_object());
     assert_eq!(h.ledger()["entries"][0]["enrollment"], birth);
     let (code, finished, error) = h.auto(
         "finish",
