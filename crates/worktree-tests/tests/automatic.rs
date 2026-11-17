@@ -5207,11 +5207,26 @@ fn automatic_retries_transfer_lock_recovery_without_rooting_old_attempts() {
             );
             assert!(report["prior_report"].is_null());
             let recovered = &report["cleanup_lock_recovery"];
-            assert_eq!(recovered["source"]["path"],
-                originals.last().unwrap().0.strip_prefix(&h.root).unwrap().to_str().unwrap());
-            assert_eq!(recovered["source"]["sha256"], sha256(&originals.last().unwrap().1));
+            assert_eq!(
+                recovered["source"]["path"],
+                originals
+                    .last()
+                    .unwrap()
+                    .0
+                    .strip_prefix(&h.root)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            );
+            assert_eq!(
+                recovered["source"]["sha256"],
+                sha256(&originals.last().unwrap().1)
+            );
             assert_eq!(recovered["path"], value!(target));
-            assert_eq!(recovered["handoff"], "prior-lock-released-under-original-exclusion");
+            assert_eq!(
+                recovered["handoff"],
+                "prior-lock-released-under-original-exclusion"
+            );
             let attempts = h.ledger()["entries"][0]["attempts"].clone();
             assert_eq!(attempts.as_array().unwrap().len(), 1);
             assert_eq!(attempts[0]["path"], report["report_path"]);
@@ -5258,8 +5273,11 @@ fn automatic_retries_transfer_lock_recovery_without_rooting_old_attempts() {
         }
         let (ancestor, ancestor_bytes) = &originals[0];
         fs::remove_file(ancestor).unwrap();
-        assert_eq!(h.auto("maintain", &[]).0, 0,
-            "a transferred ancestor is no longer a recovery input");
+        assert_eq!(
+            h.auto("maintain", &[]).0,
+            0,
+            "a transferred ancestor is no longer a recovery input"
+        );
         assert!(!ancestor.exists());
         fs::write(ancestor, ancestor_bytes).unwrap();
 
