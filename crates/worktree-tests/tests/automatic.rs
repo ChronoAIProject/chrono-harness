@@ -3060,6 +3060,7 @@ fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rota
         .as_str()
         .unwrap()
         .to_owned();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
     assert!(
         Inventory::adopted(&h.root)
             .unwrap()
@@ -3068,21 +3069,22 @@ fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rota
             .unwrap(),
         "the automatic producer must enroll its own original, not leave an unbounded file"
     );
-    Inventory::adopted(&h.root)
-        .unwrap()
-        .unwrap()
-        .maintain()
+    inventory
+        .reference_paths("fixture-birth-consumer", &[birth.clone()])
         .unwrap();
+    inventory.maintain().unwrap();
     assert!(
         h.root.join(&birth).is_file(),
-        "active enrollment still consumes birth"
+        "the fixture's actual birth reader still consumes the original"
     );
+    inventory
+        .reference_paths("fixture-birth-consumer", &[])
+        .unwrap();
     let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
     // The real consumer must be registered before a zero-retention round can
     // release the unconsumed finish report and its terminal dependency.
     let finished_path = finished["report_path"].as_str().unwrap();
-    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
     inventory
         .reference_paths("fixture-finish-consumer", &[finished_path.into()])
         .unwrap();
