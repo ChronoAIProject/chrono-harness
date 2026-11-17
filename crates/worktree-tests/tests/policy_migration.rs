@@ -1617,6 +1617,7 @@ fn expired_completed_result_handoff_releases_originals_without_renewal() {
     }
     use chrono_harness::retained_artifacts::retention::{Inventory, read_guard};
     let (h, target, used) = checkout_result_fixture_with_retention(true);
+    git(&target, &["checkout", "-b", "integration/expired-handoff"]);
     let paths = [
         used["managed_use_receipt"]["path"].as_str().unwrap(),
         used["report_path"].as_str().unwrap(),
@@ -1664,7 +1665,7 @@ fn expired_completed_result_handoff_releases_originals_without_renewal() {
         assert!(read_guard(&h.root, path).is_err());
     }
     let adopted = migrate(&h, &target);
-    assert_eq!(adopted["checkout_migration"]["status"], "already-current");
+    assert_eq!(adopted["checkout_migration"]["status"], "adopted");
     let ledger = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap();
     assert!(ledger["entries"][0]["enrollment"]["completed_uses"].is_null());
     let after = retention_state::snapshot(&h.root);
