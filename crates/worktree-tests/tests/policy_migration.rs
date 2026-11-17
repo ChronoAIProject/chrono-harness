@@ -416,7 +416,7 @@ fn birth_original_retirement(legacy: bool, interrupted: bool) {
         let ledger = h.ledger_path(&target);
         automatic::native_git(&h, "birth-interrupt", value!({"ledger":ledger}));
         fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
-        let output = CapturedChild::spawn(
+        let output = super::interrupted_cleanup::CapturedChild::spawn(
             Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"))).args([
                 "start",
                 "--host-root",
