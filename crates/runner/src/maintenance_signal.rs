@@ -365,13 +365,14 @@ pub fn request_with_context(root: &Path, reason: &str, context: Option<&str>) ->
             context.validate()?;
         }
         let root = context.map_or(root, |context| context.owner_root.as_path());
-        receipt["activation_root"] = json!(root);
+        // Use the native path for I/O. JSON can represent it only when it is UTF-8.
+        receipt["activation_root"] = json!(root.to_str());
         let Some((policy, bytes)) = adopted(root)? else {
             return Ok(false);
         };
         receipt["policy_sha256"] = json!(sha256(&bytes));
         let socket = policy.socket_path(root)?;
-        receipt["socket"] = json!(socket);
+        receipt["socket"] = json!(socket.to_str());
         send(&socket, reason.as_bytes())?;
         Ok::<_, String>(true)
     })();
