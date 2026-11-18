@@ -367,8 +367,8 @@ jobs:
           name: chrono-unit-cache-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/cache/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -376,8 +376,8 @@ jobs:
           name: diagnostics-chrono-unit-cache-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -522,8 +522,8 @@ jobs:
           name: chrono-unit-ci-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/ci/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -531,8 +531,8 @@ jobs:
           name: diagnostics-chrono-unit-ci-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -677,8 +677,8 @@ jobs:
           name: chrono-unit-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/diagnostics/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -686,8 +686,8 @@ jobs:
           name: diagnostics-chrono-unit-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -832,8 +832,8 @@ jobs:
           name: chrono-unit-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/distribution/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -841,8 +841,8 @@ jobs:
           name: diagnostics-chrono-unit-distribution-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -948,8 +948,8 @@ jobs:
           name: chrono-unit-host-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/host-bootstrap/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -957,8 +957,8 @@ jobs:
           name: diagnostics-chrono-unit-host-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1103,8 +1103,8 @@ jobs:
           name: chrono-unit-inputs-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/inputs/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1112,8 +1112,8 @@ jobs:
           name: diagnostics-chrono-unit-inputs-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1258,8 +1258,8 @@ jobs:
           name: chrono-unit-instructions-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/instructions/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1267,8 +1267,8 @@ jobs:
           name: diagnostics-chrono-unit-instructions-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1413,8 +1413,8 @@ jobs:
           name: chrono-unit-judge-ci-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-ci/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1422,8 +1422,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-ci-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1568,8 +1568,8 @@ jobs:
           name: chrono-unit-judge-cost-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-cost/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1577,8 +1577,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-cost-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1723,8 +1723,8 @@ jobs:
           name: chrono-unit-judge-filemap-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-filemap/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1732,8 +1732,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-filemap-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1878,8 +1878,8 @@ jobs:
           name: chrono-unit-judge-mixed-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-mixed/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1887,8 +1887,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-mixed-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2033,8 +2033,8 @@ jobs:
           name: chrono-unit-judge-projects-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-projects/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2042,8 +2042,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-projects-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2188,8 +2188,8 @@ jobs:
           name: chrono-unit-judge-registration-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-registration/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2197,8 +2197,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-registration-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2343,8 +2343,8 @@ jobs:
           name: chrono-unit-judge-routes-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-routes/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2352,8 +2352,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-routes-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2507,8 +2507,8 @@ jobs:
           name: chrono-unit-judge-workflow-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-workflow/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2516,8 +2516,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-workflow-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2671,8 +2671,8 @@ jobs:
           name: chrono-unit-judge-workflow-short-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-workflow-short/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2680,8 +2680,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-workflow-short-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2826,8 +2826,8 @@ jobs:
           name: chrono-unit-judge-workflow-units-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/judge-workflow-units/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2835,8 +2835,8 @@ jobs:
           name: diagnostics-chrono-unit-judge-workflow-units-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2942,8 +2942,8 @@ jobs:
           name: chrono-unit-release-build-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/release-build/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2951,8 +2951,8 @@ jobs:
           name: diagnostics-chrono-unit-release-build-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -3097,8 +3097,8 @@ jobs:
           name: chrono-unit-runner-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/runner/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -3106,8 +3106,8 @@ jobs:
           name: diagnostics-chrono-unit-runner-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -3261,8 +3261,8 @@ jobs:
           name: chrono-unit-worktree-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/worktree/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -3270,8 +3270,8 @@ jobs:
           name: diagnostics-chrono-unit-worktree-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -3416,8 +3416,8 @@ jobs:
           name: chrono-unit-worktree-adoption-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/units/worktree-adoption/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -3425,8 +3425,8 @@ jobs:
           name: diagnostics-chrono-unit-worktree-adoption-${{ github.run_id }}-${{ github.run_attempt }}
           path: ".chrono-harness/state/"
           if-no-files-found: error
-          include-hidden-files: true
           retention-days: 1
+          include-hidden-files: true
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
