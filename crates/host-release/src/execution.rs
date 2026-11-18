@@ -1,4 +1,18 @@
 //! 发布单元的真实执行：固定源码、原始操作、消费向量和原结果由本生产者发布。
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// Selection and version receipts both use this order.
+pub fn compiler_names() -> (names: [&'static str; 2])
+    ensures names[0]@ == "cargo"@, names[1]@ == "rustc"@,
+{
+    ["cargo", "rustc"]
+}
+}
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     evidence, frontend, process,
     receipt::{self, Kind, Lineage, Verified},
@@ -6,8 +20,11 @@ use crate::{
     staging::Staging,
     transport, verified_recipe as policy,
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{file_identity, no_symlink_parents};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     ffi::OsString,
@@ -18,12 +35,15 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub type Environment = BTreeMap<OsString, OsString>;
 
+#[cfg(not(verus_keep_ghost))]
 fn error(message: impl std::fmt::Display) -> String {
     format!("E_RELEASE_EXECUTION: {message}")
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn timestamp() -> Result<u64, String> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -33,6 +53,7 @@ fn timestamp() -> Result<u64, String> {
         .map_err(error)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn env<'a>(environment: &'a Environment, name: &str) -> Result<&'a str, String> {
     environment
         .get(std::ffi::OsStr::new(name))
@@ -41,12 +62,14 @@ fn env<'a>(environment: &'a Environment, name: &str) -> Result<&'a str, String> 
         .ok_or_else(|| error(format!("missing original {name} binding")))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn path_text(path: &Path) -> Result<String, String> {
     path.to_str()
         .map(str::to_owned)
         .ok_or_else(|| error("non UTF-8 execution path"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn write_json(path: &Path, value: &Value) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(error)?;
@@ -62,6 +85,7 @@ fn write_json(path: &Path, value: &Value) -> Result<(), String> {
         .map_err(error)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn executable(path: &Path) -> Result<Value, String> {
     let metadata = fs::metadata(path).map_err(error)?;
     let mode = metadata.permissions().mode() & 0o7777;
@@ -75,6 +99,7 @@ fn executable(path: &Path) -> Result<Value, String> {
     Ok(json!({"path":path_text(path)?,"sha256":sha256,"size":size,"mode":mode}))
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Execution<'a> {
     root: PathBuf,
     output: PathBuf,
@@ -88,6 +113,7 @@ struct Execution<'a> {
     started: Instant,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl<'a> Execution<'a> {
     fn begin(
         root: &Path,
@@ -475,8 +501,34 @@ impl<'a> Execution<'a> {
             argv.extend(["--component".into(), component.clone()]);
         }
         self.run("toolchain-install", argv, None)?;
+        let mut active = BTreeMap::new();
+        for name in compiler_names() {
+            let path = self.text_run(
+                "compiler-executable",
+                vec![
+                    path_text(&self.tools["rustup"])?,
+                    "which".into(),
+                    "--toolchain".into(),
+                    self.loaded.recipe.rust_toolchain.clone(),
+                    name.into(),
+                ],
+            )?;
+            let path = PathBuf::from(path);
+            active.insert(name, executable(&path)?);
+            self.tools.insert(name.into(), path);
+        }
+        let rustc = &self.tools["rustc"];
+        self.environment
+            .insert("RUSTC".into(), rustc.as_os_str().into());
+        self.report["environment"]["RUSTC"] = json!(rustc);
+        let tools = self.report["execution_tools"]
+            .as_object_mut()
+            .expect("prepared release executable identities");
+        for (name, identity) in &active {
+            tools.insert((*name).into(), identity.clone());
+        }
         let mut versions = BTreeMap::new();
-        for name in ["cargo", "rustc"] {
+        for name in compiler_names() {
             versions.insert(
                 name,
                 self.text_run(
@@ -489,27 +541,7 @@ impl<'a> Execution<'a> {
         {
             return Err(error("unexpected compiler"));
         }
-        let mut active = BTreeMap::new();
-        for name in ["cargo", "rustc"] {
-            let path = self.text_run(
-                "compiler-executable",
-                vec![
-                    path_text(&self.tools["rustup"])?,
-                    "which".into(),
-                    "--toolchain".into(),
-                    self.loaded.recipe.rust_toolchain.clone(),
-                    name.into(),
-                ],
-            )?;
-            active.insert(name, executable(Path::new(&path))?);
-        }
-        let tools: BTreeMap<_, _> = self
-            .tools
-            .iter()
-            .map(|(name, path)| Ok((name, executable(path)?)))
-            .collect::<Result<_, String>>()?;
-        self.report["toolchain"] =
-            json!({"versions":versions,"tools":tools,"active_compilers":active});
+        self.report["toolchain"] = json!({"versions":versions,"tools":self.report["execution_tools"],"active_compilers":active});
         Ok(())
     }
 
@@ -635,6 +667,7 @@ impl<'a> Execution<'a> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn retain_original(output: &Path, id: &str, verified: &Verified) -> Result<Value, String> {
     let target = output.join("originals").join(id);
     fs::create_dir_all(&target).map_err(error)?;
@@ -694,6 +727,7 @@ fn retain_original(output: &Path, id: &str, verified: &Verified) -> Result<Value
     Ok(json!(declarations))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn package_identity(output: &Path, loaded: &Loaded, report: &Value) -> Result<Value, String> {
     let release = recipe::read_json(output, "release.json")?;
     let context = &report["context"];
@@ -763,6 +797,7 @@ fn package_identity(output: &Path, loaded: &Loaded, report: &Value) -> Result<Va
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn units(execution: &mut Execution<'_>, lineage: &Lineage) -> Result<(), String> {
     let loaded = execution.loaded;
     if let Scope::Unit(id) = execution.scope {
@@ -997,6 +1032,7 @@ fn units(execution: &mut Execution<'_>, lineage: &Lineage) -> Result<(), String>
     execution.final_source()
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn scoped(
     root: &Path,
     output: &Path,
