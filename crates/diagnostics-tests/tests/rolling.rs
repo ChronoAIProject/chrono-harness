@@ -1,5 +1,39 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::policy::owner;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+#[cfg(not(verus_keep_ghost))]
+use chrono_diagnostics::{rolling as owner, verus};
+
+verus! {
+fn expect_generation(condition: bool)
+    requires condition,
+{
+    if !condition { panic!(); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn a_log_generation_expires_at_its_original_deadline() {
+    let deadline = owner::generation_deadline(100, 24);
+    expect_generation(deadline == Some(124));
+    expect_generation(!owner::generation_expired(124, 123));
+    expect_generation(owner::generation_expired(124, 124));
+    expect_generation(owner::generation_expired(124, 125));
+    expect_generation(owner::generation_deadline(100, 0).is_none());
+    expect_generation(owner::generation_deadline(u64::MAX - 1, 2).is_none());
+    expect_generation(owner::generation_deadline(u64::MAX - 1, 1) == Some(u64::MAX));
+}
+
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_diagnostics::{rolling::RollingFile, runtime};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     io::{self, Write},
@@ -8,8 +42,11 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+#[cfg(not(verus_keep_ghost))]
 static NEXT: AtomicU64 = AtomicU64::new(0);
+#[cfg(not(verus_keep_ghost))]
 struct Fixture(PathBuf);
+#[cfg(not(verus_keep_ghost))]
 impl Fixture {
     fn new() -> Self {
         let path = std::env::temp_dir().join(format!(
@@ -34,6 +71,7 @@ impl Fixture {
         .unwrap();
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Fixture {
     fn drop(&mut self) {
         if !std::thread::panicking() {
@@ -41,6 +79,7 @@ impl Drop for Fixture {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn records(directory: &Path) -> Vec<Value> {
     let mut records = Vec::new();
     for entry in fs::read_dir(directory).unwrap() {
@@ -59,6 +98,7 @@ fn records(directory: &Path) -> Vec<Value> {
     records
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn exact_boundary_rotation_restart_and_reduced_retention() {
     let fixture = Fixture::new();
@@ -85,6 +125,7 @@ fn exact_boundary_rotation_restart_and_reduced_retention() {
     assert!(!fixture.0.join("runtime.1.jsonl").exists());
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn oversized_record_and_invalid_limits_preserve_existing_bytes() {
     let fixture = Fixture::new();
@@ -100,6 +141,7 @@ fn oversized_record_and_invalid_limits_preserve_existing_bytes() {
 }
 
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn aliases_and_unknown_member_types_are_preserved() {
     use std::os::unix::fs::symlink;
@@ -120,6 +162,7 @@ fn aliases_and_unknown_member_types_are_preserved() {
     assert_eq!(fs::read(real.join("runtime.jsonl")).unwrap(), b"{}\n");
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn configured_logger_preserves_json_fields_filtering_and_failure_records() {
     let fixture = Fixture::new();
@@ -159,6 +202,65 @@ fn configured_logger_preserves_json_fields_filtering_and_failure_records() {
     assert!(!failures.is_empty());
 }
 
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn idle_runtime_logs_expire_at_their_creation_deadline() {
+    let fixture = Fixture::new();
+    fixture.policy(4096, 3, "info");
+    let config = fixture.0.join(runtime::CONFIG_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+    policy["keep_seconds"] = json!(86400);
+    fs::write(&config, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let directory = fixture.0.join(".chrono-harness/state/logs");
+    let current = directory.join("runtime.jsonl");
+    let logger = runtime::configured_logger(&fixture.0, "fixture", io::sink())
+        .unwrap()
+        .unwrap();
+    logger.run(|| tracing::info!(event_id = "old.entry", "first entry"));
+    logger.finish().unwrap();
+    let rows = records(&directory);
+    let deadline = rows[0]["deadline"].as_u64().unwrap();
+    assert_eq!(rows[0]["schema"], "chrono-runtime-log-generation/v1");
+    assert_eq!(rows[1]["event"], "old.entry");
+
+    policy["keep_seconds"] = json!(172800);
+    fs::write(&config, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let logger = runtime::configured_logger(&fixture.0, "fixture", io::sink())
+        .unwrap()
+        .unwrap();
+    logger.run(|| tracing::info!(event_id = "new.entry", "second entry"));
+    logger.finish().unwrap();
+    assert_eq!(records(&directory)[0]["deadline"], deadline);
+    let legacy = directory.join("runtime.2.jsonl");
+    fs::write(&legacy, b"{\"schema\":\"chrono-log/v1\"}\n").unwrap();
+    let staged = directory.join("runtime.pending");
+    fs::write(&staged, b"{\"schema\":\"chrono-runtime-log-gener").unwrap();
+
+    let held = fs::OpenOptions::new()
+        .write(true)
+        .open(directory.join("runtime.lock"))
+        .unwrap();
+    held.lock().unwrap();
+    let report = runtime::maintain_at(&fixture.0, deadline).unwrap().unwrap();
+    assert!(report.busy);
+    assert!(current.exists());
+    drop(held);
+
+    let report = runtime::maintain_at(&fixture.0, deadline - 1)
+        .unwrap()
+        .unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(report.removed, 0);
+    assert!(current.exists());
+    assert!(!staged.exists());
+    let report = runtime::maintain_at(&fixture.0, deadline).unwrap().unwrap();
+    assert_eq!(report.removed, 1);
+    assert_eq!(report.legacy, 1);
+    assert!(!current.exists());
+    assert!(legacy.exists());
+}
+
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn explicit_library_sink_survives_file_adoption_and_dual_failure_keeps_both_causes() {
     use std::sync::{Arc, Mutex};
@@ -214,6 +316,7 @@ fn explicit_library_sink_survives_file_adoption_and_dual_failure_keeps_both_caus
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn malformed_and_escaping_policy_is_rejected_before_creating_logs() {
     let fixture = Fixture::new();
@@ -241,6 +344,7 @@ fn malformed_and_escaping_policy_is_rejected_before_creating_logs() {
     assert!(!fixture.0.join(".chrono-harness/state/logs").exists());
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn concurrent_processes_reopen_after_rotation_and_keep_whole_records() {
     let fixture = Fixture::new();
