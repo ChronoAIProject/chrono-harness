@@ -102,6 +102,69 @@ pub proof fn retirement_stays_complete(
     finished
 }
 
+/// 一个已到期且身份固定的路径代际。OS 改名、unlink、rmdir 的实际结果
+/// 分别对应三个有效转换；占用、失败或中断可让状态停在任何一项。
+pub ghost enum PathCustody { Indexed, Queued, EmptyDirectory, Absent }
+
+pub open spec fn path_debt(state: PathCustody) -> nat {
+    match state {
+        PathCustody::Indexed => 3,
+        PathCustody::Queued => 2,
+        PathCustody::EmptyDirectory => 1,
+        PathCustody::Absent => 0,
+    }
+}
+
+pub open spec fn path_effect(before: PathCustody, after: PathCustody) -> bool {
+    before == after || match before {
+        PathCustody::Indexed => after == PathCustody::Queued,
+        PathCustody::Queued => after == PathCustody::EmptyDirectory,
+        PathCustody::EmptyDirectory => after == PathCustody::Absent,
+        PathCustody::Absent => false,
+    }
+}
+
+proof fn path_interval(trace: spec_fn(nat) -> PathCustody, first: nat, last: nat)
+    requires first <= last,
+        forall|i: nat| first <= i < last ==> path_effect(#[trigger] trace(i), trace(i+1)),
+    ensures path_debt(trace(last)) <= path_debt(trace(first)),
+    decreases last - first,
+{
+    if first < last {
+        let prior = (last - 1) as nat;
+        path_interval(trace, first, prior);
+        assert(path_effect(trace(prior), trace(last)));
+    }
+}
+
+/// 从逐步内核效果推出有限退休。公平性只要求一个仍有工作量的代际
+/// 最终离开当前阶段。调用者独立核实调度、锁、预算以及文件系统效果。
+pub proof fn path_generation_retires(trace: spec_fn(nat) -> PathCustody, start: nat) -> (end: nat)
+    requires
+        forall|i: nat| start <= i ==> path_effect(#[trigger] trace(i), trace(i+1)),
+        forall|i: nat| start <= i && #[trigger] trace(i) != PathCustody::Absent ==>
+            exists|later: nat| i < later && #[trigger] trace(later) != trace(i),
+    ensures start <= end,
+        forall|later: nat| end <= later ==> #[trigger] trace(later) == PathCustody::Absent,
+{
+    let debt = |i: nat| path_debt(trace(i));
+    assert forall|a: nat, b: nat| start <= a <= b implies
+        #[trigger] debt(b) <= #[trigger] debt(a) by {
+        path_interval(trace, a, b);
+    }
+    assert forall|i: nat| start <= i && #[trigger] debt(i) > 0 implies
+        exists|later: nat| i < later && #[trigger] debt(later) < debt(i) by {
+        let later = choose|later: nat| i < later && #[trigger] trace(later) != trace(i);
+        path_interval(trace, i, later);
+        assert(debt(later) < debt(i));
+    }
+    let end = retirement_stays_complete(debt, start);
+    assert forall|later: nat| end <= later implies #[trigger] trace(later) == PathCustody::Absent by {
+        assert(debt(later) == 0);
+    }
+    end
+}
+
 /// 不同地址及相同字节不能证明独立保管；硬链接仍有同一物理身份。
 pub fn independent_original(source: &str, survivor: &str) -> (independent: bool)
     ensures independent == (source@ != survivor@),
