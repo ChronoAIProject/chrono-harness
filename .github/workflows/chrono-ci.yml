@@ -242,6 +242,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   unit_cache:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -367,6 +368,7 @@ jobs:
           path: ".chrono-harness/state/units/cache/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -375,6 +377,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -520,6 +523,7 @@ jobs:
           path: ".chrono-harness/state/units/ci/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -528,6 +532,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -673,6 +678,7 @@ jobs:
           path: ".chrono-harness/state/units/diagnostics/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -681,6 +687,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -826,6 +833,7 @@ jobs:
           path: ".chrono-harness/state/units/distribution/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -834,6 +842,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -940,6 +949,7 @@ jobs:
           path: ".chrono-harness/state/units/host-bootstrap/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -948,6 +958,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1093,6 +1104,7 @@ jobs:
           path: ".chrono-harness/state/units/inputs/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1101,6 +1113,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1246,6 +1259,7 @@ jobs:
           path: ".chrono-harness/state/units/instructions/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1254,6 +1268,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1399,6 +1414,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-ci/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1407,6 +1423,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1552,6 +1569,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-cost/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1560,6 +1578,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1705,6 +1724,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-filemap/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1713,6 +1733,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -1858,6 +1879,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-mixed/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -1866,6 +1888,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2011,6 +2034,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-projects/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2019,6 +2043,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2164,6 +2189,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-registration/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2172,6 +2198,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2317,6 +2344,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-routes/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2325,6 +2353,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2479,6 +2508,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-workflow/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2487,6 +2517,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2641,6 +2672,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-workflow-short/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2649,6 +2681,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2794,6 +2827,7 @@ jobs:
           path: ".chrono-harness/state/units/judge-workflow-units/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2802,6 +2836,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -2908,6 +2943,7 @@ jobs:
           path: ".chrono-harness/state/units/release-build/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -2916,6 +2952,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -3061,6 +3098,7 @@ jobs:
           path: ".chrono-harness/state/units/runner/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -3069,6 +3107,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -3223,6 +3262,7 @@ jobs:
           path: ".chrono-harness/state/units/worktree/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -3231,6 +3271,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
@@ -3376,6 +3417,7 @@ jobs:
           path: ".chrono-harness/state/units/worktree-adoption/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Preserve failed job diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -3384,6 +3426,7 @@ jobs:
           path: ".chrono-harness/state/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Acknowledge delivered original evidence
         if: ${{ always() && steps.chrono_evidence_upload.outcome == 'success' }}
         shell: bash
