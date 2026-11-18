@@ -258,6 +258,50 @@ fn expired_original_rejects_new_readers_and_edges_but_allows_exact_release() {
 }
 
 #[test]
+fn output_metadata_retires_within_the_original_creation_window() {
+    if !isolated_capability_test("output_metadata_retires_within_the_original_creation_window") {
+        return;
+    }
+    let h = deadline_host();
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["metadata_keep_seconds"] = json!(86400);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let path = ".chrono-harness/state/fixtures/metadata-window";
+    let physical = h.path().join(path);
+    fs::write(&physical, b"short-lived original").unwrap();
+    let owner = inventory(h.path());
+    let publication = inventory(h.path()).begin("fixture", path, json!({})).unwrap();
+    let id = publication.id().to_owned();
+    publication.complete_sealed(json!({"exit_code":0})).unwrap();
+    let deadline = ledger(h.path())["outputs"][0]["lifetime"]["deadline"]
+        .as_u64()
+        .unwrap();
+    let metadata = retention_state::object_path(h.path(), &id);
+
+    let active = owner.consume(&id).unwrap();
+    owner
+        .maintain_originals_at(std::slice::from_ref(&id), deadline)
+        .unwrap();
+    assert!(physical.is_file());
+    assert!(metadata.is_file());
+    drop(active);
+    for _ in 0..8 {
+        if !metadata.exists() {
+            break;
+        }
+        owner
+            .maintain_originals_at(std::slice::from_ref(&id), deadline)
+            .unwrap();
+    }
+    assert!(!physical.exists());
+    assert!(
+        !metadata.exists(),
+        "retirement renewed output metadata after its original deadline"
+    );
+}
+
+#[test]
 fn existing_consumer_can_transfer_expired_originals_without_new_report_dependencies() {
     if !isolated_capability_test(
         "existing_consumer_can_transfer_expired_originals_without_new_report_dependencies",
