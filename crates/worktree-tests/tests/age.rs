@@ -986,10 +986,17 @@ fn empty_aged_cache_preserves_working_source_until_an_effect_is_needed() {
         let (code, maintained, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{maintained} {error}");
         if round == 1 {
-            let observation = maintained["drain"].as_array().unwrap().iter()
-                .find(|row| row["path"] == value!(target)).unwrap();
+            let observation = maintained["drain"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["path"] == value!(target))
+                .unwrap();
             assert_eq!(observation["status"], "preserved");
-            assert_eq!(observation["age_outcome"], "no-disposable-output-retained-checkout");
+            assert_eq!(
+                observation["age_outcome"],
+                "no-disposable-output-retained-checkout"
+            );
             assert!(observation.get("receipt").is_none());
             assert!(observation.get("input").is_none());
         }

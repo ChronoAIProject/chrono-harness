@@ -100,6 +100,37 @@ impl Manager {
         Ok(!age_preservation_required(false, retained_file))
     }
 
+    // A previous clean pass does not cover a later change to the checkout.
+    // Recheck current roots and the same attachment under its enrollment lease.
+    pub(super) fn observe_settled_age(
+        &mut self,
+        r: &mut Runner,
+        i: usize,
+        lease: &Lease,
+    ) -> Result<bool, String> {
+        use crate::verified_lifecycle::CleanupStage;
+        let e = &self.ledger.entries[i];
+        if !matches!(e.status.as_str(), "active" | "retained")
+            || e.ownership.as_ref().is_none_or(|owner| owner.cache_pending)
+            || !e.cleanup.as_ref().is_some_and(|progress| {
+                matches!(
+                    progress.stage,
+                    CleanupStage::CachesReleased | CleanupStage::Retained
+                )
+            })
+            || e.attempts.iter().any(|attempt| attempt.receipt.is_none())
+            || !self.age_has_no_effect(e)?
+        {
+            return Ok(false);
+        }
+        self.reconcile_birth(r, i, lease)?;
+        let e = &self.ledger.entries[i];
+        let head = r.oid(&e.path, "HEAD")?;
+        self.check_entry(r, e, &head, None)?;
+        lease.stable()?;
+        Ok(true)
+    }
+
     pub(super) fn age_eligible(&self, e: &Entry, deleting: bool) -> Result<bool, String> {
         let Some(policy) = &self.inputs.policy.age_policy else {
             return Ok(false);

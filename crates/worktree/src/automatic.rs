@@ -4135,6 +4135,18 @@ impl Manager {
                     }
                 }
             }
+            let observation = match &_lease {
+                Some(lease) if maintenance && age => self.observe_settled_age(r, i, lease),
+                _ => Ok(false),
+            };
+            if observation == Ok(true) {
+                report["drain"].as_array_mut().unwrap().push(value!({
+                    "path":e.path,"status":"preserved",
+                    "age_outcome":"no-disposable-output-retained-checkout",
+                    "preserved_reason":"all disposable roots absent; retained file prevents checkout retirement"
+                }));
+                continue;
+            }
             let (config, bytes) = crate::configuration(
                 &self.inputs.policy.coordinator_root,
                 &self.inputs.config_path,
@@ -4163,6 +4175,7 @@ impl Manager {
                         self.inputs.registrations.filemap()
                     ))?);
                     attempt["automatic_cleanup"] = value!(true);
+                    observation?;
                     if let Some(lease) = &_lease {
                         self.reconcile_birth(r, i, lease)?;
                     }
