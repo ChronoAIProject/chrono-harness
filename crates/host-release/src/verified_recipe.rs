@@ -10,6 +10,18 @@ pub(crate) mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_identifiers as identifiers;
 
+#[cfg(verus_keep_ghost)]
+#[path = "execution.rs"]
+pub mod execution;
+#[cfg(verus_keep_ghost)]
+#[path = "receipt.rs"]
+pub mod receipt;
+#[cfg(verus_keep_ghost)]
+#[path = "recipe.rs"]
+pub mod recipe;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::{execution, receipt, recipe};
+
 #[path = "verified_delivery.rs"]
 pub mod delivery;
 
