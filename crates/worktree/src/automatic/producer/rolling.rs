@@ -21,6 +21,15 @@ pub fn rolling_keep(finished: bool, failed: bool, diagnostics: bool,
 {
     if !finished { interrupted } else if failed || diagnostics { failure } else { success }
 }
+
+pub fn clamp_rolling_deadline(since: u64, keep: u64, cap: u64) -> (deadline: u64)
+    ensures
+        deadline <= cap,
+        (since as int + keep as int) >= (cap as int) ==> deadline == cap,
+        (since as int + keep as int) < (cap as int) ==> deadline as int == since as int + keep as int,
+{
+    if since >= cap || keep >= cap - since { cap } else { since + keep }
+}
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -34,6 +43,17 @@ pub(super) struct Policy {
     failure_keep_seconds: u64,
     interrupted_keep_seconds: u64,
     metadata_keep_seconds: u64,
+}
+
+#[cfg(not(verus_keep_ghost))]
+impl Policy {
+    pub(super) fn birth_window(&self) -> Result<(u64, u64), String> {
+        let born_at = now()?;
+        let deadline = born_at
+            .checked_add(self.interrupted_keep_seconds)
+            .ok_or("rolling birth deadline overflow")?;
+        Ok((born_at, deadline))
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -51,11 +71,25 @@ pub(super) struct Directory {
     pub(super) metadata: String,
     pub(super) metadata_identity: String,
     pub(super) born_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) deadline: Option<u64>,
     pub(super) diagnostics: bool,
     pub(super) terminal: Option<Terminal>,
     pub(super) disposal_intent: Option<Receipt>,
     pub(super) disposed: bool,
     pub(super) disposed_at: Option<u64>,
+}
+
+#[cfg(not(verus_keep_ghost))]
+impl Directory {
+    fn expires(&self, since: u64, keep: u64) -> Result<u64, String> {
+        match self.deadline {
+            Some(cap) => Ok(clamp_rolling_deadline(since, keep, cap)),
+            None => since
+                .checked_add(keep)
+                .ok_or("rolling expiry overflow".into()),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -220,7 +254,7 @@ impl TemporaryHost {
                     .policy
                     .retained_producers
                     .iter()
-                    .find(|p| p.id == producer && p.temporary && p.rolling_directory.is_some())
+                    .find(|p| p.id == producer && p.temporary)
                     .ok_or("whole temporary directory ownership is not adopted")?;
                 inputs.stable(r)?;
                 let allocation = Self::allocate_owned(
@@ -228,11 +262,17 @@ impl TemporaryHost {
                     producer,
                     &declaration.generated_outputs,
                     prefix,
-                    Some(Owner {
-                        root: inputs.policy.coordinator_root.clone(),
-                        config_path: inputs.config_path.clone(),
-                        producer: producer.into(),
-                    }),
+                    Some((
+                        Owner {
+                            root: inputs.policy.coordinator_root.clone(),
+                            config_path: inputs.config_path.clone(),
+                            producer: producer.into(),
+                        },
+                        declaration
+                            .rolling_directory
+                            .as_ref()
+                            .ok_or("whole temporary directory ownership is not adopted")?,
+                    )),
                 )?;
                 report["allocation"] = value!(allocation.path());
                 allocated = Some(allocation);
@@ -388,7 +428,7 @@ pub(super) fn drain(
         retention.failure_keep_seconds,
         retention.interrupted_keep_seconds,
     );
-    let expires = since.checked_add(keep).ok_or("rolling expiry overflow")?;
+    let expires = rolling.expires(since, keep)?;
     let released = object.consumers.values().all(|c| c.released);
     if !crate::verified_lifecycle::rolling_disposal(
         true,
@@ -550,11 +590,12 @@ fn retire(
         .rolling_directory
         .as_ref()
         .ok_or("rolling policy missing")?;
-    let expires = rolling
-        .disposed_at
-        .ok_or("physical disposal time missing")?
-        .checked_add(retention.metadata_keep_seconds)
-        .ok_or("metadata expiry overflow")?;
+    let expires = rolling.expires(
+        rolling
+            .disposed_at
+            .ok_or("physical disposal time missing")?,
+        retention.metadata_keep_seconds,
+    )?;
     if now()? < expires {
         return Ok(value!({"status":"retained","expires":expires}));
     }

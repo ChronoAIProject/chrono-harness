@@ -74,7 +74,9 @@ pub use automatic_verification::service::{
 };
 
 #[cfg(not(verus_keep_ghost))]
-pub use crate::automatic::producer::rolling::{rolling_disposal, rolling_keep};
+pub use crate::automatic::producer::rolling::{
+    clamp_rolling_deadline, rolling_disposal, rolling_keep,
+};
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::producer::{
     ProducerDeclarations, ProducerLookupError, ProducerNamespaceMember, find_producer_declaration,
@@ -82,7 +84,9 @@ pub use crate::automatic::producer::{
     visit_producer_stores,
 };
 #[cfg(verus_keep_ghost)]
-pub use automatic_verification::producer::rolling::{rolling_disposal, rolling_keep};
+pub use automatic_verification::producer::rolling::{
+    clamp_rolling_deadline, rolling_disposal, rolling_keep,
+};
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::producer::{
     ProducerDeclarations, ProducerLookupError, ProducerNamespaceMember, find_producer_declaration,
