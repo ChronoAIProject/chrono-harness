@@ -247,7 +247,7 @@ pub(super) struct Object {
     policy_sha256: String,
     id: String,
     path: String,
-    output: Option<Output>,
+    output: Option<OutputRecord>,
     incoming: BTreeSet<String>,
     roles: BTreeSet<String>,
     #[serde(deserialize_with = "strict_summaries")]
@@ -348,7 +348,7 @@ impl Gate {
                 (
                     id.clone(),
                     retained_measurements(
-                        record.output.as_ref(),
+                        record.output.as_deref(),
                         record.retired_leases.len(),
                         max_output_bytes,
                     ),
@@ -2430,7 +2430,7 @@ impl Inventory {
                 );
             }
             if let Some(output) = &record.output {
-                ledger.outputs.push(output.clone().into());
+                ledger.outputs.push(output.clone());
             }
             ledger.summaries.extend(record.summaries.clone());
             ledger.retired_leases.extend(record.retired_leases.clone());
@@ -2675,11 +2675,7 @@ impl Inventory {
                 record.metadata_expires = output.bound_expiry(now()?.saturating_add(keep));
                 record.prune_path = Some(record.path.clone());
             }
-            record.output = ledger
-                .outputs
-                .iter()
-                .find(|o| o.id == *id)
-                .map(|o| o.value.as_ref().clone());
+            record.output = ledger.outputs.iter().find(|o| o.id == *id).cloned();
             record.retired_leases = ledger
                 .retired_leases
                 .iter()
