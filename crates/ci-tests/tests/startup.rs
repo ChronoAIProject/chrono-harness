@@ -4,6 +4,10 @@ use super::policy::startup::retention_days_valid;
 use super::*;
 #[cfg(not(verus_keep_ghost))]
 use chrono_ci::startup::retention_days_valid;
+#[cfg(verus_keep_ghost)]
+use super::policy::gating::unit_evidence_retention;
+#[cfg(not(verus_keep_ghost))]
+use chrono_ci::gating::unit_evidence_retention;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -18,6 +22,16 @@ fn startup_retention_rejects_zero_and_allows_one_day() {
     proof { assert(omitted && !default_requested && one_day); }
     #[cfg(not(verus_keep_ghost))]
     assert!(omitted && !default_requested && one_day);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn independent_evidence_window_for_unit_and_aggregate() {
+    let unit = unit_evidence_retention(Some(1), true);
+    let aggregate = unit_evidence_retention(Some(1), false);
+    let omitted = unit_evidence_retention(None, true);
+    proof { assert(unit == Some(1u16) && aggregate.is_none() && omitted.is_none()); }
+    #[cfg(not(verus_keep_ghost))]
+    assert_eq!((unit, aggregate, omitted), (Some(1), None, None));
 }
 }
 

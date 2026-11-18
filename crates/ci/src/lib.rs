@@ -95,11 +95,6 @@ fn artifact_hidden_files(enabled: bool) -> &'static str {
         ""
     }
 }
-fn artifact_retention(days: Option<u16>) -> String {
-    days.map_or_else(String::new, |days| {
-        format!("          retention-days: {days}\n")
-    })
-}
 fn shell(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\"'\"'"))
 }
@@ -275,7 +270,7 @@ fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
     Ok(())
 }
 pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
-    let job = render_job(c, config_path, None, "chrono-check", false, None)?;
+    let job = render_job(c, config_path, None, "chrono-check", false)?;
     let header = render_header(c, None, false, MARKER);
     Ok(format!("{header}jobs:\n  check:\n{job}"))
 }
@@ -333,7 +328,6 @@ fn render_job(
     scope: Option<&chrono_harness::units::Scope>,
     artifact_prefix: &str,
     full_policy: bool,
-    retention_days: Option<u16>,
 ) -> Result<String, String> {
     validate_policy(c, full_policy)?;
     relative_path(config_path)?;
@@ -395,13 +389,12 @@ fn render_job(
           name: {artifact_prefix}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
           path: {artifacts}
           if-no-files-found: error
-{hidden_files}{retention}"#,
+{hidden_files}"#,
         runs_on = scalar(&c.runs_on),
         timeout = c.timeout_minutes,
         checkout = c.checkout_action,
         upload = c.upload_artifact_action,
         hidden_files = artifact_hidden_files(c.include_hidden_files),
-        retention = artifact_retention(retention_days),
         artifacts = scalar(&c.artifact_directory)
     );
     let rendered = if let Some(directory) = c
@@ -410,11 +403,10 @@ fn render_job(
         .filter(|d| **d != c.artifact_directory)
     {
         format!(
-            "{rendered}      - name: Preserve failed job diagnostics\n        if: ${{{{ failure() }}}}\n        uses: {}\n        with:\n          name: diagnostics-{artifact_prefix}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}{}",
+            "{rendered}      - name: Preserve failed job diagnostics\n        if: ${{{{ failure() }}}}\n        uses: {}\n        with:\n          name: diagnostics-{artifact_prefix}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}",
             c.upload_artifact_action,
             scalar(directory),
-            artifact_hidden_files(c.include_hidden_files),
-            artifact_retention(retention_days)
+            artifact_hidden_files(c.include_hidden_files)
         )
     } else {
         rendered

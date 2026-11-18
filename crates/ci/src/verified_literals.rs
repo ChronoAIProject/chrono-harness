@@ -5,6 +5,9 @@ mod release_projection;
 #[cfg(verus_keep_ghost)]
 #[path = "startup.rs"]
 pub mod startup;
+#[cfg(verus_keep_ghost)]
+#[path = "gating.rs"]
+pub mod gating;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]

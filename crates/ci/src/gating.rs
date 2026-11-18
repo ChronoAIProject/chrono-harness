@@ -1,15 +1,39 @@
 //! Single-parent GitHub scheduling. The adjudicator owns DELTA obligations;
 //! this provider owns their projection and native job/run transport predicate.
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+
+/// 这项期限属于单元生产者。汇总有独立的证据保存合同。
+pub fn unit_evidence_retention(days: Option<u16>, is_unit: bool) -> (retention: Option<u16>)
+    ensures retention == if is_unit { days } else { None },
+{
+    if is_unit { days } else { None }
+}
+
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{file_identity, sha256, wire};
+#[cfg(not(verus_keep_ghost))]
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(not(verus_keep_ghost))]
 pub const SCHEMA: &str = "chrono-job-gating/v1";
+#[cfg(not(verus_keep_ghost))]
 pub(crate) const MARKER: &str = "# chrono-ci: owned github-job-gating/v1\n";
+#[cfg(not(verus_keep_ghost))]
 pub const DETECTION_ENV: &str = "CHRONO_CI_DETECTION";
+#[cfg(not(verus_keep_ghost))]
 pub const NEEDS_ENV: &str = "CHRONO_CI_NEEDS";
 
 /// 已由 needs 确认成功的依赖，继续核对所选原生执行的终态。
+#[cfg(not(verus_keep_ghost))]
 pub fn completed_native_job(
     listed: &Value,
     mut read: impl FnMut(u64) -> Result<Value, String>,
@@ -66,6 +90,7 @@ pub fn completed_native_job(
     Ok(detail)
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -80,11 +105,13 @@ pub struct Config {
     )]
     pub startup: Option<super::startup::Config>,
 }
+#[cfg(not(verus_keep_ghost))]
 fn startup_present<'de, D: serde::Deserializer<'de>>(
     d: D,
 ) -> Result<Option<super::startup::Config>, D::Error> {
     super::startup::Config::deserialize(d).map(Some)
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Detector {
@@ -98,6 +125,7 @@ pub struct Detector {
     pub evidence_directory: Option<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
     if g.schema != SCHEMA || c.collection.schema != "chrono-github-ci/v4" {
         return Err(
@@ -145,6 +173,7 @@ pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn job_id(unit: &str) -> String {
     let encoded: String = unit
         .bytes()
@@ -159,20 +188,30 @@ pub fn job_id(unit: &str) -> String {
     format!("unit_{encoded}")
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, String> {
     let w = c.workflow(unit)?;
     let scope = c.scope(unit);
     let artifact = unit
         .map(|u| format!("chrono-unit-{u}"))
         .unwrap_or("chrono-collection".into());
-    let body = super::render_job(
+    let mut body = super::render_job(
         &w,
         path,
         Some(&scope),
         &artifact,
         c.schema == units::FULL_SCHEMA,
-        unit.and(c.job_gating.evidence_retention_days),
     )?;
+    if let Some(days) = unit_evidence_retention(c.job_gating.evidence_retention_days, unit.is_some()) {
+        const UPLOAD_END: &str = "          if-no-files-found: error\n";
+        let expected_uploads = 1 + usize::from(
+            w.failure_artifact_directory.as_ref().is_some_and(|directory| directory != &w.artifact_directory),
+        );
+        if body.matches(UPLOAD_END).count() != expected_uploads {
+            return Err("unit evidence upload projection differs from registered artifacts".into());
+        }
+        body = body.replace(UPLOAD_END, &format!("{UPLOAD_END}          retention-days: {days}\n"));
+    }
     let old_if = "    if: ${{ github.event.deleted != true }}\n";
     let condition = if let Some(unit) = unit {
         format!(
@@ -256,6 +295,7 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         unit.map(job_id).unwrap_or("aggregate".into())
     ))
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, String>, String> {
     let g = &c.job_gating;
     let prefix = super::render_header(&c.collection, Some(&c.scope(None)), true, MARKER);
@@ -342,7 +382,9 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
     )?;
     if let Some(directory) = &g.detector.evidence_directory {
         text.push_str(&format!("      - name: Preserve detector evidence\n        if: ${{{{ always() }}}}\n        uses: {}\n        with:\n          name: chrono-detector-evidence-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, scalar(directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
-        text.push_str(&super::artifact_retention(g.evidence_retention_days));
+        if let Some(days) = g.evidence_retention_days {
+            text.push_str(&format!("          retention-days: {days}\n"));
+        }
     }
     for id in c.units.keys() {
         text.push_str(&job(c, path, Some(id))?);
@@ -351,6 +393,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
     Ok(BTreeMap::from([(c.collection.workflow_path.clone(), text)]))
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Detection {
@@ -373,9 +416,11 @@ pub struct Detection {
     pub required_units: Vec<String>,
     pub selection_sha256: String,
 }
+#[cfg(not(verus_keep_ghost))]
 fn env(key: &str) -> Result<String, String> {
     std::env::var(key).map_err(|_| format!("missing native job binding {key}"))
 }
+#[cfg(not(verus_keep_ghost))]
 fn number(key: &str) -> Result<u64, String> {
     env(key)?
         .parse::<u64>()
@@ -383,6 +428,7 @@ fn number(key: &str) -> Result<u64, String> {
         .filter(|n| *n > 0)
         .ok_or_else(|| format!("invalid native job binding {key}"))
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn requirements(
     root: &Path,
     c: &units::Config,
@@ -411,6 +457,7 @@ pub(crate) fn requirements(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let mut opts = BTreeMap::new();
     if args.len() != 7 {
@@ -549,6 +596,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         + "\n")
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn native_detection(
     root: &Path,
     path: &str,
@@ -598,6 +646,7 @@ pub(crate) fn native_detection(
     Ok(serde_json::to_value(d).map_err(|e| e.to_string())?)
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct NativeRun {
@@ -606,6 +655,7 @@ pub struct NativeRun {
     pub run_attempt: u64,
     pub job: String,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Production {
@@ -615,6 +665,7 @@ pub struct Production {
     pub context_sha256: String,
     pub report_sha256: String,
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn production(args: &[String]) -> Result<String, String> {
     if args.len() != 9 {
         return Err("production requires host-root, config, unit and github-output".into());
@@ -667,6 +718,7 @@ pub(crate) fn production(args: &[String]) -> Result<String, String> {
     writeln!(output, "production={raw}").map_err(|e| e.to_string())?;
     Ok(raw + "\n")
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn native_run(unit: Option<&str>) -> Result<NativeRun, String> {
     let job = unit.map(job_id).unwrap_or("aggregate".into());
     if env("GITHUB_JOB")? != job {
@@ -681,6 +733,7 @@ pub(crate) fn native_run(unit: Option<&str>) -> Result<NativeRun, String> {
 }
 
 /// Native status is a necessary transport gate. The final check still judges originals.
+#[cfg(not(verus_keep_ghost))]
 pub fn validate_statuses(c: &units::Config, d: &Detection, needs: &Value) -> Result<(), String> {
     if needs["detect"]["result"] != "success" {
         return Err("change detection did not succeed".into());
