@@ -954,10 +954,9 @@ fn import_source(
             v.get("candidate").is_some(),
         )?;
     }
-    let retained_path = format!(
-        ".chrono-harness/state/inputs/originals/pair-{}.json",
-        sha256(&bytes)
-    );
+    let originals = ".chrono-harness/state/inputs/originals";
+    fs::create_dir_all(state(root, originals)?).map_err(|e| e.to_string())?;
+    let retained_path = format!("{originals}/pair-{}.json", sha256(&bytes));
     publish_bytes(root, &retained_path, &bytes)?;
     let retained = Original {
         path: retained_path,
@@ -1047,8 +1046,8 @@ pub fn compose(
     receipt: &str,
 ) -> Result<Produced, String> {
     let read_scope = retained_artifacts::retention::read_scope(root)?;
-    state(root, output)?;
-    state(root, receipt)?;
+    output_path(root, output)?;
+    output_path(root, receipt)?;
     admit_output_paths(output, receipt)?;
     let (raw, manifest) = manifest(root, manifest_path)?;
     let reader = facts::Reader::for_config(root, config)?;

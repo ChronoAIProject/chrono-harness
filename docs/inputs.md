@@ -139,7 +139,7 @@ config v1 快照为 `chrono-input-snapshot/v1`，包含 `commit`、`config_path`
 
 pair 保留两份明确提供的快照。可选 `--base-root`、`--candidate-root` 选择来源仓库，默认都为 `--host-root`。它将引用 blob 复制到目的状态目录并核身份，不访问历史外部输入位置，也不猜新位置。快照和 blob 可一起作为 CI 产物传输。基线原字节必须仍可用，缺基线 blob 就失败，即使候选字节存在也不能替代。
 
-快照／配对输出必须在 `.chrono-harness/state/`。重复相同输出不写入，不同内容碰到已有路径则报 `E_SNAPSHOT_EXISTS` 并保留旧证据；新观察须选新路径。blob 和输出引用拒绝符号链接路径段及越界。普通 IO 用临时文件和不覆盖发布，不保证断电恢复或源码并发变化。
+快照、配对及组合回执必须在 `.chrono-harness/state/`。直接写在该目录的请求复用同一宿主命名空间。选择下级目录的调用方须先建立并保管该目录。缺失的下级目录会在复制输入前返回 `E_INPUT_OUTPUT_PARENT`。重复相同输出不写入，不同内容碰到已有路径则报 `E_SNAPSHOT_EXISTS` 并保留旧证据。新观察须选新路径。blob 和输出引用拒绝符号链接路径段及越界。未采用保留时的文件写入使用临时文件和不覆盖发布。
 
 context 的 `retained_inputs` 指向生成 pair。registration 接受原内嵌 `{bytes: [...]}`，或恰好一个 `{blob, sha256, length}` 引用，核对端点／配置绑定、文件 ID、原 blob 摘要／长度及当前候选磁盘身份。
 
