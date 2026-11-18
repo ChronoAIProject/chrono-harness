@@ -262,6 +262,48 @@ fn idle_runtime_logs_expire_at_their_creation_deadline() {
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
+fn maintenance_retires_only_complete_legacy_log_records_after_the_window() {
+    let fixture = Fixture::new();
+    fixture.policy(4096, 4, "info");
+    let logger = runtime::configured_logger(&fixture.0, "fixture", io::sink())
+        .unwrap()
+        .unwrap();
+    logger.run(|| tracing::info!(event_id = "old.entry", "legacy diagnostic"));
+    logger.finish().unwrap();
+    let directory = fixture.0.join(".chrono-harness/state/logs");
+    let current = directory.join("runtime.jsonl");
+    let original = fs::read(&current).unwrap();
+    let malformed = directory.join("runtime.1.jsonl");
+    let mut damaged = original.clone();
+    damaged.extend_from_slice(b"{\"schema\":\"chrono-log/v1\"");
+    fs::write(&malformed, &damaged).unwrap();
+    let unknown = directory.join("runtime.2.jsonl");
+    fs::write(&unknown, b"{\"unrelated\":true}\n").unwrap();
+    let config = fixture.0.join(runtime::CONFIG_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+    policy["keep_seconds"] = json!(86400);
+    fs::write(&config, serde_json::to_vec(&policy).unwrap()).unwrap();
+
+    let birth = current.metadata().unwrap().created().unwrap()
+        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let report = runtime::maintain_at(&fixture.0, birth + 86399).unwrap().unwrap();
+    assert_eq!(report.removed, 0);
+    assert_eq!(fs::read(&current).unwrap(), original);
+    let lock = fs::File::open(directory.join("runtime.lock")).unwrap();
+    lock.lock().unwrap();
+    assert!(runtime::maintain_at(&fixture.0, birth + 86400).unwrap().unwrap().busy);
+    assert!(current.exists());
+    drop(lock);
+
+    let report = runtime::maintain_at(&fixture.0, birth + 86400).unwrap().unwrap();
+    assert_eq!(report.removed, 1);
+    assert!(!current.exists());
+    assert_eq!(fs::read(&malformed).unwrap(), damaged);
+    assert_eq!(fs::read(&unknown).unwrap(), b"{\"unrelated\":true}\n");
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
 fn explicit_library_sink_survives_file_adoption_and_dual_failure_keeps_both_causes() {
     use std::sync::{Arc, Mutex};
     #[derive(Clone)]
