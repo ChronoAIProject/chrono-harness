@@ -4543,6 +4543,7 @@ fn per_relation_capacity_preserves_independent_outputs_and_recovers_pending_reco
 #[cfg(not(verus_keep_ghost))]
 fn report_host() -> tempfile::TempDir {
     let h = host(256, 16);
+    fs::create_dir_all(h.path().join(".chrono-harness/state/preparation")).unwrap();
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
     policy["producers"]["check-original"] = json!([".chrono-harness/state/preparation/"]);

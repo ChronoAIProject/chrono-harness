@@ -1288,6 +1288,31 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
 }
 #[cfg(not(verus_keep_ghost))]
 #[test]
+fn snapshot_outputs_do_not_allocate_caller_directories() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let (host, _input, _values, commit) = fixture();
+    let directory = ".chrono-harness/state/caller-generation";
+    let path = format!("{directory}/snapshot.json");
+    let result = chrono_inputs::capture(host.path(), CONFIG, &commit, &path);
+    assert!(result.unwrap_err().contains("E_INPUT_OUTPUT_PARENT"));
+    assert!(!host.path().join(directory).exists());
+    assert!(
+        !host
+            .path()
+            .join(".chrono-harness/state/inputs/blobs")
+            .exists()
+    );
+
+    fs::create_dir_all(host.path().join(directory)).unwrap();
+    let snapshot = chrono_inputs::capture(host.path(), CONFIG, &commit, &path).unwrap();
+    assert_eq!(snapshot["commit"], commit);
+    assert!(host.path().join(path).is_file());
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
 fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
     if !chrono_git_boundary::isolated_git() {
         return;
