@@ -271,7 +271,9 @@ fn output_metadata_retires_within_the_original_creation_window() {
     let physical = h.path().join(path);
     fs::write(&physical, b"short-lived original").unwrap();
     let owner = inventory(h.path());
-    let publication = inventory(h.path()).begin("fixture", path, json!({})).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!({}))
+        .unwrap();
     let id = publication.id().to_owned();
     publication.complete_sealed(json!({"exit_code":0})).unwrap();
     let deadline = ledger(h.path())["outputs"][0]["lifetime"]["deadline"]
