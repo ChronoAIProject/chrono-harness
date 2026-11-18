@@ -932,15 +932,15 @@ impl Inventory {
         if address.path != path {
             return Err("path metadata identity differs".into());
         }
-        Ok(address.output.is_some()
-            || fs::read_dir(directory)
-                .map_err(|e| e.to_string())?
-                .any(|entry| {
-                    entry.map_or(true, |entry| {
-                        entry.file_name() != "address.json"
-                            && entry.file_name() != "address.pending"
-                    })
-                }))
+        if address.output.is_some() {
+            return Ok(true);
+        }
+        for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
+            if entry.map_err(|e| e.to_string())?.file_name() != "address.json" {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     // Only the owner can publish into this namespace. The name carries both
@@ -1060,24 +1060,28 @@ impl Inventory {
         if identity(directory)? != dir_id || identity(&marker)? != marker_id {
             return Err("path identity changed during exclusion".into());
         }
-        let Some(address) = self.read_metadata::<Address>(&marker)? else {
-            return Err("path address has no published declaration".into());
-        };
-        if self.path_directory(&address.path)? != directory {
-            return Err("path declaration differs from physical address".into());
+        Ok(self
+            .detach_empty_path(directory, &initial_address.path, &gate, nodes)?
+            .is_some())
+    }
+
+    fn detach_empty_path(
+        &self,
+        directory: &Path,
+        path: &str,
+        gate: &DirectoryLease,
+        nodes: &mut usize,
+    ) -> Result<Option<PathBuf>, String> {
+        if self.path_metadata_occupied(directory, path)? || !self.path_step_available(*nodes) {
+            return Ok(None);
         }
-        if address.output.is_some() {
-            return Ok(false);
-        }
-        for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
-            if entry.map_err(|e| e.to_string())?.file_name() != "address.json" {
-                return Ok(false);
-            }
-        }
+        let dir_id = identity(directory)?;
+        let marker = directory.join("address.json");
+        let marker_id = identity(&marker)?;
         let pending_root = no_symlink_parents(&self.directory, "paths")?;
         let pending = pending_root.join(format!(
             "retiring-{}_{}_{}",
-            sha256(address.path.as_bytes()),
+            sha256(path.as_bytes()),
             dir_id,
             marker_id
         ));
@@ -1088,15 +1092,15 @@ impl Inventory {
             .ok_or("path address UTF8")?;
         no_symlink_parents(&self.directory, relative)?;
         if !self.path_step_available(*nodes) {
-            return Ok(false);
+            return Ok(None);
         }
-        self.stable(&gate)?;
+        self.stable(gate)?;
         if identity(directory)? != dir_id || identity(&marker)? != marker_id {
             return Err("empty path identity changed before retirement".into());
         }
         crate::artifact_disposal::publish_entry(directory, &pending)?;
         *nodes += 1;
-        Ok(true)
+        Ok(Some(pending))
     }
 
     // Stream the registered hash tree bottom-up. Revalidate each mapping in
@@ -1289,17 +1293,16 @@ impl Inventory {
                     };
                     // The shared observation may already be stale. Recheck the
                     // actual mapping and members under the original exclusion.
-                    if self.path_metadata_occupied(&path_directory, &path)? {
-                        record.prune_path = None;
-                    } else {
-                        self.remove_metadata_directory(
-                            &path_directory,
-                            &path_gate,
-                            &["address.json", "address.pending"],
-                        )?;
-                        *nodes += 3;
-                        record.prune_path = next;
-                    }
+                    let Some(pending) =
+                        self.detach_empty_path(&path_directory, &path, &path_gate, nodes)?
+                    else {
+                        break;
+                    };
+                    drop(path_gate);
+                    // The pending name now owns any work left by this pass or
+                    // an interruption, even after the object cursor is retired.
+                    self.finish_path_retirement(&pending, nodes)?;
+                    record.prune_path = next;
                 }
             }
         }

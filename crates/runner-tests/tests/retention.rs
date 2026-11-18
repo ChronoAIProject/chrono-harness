@@ -1525,6 +1525,30 @@ fn expired_orphan_addresses_preserve_active_and_unknown_members_then_retire_bott
 }
 
 #[test]
+fn retiring_object_preserves_an_unresolved_path_publication() {
+    if !isolated_capability_test("retiring_object_preserves_an_unresolved_path_publication") {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/pending-path";
+    fs::write(h.path().join(path), b"returned").unwrap();
+    let original = inventory(h.path())
+        .begin("fixture", path, json!({}))
+        .unwrap();
+    let id = original.id().to_owned();
+    original.complete(json!({"exit":0})).unwrap();
+    let owner = inventory(h.path());
+    owner.maintain_originals(&[id.clone()]).unwrap();
+    assert!(!h.path().join(path).exists());
+    let address = legacy_empty_address(h.path(), path);
+    let pending = address.join("address.pending");
+    fs::write(&pending, b"interrupted mapping update").unwrap();
+    owner.maintain_originals_at(&[id], u64::MAX).unwrap();
+    assert_eq!(fs::read(pending).unwrap(), b"interrupted mapping update");
+    assert!(address.join("address.json").is_file());
+}
+
+#[test]
 fn interrupted_path_retirement_resumes_without_following_a_replacement() {
     if !isolated_capability_test(
         "interrupted_path_retirement_resumes_without_following_a_replacement",
