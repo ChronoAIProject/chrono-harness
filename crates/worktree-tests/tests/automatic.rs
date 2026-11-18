@@ -1376,12 +1376,14 @@ fn superseded_cleanup_original_retires_only_after_its_independent_reader_release
         let path = ".chrono-harness/state/worktrees/cleanup-superseded.json";
         let raw = b"original cleanup failure retained for its actual reader\n";
         fs::write(h.root.join(path), raw).unwrap();
-        let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
-        inventory
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
             .begin("lifecycle-original", path, value!(null))
             .unwrap()
             .complete(value!({"status":"failed"}))
             .unwrap();
+        let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
         let role = format!(
             "worktree-enrollment:{}",
             sha256(h.target.to_str().unwrap().as_bytes())
