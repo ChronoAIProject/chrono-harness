@@ -72,6 +72,13 @@ impl Fixture {
             fs::set_permissions(&file, fs::Permissions::from_mode(0o755)).unwrap();
             host.config["tools"][name] = json!(file);
         }
+        if behavior == "distinct-compilers" {
+            let active = tools.path().join("active");
+            fs::create_dir(&active).unwrap();
+            for name in ["cargo", "rustc"] {
+                fs::copy(tools.path().join(name), active.join(name)).unwrap();
+            }
+        }
         host.config["limits"] = json!({"unit_seconds":120,"platform_seconds":600});
         host.config["failure_evidence"]["test.none"] = json!(["failures/test-a/"]);
         // 真实打包器要求发布安装器；它仍由 build_a 产生并暂存到 consumer/a。

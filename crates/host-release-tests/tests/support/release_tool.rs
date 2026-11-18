@@ -130,6 +130,14 @@ fn run() -> Result<u8, String> {
         .file_name()
         .and_then(|s| s.to_str())
         .ok_or("missing tool fixture name")?;
+    let tool_directory = executable.parent().ok_or("missing fixture tool parent")?;
+    let distinct_compilers = fixture["behavior"] == "distinct-compilers";
+    if distinct_compilers
+        && matches!(name, "cargo" | "rustc")
+        && tool_directory.file_name().and_then(|name| name.to_str()) != Some("active")
+    {
+        return Err("called the unselected compiler launcher".into());
+    }
     match (name, args.as_slice()) {
         ("cargo" | "rustc", [arg]) if arg == "--version" => {
             if name == "rustc" && fixture["behavior"] == "wrong-compiler" {
@@ -145,14 +153,12 @@ fn run() -> Result<u8, String> {
                 && version == "1.95.0"
                 && (tool == "cargo" || tool == "rustc") =>
         {
-            println!(
-                "{}",
-                executable
-                    .parent()
-                    .ok_or("missing fixture tool parent")?
-                    .join(tool)
-                    .display()
-            );
+            let active = if distinct_compilers {
+                tool_directory.join("active")
+            } else {
+                tool_directory.to_owned()
+            };
+            println!("{}", active.join(tool).display());
             Ok(0)
         }
         ("rustup", _)

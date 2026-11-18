@@ -264,6 +264,24 @@ fn malformed_recipe_or_existing_output_fails_before_any_unit_process() {
 }
 
 #[test]
+fn rust_build_executes_the_compilers_selected_from_the_declared_toolchain() {
+    let mut f = fixture::Fixture::new("distinct-compilers", false);
+    f.success("build_a");
+    let report = f.report("build_a");
+    let active = &report["toolchain"]["active_compilers"];
+    assert_eq!(report["execution_tools"]["cargo"], active["cargo"]);
+    assert_eq!(report["execution_tools"]["rustc"], active["rustc"]);
+    assert_eq!(report["environment"]["RUSTC"], active["rustc"]["path"]);
+    let build = report["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|process| process["phase"] == "build")
+        .unwrap();
+    assert_eq!(build["argv"][0], active["cargo"]["path"]);
+}
+
+#[test]
 fn wrong_compiler_is_retained_as_failed_original_observation_without_building() {
     let mut f = fixture::Fixture::new("wrong-compiler", false);
     let out = f.invoke("build_a");
