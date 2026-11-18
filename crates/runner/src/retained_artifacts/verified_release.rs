@@ -124,45 +124,50 @@ pub open spec fn path_effect(before: PathCustody, after: PathCustody) -> bool {
     }
 }
 
+pub open spec fn path_tick(trace: spec_fn(nat) -> PathCustody, i: nat) -> bool {
+    path_effect(trace(i), trace(i + 1))
+}
+
+pub open spec fn path_moves(trace: spec_fn(nat) -> PathCustody, i: nat) -> bool {
+    trace(i) != PathCustody::Absent ==> exists|later: nat| i < later
+        && #[trigger] trace(later) != trace(i)
+}
+
 proof fn path_interval(trace: spec_fn(nat) -> PathCustody, first: nat, last: nat)
     requires first <= last,
-        forall|i: nat| first <= i < last ==> path_effect(#[trigger] trace(i), trace(i+1)),
+        forall|i: nat| first <= i < last ==> #[trigger] path_tick(trace, i),
     ensures path_debt(trace(last)) <= path_debt(trace(first)),
     decreases last - first,
 {
     if first < last {
         let prior = (last - 1) as nat;
         path_interval(trace, first, prior);
-        assert(path_effect(trace(prior), trace(last)));
+        assert(path_tick(trace, prior));
     }
 }
 
-/// 从逐步内核效果推出有限退休。公平性只要求一个仍有工作量的代际
-/// 最终离开当前阶段。调用者独立核实调度、锁、预算以及文件系统效果。
+/// 相邻观察必须对应一个内核效果或停留。只有仍在保管的代际需要
+/// 公平推进；由当前程序、租约、预算及文件系统独立建立这两个前提。
 pub proof fn path_generation_retires(trace: spec_fn(nat) -> PathCustody, start: nat) -> (end: nat)
     requires
-        forall|i: nat| start <= i ==> path_effect(#[trigger] trace(i), trace(i+1)),
-        forall|i: nat| start <= i && #[trigger] trace(i) != PathCustody::Absent ==>
-            exists|later: nat| i < later && #[trigger] trace(later) != trace(i),
+        forall|i: nat| start <= i ==> #[trigger] path_tick(trace, i),
+        forall|i: nat| start <= i ==> #[trigger] path_moves(trace, i),
     ensures start <= end,
         forall|later: nat| end <= later ==> #[trigger] trace(later) == PathCustody::Absent,
+    decreases path_debt(trace(start)),
 {
-    let debt = |i: nat| path_debt(trace(i));
-    assert forall|a: nat, b: nat| start <= a <= b implies
-        #[trigger] debt(b) <= #[trigger] debt(a) by {
-        path_interval(trace, a, b);
+    if trace(start) == PathCustody::Absent {
+        assert forall|later: nat| start <= later implies #[trigger] trace(later) == PathCustody::Absent by {
+            path_interval(trace, start, later);
+        }
+        start
+    } else {
+        assert(path_moves(trace, start));
+        let later = choose|later: nat| start < later && #[trigger] trace(later) != trace(start);
+        path_interval(trace, start, later);
+        assert(path_debt(trace(later)) < path_debt(trace(start)));
+        path_generation_retires(trace, later)
     }
-    assert forall|i: nat| start <= i && #[trigger] debt(i) > 0 implies
-        exists|later: nat| i < later && #[trigger] debt(later) < debt(i) by {
-        let later = choose|later: nat| i < later && #[trigger] trace(later) != trace(i);
-        path_interval(trace, i, later);
-        assert(debt(later) < debt(i));
-    }
-    let end = retirement_stays_complete(debt, start);
-    assert forall|later: nat| end <= later implies #[trigger] trace(later) == PathCustody::Absent by {
-        assert(debt(later) == 0);
-    }
-    end
 }
 
 /// 不同地址及相同字节不能证明独立保管；硬链接仍有同一物理身份。
