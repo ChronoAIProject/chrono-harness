@@ -4281,6 +4281,7 @@ pub fn publish_owned_original(
         outcome,
         |file| file.write_all(bytes).map_err(|e| e.to_string()),
         None,
+        false,
     )
 }
 
@@ -4307,6 +4308,7 @@ pub fn publish_owned_observed(
             file.write_all(bytes).map_err(|e| e.to_string())
         },
         None,
+        false,
     )
 }
 
@@ -4320,6 +4322,7 @@ fn publish_owned_with(
     outcome: Value,
     write_content: impl FnOnce(&mut fs::File) -> Result<(), String>,
     consumer: Option<(&str, bool)>,
+    create_parent: bool,
 ) -> Result<bool, String> {
     let began = Instant::now();
     let Some(inventory) = Inventory::adopted(root)? else {
@@ -4347,7 +4350,15 @@ fn publish_owned_with(
         "original publication writer acquisition returned"
     );
     let target = no_symlink_parents(root, path)?;
-    fs::create_dir_all(target.parent().ok_or("original parent")?).map_err(|e| e.to_string())?;
+    let parent = target.parent().ok_or("original parent")?;
+    if create_parent {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    } else if !fs::symlink_metadata(parent)
+        .map_err(|e| e.to_string())?
+        .is_dir()
+    {
+        return Err("original parent must be an existing physical directory".into());
+    }
     match fs::symlink_metadata(&target) {
         Ok(_) => {
             let _input = read_guard(root, path)?;
@@ -4451,6 +4462,7 @@ pub fn publish_final_original(
             },
             false,
         )),
+        true,
     )
 }
 /// Inputs of an unfinished report stay rooted until the actual fixed-slot
@@ -4472,6 +4484,7 @@ pub fn publish_pending_original(
         outcome,
         |file| file.write_all(bytes).map_err(|e| e.to_string()),
         Some(("publication-recheck", false)),
+        true,
     )
 }
 
@@ -4546,6 +4559,7 @@ fn publish_original_file(
             Ok(())
         },
         consumer,
+        true,
     )
 }
 

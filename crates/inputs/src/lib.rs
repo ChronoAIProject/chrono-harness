@@ -431,6 +431,24 @@ fn state(root: &Path, path: &str) -> Result<PathBuf, String> {
     no_symlink_parents(root, path)
 }
 #[cfg(not(verus_keep_ghost))]
+fn output_path(root: &Path, path: &str) -> Result<PathBuf, String> {
+    let target = state(root, path)?;
+    let parent = target
+        .parent()
+        .ok_or("E_INPUT_OUTPUT_PARENT: missing parent")?;
+    if parent != root.join(".chrono-harness/state") {
+        let metadata = fs::symlink_metadata(parent)
+            .map_err(|e| format!("E_INPUT_OUTPUT_PARENT: {}: {e}", parent.display()))?;
+        if !metadata.is_dir() {
+            return Err(format!(
+                "E_INPUT_OUTPUT_PARENT: {} is not a physical directory",
+                parent.display()
+            ));
+        }
+    }
+    Ok(target)
+}
+#[cfg(not(verus_keep_ghost))]
 fn publish(root: &Path, path: &str, v: &Value) -> Result<(), String> {
     let bytes = wire::canonical(v)?;
     publish_bytes(root, path, &bytes)
@@ -438,7 +456,11 @@ fn publish(root: &Path, path: &str, v: &Value) -> Result<(), String> {
 #[cfg(not(verus_keep_ghost))]
 fn publish_bytes(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
     use chrono_harness::retained_artifacts::retention;
-    let target = state(root, path)?;
+    let target = output_path(root, path)?;
+    let parent = target.parent().ok_or("snapshot parent")?;
+    if parent == root.join(".chrono-harness/state") {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
     if retention::publish_owned_original(
         root,
         "full-original",
@@ -454,8 +476,6 @@ fn publish_bytes(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
         }
         return Err("E_SNAPSHOT_EXISTS: retain old snapshot; choose a new output path".into());
     }
-    let parent = target.parent().ok_or("snapshot parent")?;
-    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     let mut tmp = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
     tmp.write_all(bytes).map_err(|e| e.to_string())?;
     tmp.persist_noclobber(&target).map_err(|e| e.to_string())?;
@@ -568,7 +588,7 @@ pub fn capture_selected(
         Selection::Unit { unit } => Some(Scope::Unit { unit: unit.clone() }),
         Selection::Collect => return Err("E_INPUT_SCOPE: collection consumes original snapshots; it does not capture live inputs".into()),
     };
-    state(root, output)?;
+    output_path(root, output)?;
     let reader = facts::Reader::for_config(root, config)?;
     reader.verify_config(root, commit)?;
     reader.verify_oid(root, commit)?;
@@ -673,7 +693,7 @@ pub fn pair(
     // Source capabilities survive both transports and the destination handoff.
     let _base = chrono_harness::retained_artifacts::retention::read_scope(base_root)?;
     let _candidate = chrono_harness::retained_artifacts::retention::read_scope(candidate_root)?;
-    state(root, output)?;
+    output_path(root, output)?;
     let a = transport(base_root, base, root)?;
     let b = transport(candidate_root, candidate, root)?;
     let v = value!({"base":a,"candidate":b});
