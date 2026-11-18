@@ -515,8 +515,7 @@ impl<'a> Execution<'a> {
         {
             return Err(error("unexpected compiler"));
         }
-        self.report["toolchain"] =
-            json!({"versions":versions,"tools":self.report["execution_tools"],"active_compilers":active});
+        self.report["toolchain"] = json!({"versions":versions,"tools":self.report["execution_tools"],"active_compilers":active});
         Ok(())
     }
 
