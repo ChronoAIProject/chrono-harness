@@ -282,6 +282,9 @@ fn maintenance_retires_only_complete_legacy_log_records_after_the_window() {
     let config = fixture.0.join(runtime::CONFIG_PATH);
     let mut policy: Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
     policy["keep_seconds"] = json!(86400);
+    // Existing generations can be larger than a newly reduced writer limit.
+    assert!(original.len() > 128);
+    policy["max_bytes"] = json!(128);
     fs::write(&config, serde_json::to_vec(&policy).unwrap()).unwrap();
 
     let birth = current
