@@ -54,6 +54,11 @@ Rust 前端按 `.chrono-harness/projects.json` 构建明确列出的 bootstrap �
 .chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/units.json
 ```
 
+本宿主用 `job_gating.evidence_retention_days: 1` 为 detector 和单元上传设置一天。
+汇总通过同一运行的精确生产标识读取需要的单元证据，并核对下载内容。跨天局部重跑
+仍要求原工件可取得，工件过期后须由原生产者重新生成证据。维护者使用 detector
+原件排查检测和选测问题。汇总工件的长期使用方及其持久交接仍在审计中。
+
 本仓为 detector 共享启动工件指定 `job_gating.startup.retention_days: 1`。
 各单元和汇总作业在同一运行中按上传 ID 下载，固定源码的后续部署使用经验证的持久安装。
 需要跨运行使用的启动二进制及构建原件由使用方在窗口内转存。生成器向现有上传操作传递
