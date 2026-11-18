@@ -1,9 +1,30 @@
 //! Explicit startup transfer; hosts own production, identity and installation.
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn retention_days_valid(days: Option<u16>) -> (valid: bool)
+    ensures valid == (days != Some(0u16)),
+{
+    match days {
+        Some(value) => value > 0,
+        None => true,
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{action, gating, overlap, scalar, shell, units};
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::relative_path;
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -11,9 +32,12 @@ pub struct Config {
     pub directory: String,
     pub artifact: String,
     pub download_action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retention_days: Option<u16>,
     pub consumers: BTreeMap<String, Consumer>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Consumer {
@@ -22,6 +46,7 @@ pub struct Consumer {
     pub install: Vec<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
     let directory = s.directory.trim_end_matches('/');
     relative_path(directory)?;
@@ -39,6 +64,9 @@ pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
         return Err(
             "startup requires a literal host transfer directory, artifact and consumers".into(),
         );
+    }
+    if !retention_days_valid(s.retention_days) {
+        return Err("startup artifact retention_days must be positive".into());
     }
     action(&s.download_action, "actions/download-artifact")?;
     if matches!(
@@ -88,23 +116,28 @@ pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn producer(c: &units::Config, s: &Config, body: String) -> Result<String, String> {
     let marker = "      - name: Bootstrap registered detector tools\n";
     let detection = "      - name: Detect required units from fixed Git endpoints\n";
     if body.matches(marker).count() != 1 || body.matches(detection).count() != 1 {
         return Err("startup requires one detector bootstrap and detection step".into());
     }
-    let upload = format!(
+    let mut upload = format!(
         "      - name: Publish registered startup artifact\n        id: chrono_startup_upload\n        uses: {}\n        with:\n          name: {}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n          include-hidden-files: true\n",
         c.collection.upload_artifact_action,
         s.artifact,
         scalar(&s.directory)
     );
+    if let Some(days) = s.retention_days {
+        upload.push_str(&format!("          retention-days: {days}\n"));
+    }
     Ok(body
         .replacen(marker, &format!("{marker}        id: chrono_startup\n"), 1)
         .replacen(detection, &format!("{upload}{detection}"), 1))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn consumer(
     s: &Config,
     job: &str,
