@@ -26,6 +26,82 @@ use crate::verified_identifiers as identifiers;
 
 verus! {
 
+pub open spec fn retirement_rank(body: Seq<nat>, metadata: Seq<nat>) -> nat
+    decreases body.len() + metadata.len(),
+{
+    if body.len() > 0 {
+        body.first() + retirement_rank(body.drop_first(), metadata)
+    } else if metadata.len() > 0 {
+        metadata.first() + retirement_rank(body, metadata.drop_first())
+    } else {
+        0
+    }
+}
+
+pub proof fn zero_rank_finishes_each_member(body: Seq<nat>, metadata: Seq<nat>)
+    requires retirement_rank(body, metadata) == 0,
+    ensures
+        forall|i: int| 0 <= i < body.len() ==> #[trigger] body[i] == 0,
+        forall|i: int| 0 <= i < metadata.len() ==> #[trigger] metadata[i] == 0,
+    decreases body.len() + metadata.len(),
+{
+    reveal(retirement_rank);
+    if body.len() > 0 {
+        zero_rank_finishes_each_member(body.drop_first(), metadata);
+        assert forall|i: int| 0 <= i < body.len() implies #[trigger] body[i] == 0 by {
+            if i > 0 {
+                assert(body[i] == body.drop_first()[i - 1]);
+            }
+        }
+    } else if metadata.len() > 0 {
+        zero_rank_finishes_each_member(body, metadata.drop_first());
+        assert forall|i: int| 0 <= i < metadata.len() implies #[trigger] metadata[i] == 0 by {
+            if i > 0 {
+                assert(metadata[i] == metadata.drop_first()[i - 1]);
+            }
+        }
+    }
+}
+
+/// 有效步骤必须由维护执行及其原结果建立。时间流逝不构成有效步骤。
+pub open spec fn fair_retirement(rank: spec_fn(nat) -> nat, start: nat) -> bool {
+    forall|step: nat| start <= step && #[trigger] rank(step) > 0 ==>
+        exists|later: nat| step < later && #[trigger] rank(later) < rank(step)
+}
+
+pub proof fn retirement_reaches_zero(rank: spec_fn(nat) -> nat, start: nat) -> (finished: nat)
+    requires fair_retirement(rank, start),
+    ensures start <= finished, rank(finished) == 0,
+    decreases rank(start),
+{
+    if rank(start) == 0 {
+        start
+    } else {
+        assert(exists|later: nat| start < later && #[trigger] rank(later) < rank(start));
+        let later = choose|later: nat| start < later && #[trigger] rank(later) < rank(start);
+        assert forall|step: nat| later <= step && #[trigger] rank(step) > 0 implies
+            exists|after: nat| step < after && #[trigger] rank(after) < rank(step) by {
+            assert(start <= step);
+        }
+        retirement_reaches_zero(rank, later)
+    }
+}
+
+pub proof fn retirement_stays_complete(
+    rank: spec_fn(nat) -> nat, start: nat,
+) -> (finished: nat)
+    requires fair_retirement(rank, start),
+        forall|a: nat, b: nat| start <= a <= b ==> #[trigger] rank(b) <= #[trigger] rank(a),
+    ensures start <= finished,
+        forall|later: nat| finished <= later ==> #[trigger] rank(later) == 0,
+{
+    let finished = retirement_reaches_zero(rank, start);
+    assert forall|later: nat| finished <= later implies #[trigger] rank(later) == 0 by {
+        assert(rank(later) <= rank(finished));
+    }
+    finished
+}
+
 /// 不同地址及相同字节不能证明独立保管；硬链接仍有同一物理身份。
 pub fn independent_original(source: &str, survivor: &str) -> (independent: bool)
     ensures independent == (source@ != survivor@),
