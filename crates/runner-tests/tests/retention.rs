@@ -1029,26 +1029,45 @@ fn reading_a_tree_member_leaves_only_its_owning_output_to_retire() {
     let member = format!("{path}/result.json");
     fs::write(h.path().join(&member), b"returned").unwrap();
     let owner = inventory(h.path());
-    let publication = inventory(h.path()).begin("fixture", &path, json!({})).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", &path, json!({}))
+        .unwrap();
     let id = publication.id().to_owned();
     publication.complete(json!({"exit_code":0})).unwrap();
-    let mut address = h.path().join(".chrono-harness/state/output-retention-v1/paths");
+    let mut address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
     for part in path.split('/') {
         address.push(chrono_harness::sha256(part.as_bytes()));
     }
     let reader = retained_artifacts::retention::read_guard(h.path(), &member)
-        .unwrap().unwrap();
-    assert!(!address.join(chrono_harness::sha256(b"result.json")).exists());
-    owner.maintain_originals_at(std::slice::from_ref(&id), u64::MAX).unwrap();
+        .unwrap()
+        .unwrap();
+    assert!(
+        !address
+            .join(chrono_harness::sha256(b"result.json"))
+            .exists()
+    );
+    owner
+        .maintain_originals_at(std::slice::from_ref(&id), u64::MAX)
+        .unwrap();
     assert_eq!(fs::read(h.path().join(&member)).unwrap(), b"returned");
     drop(reader);
     for _ in 0..8 {
-        if !retention_state::object_path(h.path(), &id).exists() { break; }
-        owner.maintain_originals_at(std::slice::from_ref(&id), u64::MAX).unwrap();
+        if !retention_state::object_path(h.path(), &id).exists() {
+            break;
+        }
+        owner
+            .maintain_originals_at(std::slice::from_ref(&id), u64::MAX)
+            .unwrap();
     }
     assert!(!h.path().join(path).exists());
     assert!(!address.exists());
-    assert!(retained_artifacts::retention::read_guard(h.path(), &member).unwrap().is_none());
+    assert!(
+        retained_artifacts::retention::read_guard(h.path(), &member)
+            .unwrap()
+            .is_none()
+    );
     assert!(!address.exists(), "a lookup recreated the retired path");
 }
 

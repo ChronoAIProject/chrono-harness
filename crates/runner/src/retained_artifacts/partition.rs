@@ -1908,7 +1908,8 @@ impl Inventory {
             let read_address = access != PathAccess::Maintain || exclusive;
             // Birth needs only an absence observation here. Decode and validate
             // an existing declaration once, under the acquired path lease.
-            let missing = access != PathAccess::Lookup && read_address
+            let missing = access != PathAccess::Lookup
+                && read_address
                 && match fs::symlink_metadata(&marker) {
                     Ok(_) => false,
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
