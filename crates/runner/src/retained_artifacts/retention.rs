@@ -2931,17 +2931,34 @@ impl Inventory {
             .collect();
         order.sort_by_key(|(_, priority)| *priority);
         let prepared_micros = began.elapsed().as_micros() as u64;
+        let node_limit = self
+            .round_node_limit
+            .get()
+            .unwrap_or(self.policy.max_nodes_per_round);
         for (id, _) in order {
+            let metadata_room = self.metadata_room();
+            let elapsed = began.elapsed();
             if let Some(reason) = crate::verified_release::retirement_deferral(
-                self.metadata_room(),
+                metadata_room,
                 nodes,
-                self.round_node_limit
-                    .get()
-                    .unwrap_or(self.policy.max_nodes_per_round),
-                began.elapsed().as_millis(),
+                node_limit,
+                elapsed.as_millis(),
                 self.policy.max_millis_per_round,
             ) {
-                protected.push(json!({"id":id,"reason":reason}));
+                protected.push(json!({
+                    "id": id,
+                    "reason": reason,
+                    "budget": {
+                        "metadata_room": metadata_room,
+                        "nodes_used": nodes,
+                        "node_limit": node_limit,
+                        "time_limit_millis": self.policy.max_millis_per_round,
+                        "entered_micros": entered_micros,
+                        "loaded_micros": loaded_micros,
+                        "prepared_micros": prepared_micros,
+                        "elapsed_micros": elapsed.as_micros() as u64
+                    }
+                }));
                 break;
             }
             let i = l
