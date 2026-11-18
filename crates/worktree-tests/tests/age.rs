@@ -982,9 +982,24 @@ fn empty_aged_cache_preserves_working_source_until_an_effect_is_needed() {
     fs::write(&evidence, b"required failure original\0\xff").unwrap();
     older_than(&target, 3);
 
-    for _ in 0..2 {
+    for round in 0..2 {
         let (code, maintained, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{maintained} {error}");
+        if round == 1 {
+            let observation = maintained["drain"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["path"] == value!(target))
+                .unwrap();
+            assert_eq!(observation["status"], "preserved");
+            assert_eq!(
+                observation["age_outcome"],
+                "no-disposable-output-retained-checkout"
+            );
+            assert!(observation.get("receipt").is_none());
+            assert!(observation.get("input").is_none());
+        }
         assert_eq!(git(&target, &["rev-parse", "HEAD"]), original_head);
         assert_eq!(git(&target, &["write-tree"]), original_index);
         assert_eq!(fs::read(target.join("payload")).unwrap(), b"working source");
