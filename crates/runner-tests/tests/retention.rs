@@ -824,13 +824,31 @@ fn exhausted_retirement_budget_reports_the_unattempted_original() {
         fs::read(h.path().join(path)).unwrap(),
         b"original interrupted producer"
     );
-    assert!(
-        round["protected"].as_array().unwrap().iter().any(|row| {
+    let budget = &round["protected"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| {
             row["id"] == id
                 && row["reason"] == "retirement round budget exhausted; original not attempted"
-        }),
-        "the owning round must explain its unattempted original: {round}"
-    );
+        })
+        .unwrap_or_else(|| {
+            panic!("the owning round must explain its unattempted original: {round}")
+        })["budget"];
+    assert_eq!(budget["nodes_used"], 1);
+    assert_eq!(budget["node_limit"], 1);
+    assert_eq!(budget["metadata_room"], true);
+    let mut previous = 0;
+    for field in [
+        "entered_micros",
+        "loaded_micros",
+        "prepared_micros",
+        "elapsed_micros",
+    ] {
+        let elapsed = budget[field].as_u64().unwrap();
+        assert!(elapsed >= previous, "{budget}");
+        previous = elapsed;
+    }
     h.disable_cleanup(false);
 }
 
