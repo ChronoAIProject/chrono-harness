@@ -1460,6 +1460,120 @@ fn explicit_inventory_observer_keeps_damaged_live_and_unexecuted_members() {
     drop(live);
 }
 
+#[cfg(not(verus_keep_ghost))]
+fn legacy_empty_address(root: &Path, path: &str) -> std::path::PathBuf {
+    let mut directory = root.join(".chrono-harness/state/output-retention-v1/paths");
+    let mut logical = String::new();
+    for part in path.split('/') {
+        if !logical.is_empty() {
+            logical.push('/');
+        }
+        logical.push_str(part);
+        directory.push(chrono_harness::sha256(part.as_bytes()));
+        fs::create_dir_all(&directory).unwrap();
+        let marker = directory.join("address.json");
+        if !marker.exists() {
+            fs::write(
+                marker,
+                serde_json::to_vec(&json!({"path":logical,"output":null})).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+    directory
+}
+
+#[test]
+fn expired_orphan_addresses_preserve_active_and_unknown_members_then_retire_bottom_up() {
+    if !isolated_capability_test(
+        "expired_orphan_addresses_preserve_active_and_unknown_members_then_retire_bottom_up",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    let owner = inventory(h.path());
+    let child = legacy_empty_address(h.path(), "archived/check/result.json");
+    let sibling = legacy_empty_address(h.path(), "archived/shared");
+    fs::write(sibling.join("address.pending"), b"unresolved publication").unwrap();
+    owner.maintain_explicit().unwrap();
+    assert!(
+        child.join("address.json").is_file(),
+        "inside its original window"
+    );
+
+    policy["metadata_keep_seconds"] = json!(0);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(h.path());
+    let lease = chrono_harness::ownership::DirectoryLease::acquire_local(&child, false, None)
+        .unwrap()
+        .unwrap();
+    owner.maintain_explicit().unwrap();
+    assert!(child.join("address.json").is_file());
+    drop(lease);
+    owner.maintain_explicit().unwrap();
+    assert!(
+        !child.parent().unwrap().exists(),
+        "parent must retire after the member"
+    );
+    assert!(sibling.parent().unwrap().join("address.json").is_file());
+    assert_eq!(
+        fs::read(sibling.join("address.pending")).unwrap(),
+        b"unresolved publication"
+    );
+}
+
+#[test]
+fn interrupted_path_retirement_resumes_without_following_a_replacement() {
+    if !isolated_capability_test(
+        "interrupted_path_retirement_resumes_without_following_a_replacement",
+    ) {
+        return;
+    }
+    let h = host(1, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["metadata_keep_seconds"] = json!(0);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(h.path());
+    let old = legacy_empty_address(h.path(), "original");
+    let stop = owner.maintain_explicit_observed(|row| {
+        if row["namespace"] == "paths" && row["original"]["retirement_pending"] == true {
+            return Err("interrupted after identity-qualified rename".into());
+        }
+        Ok(())
+    });
+    assert_eq!(
+        stop.unwrap_err(),
+        "interrupted after identity-qualified rename"
+    );
+    assert!(!old.exists());
+    let queue = old
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("retiring-paths");
+    let pending = fs::read_dir(&queue)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    assert!(pending.join("address.json").is_file());
+    fs::create_dir(&old).unwrap();
+    let replacement = br#"{"path":"original","output":"new-owner"}"#;
+    fs::write(old.join("address.json"), replacement).unwrap();
+    let first = owner.maintain_explicit().unwrap();
+    assert!(first["round_maxima"]["nodes"].as_u64().unwrap() <= 1);
+    assert!(pending.is_dir());
+    assert!(!pending.join("address.json").exists());
+    owner.maintain_explicit().unwrap();
+    assert!(!pending.exists());
+    assert_eq!(fs::read(old.join("address.json")).unwrap(), replacement);
+}
+
 #[test]
 fn explicit_sweep_preserves_live_rooted_damaged_and_changed_originals() {
     if !isolated_capability_test(
