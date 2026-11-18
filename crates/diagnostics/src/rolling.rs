@@ -42,6 +42,9 @@ use serde::{Deserialize, Serialize};
 pub use crate::verified_rolling::MAX_FILES;
 
 #[cfg(not(verus_keep_ghost))]
+pub(crate) const MAX_RUNTIME_LOG_BYTES: u64 = 64 * 1024 * 1024;
+
+#[cfg(not(verus_keep_ghost))]
 const GENERATION_SCHEMA: &str = "chrono-runtime-log-generation/v1";
 #[cfg(not(verus_keep_ghost))]
 const GENERATION_PREFIX: &[u8] = b"{\"schema\":\"chrono-runtime-log-generation/v1\"";
@@ -302,7 +305,6 @@ impl RollingFile {
         directory: &Path,
         observed: u64,
         keep_seconds: u64,
-        max_bytes: u64,
     ) -> io::Result<ExpiredLogs> {
         let mut result = ExpiredLogs::default();
         if !Self::check_directory(directory, false)? {
@@ -326,9 +328,7 @@ impl RollingFile {
         }
         for index in 0..MAX_FILES {
             let path = Self::member(directory, index);
-            if let Err(error) =
-                Self::expire_member(&path, observed, keep_seconds, max_bytes, &mut result)
-            {
+            if let Err(error) = Self::expire_member(&path, observed, keep_seconds, &mut result) {
                 result.errors.push(format!("{}: {error}", path.display()));
             }
         }
@@ -339,7 +339,6 @@ impl RollingFile {
         path: &Path,
         observed: u64,
         keep_seconds: u64,
-        max_bytes: u64,
         result: &mut ExpiredLogs,
     ) -> io::Result<()> {
         if !regular(path)? {
@@ -358,7 +357,7 @@ impl RollingFile {
                 let deadline = generation_deadline(born, keep_seconds)
                     .ok_or_else(|| invalid("legacy log deadline exceeds supported time range"))?;
                 if !generation_expired(deadline, observed)
-                    || !Self::complete_legacy_log(&file, metadata.len(), max_bytes)?
+                    || !Self::complete_legacy_log(&file, metadata.len())?
                 {
                     result.legacy += 1;
                     return Ok(());
@@ -390,10 +389,10 @@ impl RollingFile {
         Ok(())
     }
 
-    fn complete_legacy_log(mut file: &File, length: u64, max_bytes: u64) -> io::Result<bool> {
+    fn complete_legacy_log(mut file: &File, length: u64) -> io::Result<bool> {
         use std::io::Seek;
 
-        if length == 0 || length > max_bytes {
+        if length == 0 || length > MAX_RUNTIME_LOG_BYTES {
             return Ok(false);
         }
         // Reading the header advanced the same open file description. Bound the
