@@ -1147,7 +1147,7 @@ fn maintenance_preserves_an_adopted_absence_without_a_finish_handoff() {
                 "observed_head":entry["enrollment"]["observed_head"],
                 "policy_inputs":entry["enrollment"]["policy_inputs"],
                 "original_receipt":entry["enrollment"]["receipt"],
-                "ownership":{"path":entry["ownership"]["path"],"id":entry["ownership"]["id"]}
+                "ownership":null
             },
             "head":head,"observed_worktree":"already-absent","original_outcomes":"unchanged",
             "task_completion":"not-claimed"
@@ -1169,6 +1169,14 @@ fn maintenance_preserves_an_adopted_absence_without_a_finish_handoff() {
 
         let (code, report) = h.invoke("maintain", false);
         assert_eq!(code == 0, valid, "{report}");
+        if !valid {
+            assert!(
+                report
+                    .to_string()
+                    .contains("original absence adoption does not bind this enrollment"),
+                "{report}"
+            );
+        }
         assert_eq!(fs::read(&ledger_path).unwrap(), ledger_bytes);
         assert_eq!(fs::read(h.root.join(path)).unwrap(), bytes);
         assert!(!h.target.exists());
