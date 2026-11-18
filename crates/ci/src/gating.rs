@@ -71,6 +71,8 @@ pub fn completed_native_job(
 pub struct Config {
     pub schema: String,
     pub detector: Detector,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_retention_days: Option<u16>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -101,6 +103,9 @@ pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
         return Err(
             "job gating requires chrono-job-gating/v1 and the fixed short v4 command".into(),
         );
+    }
+    if !super::startup::retention_days_valid(g.evidence_retention_days) {
+        return Err("CI job evidence retention days must be positive".into());
     }
     if c.collection.name == "Detect registered DELTA"
         || c.units
@@ -166,6 +171,7 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         Some(&scope),
         &artifact,
         c.schema == units::FULL_SCHEMA,
+        unit.and(c.job_gating.evidence_retention_days),
     )?;
     let old_if = "    if: ${{ github.event.deleted != true }}\n";
     let condition = if let Some(unit) = unit {
@@ -336,6 +342,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
     )?;
     if let Some(directory) = &g.detector.evidence_directory {
         text.push_str(&format!("      - name: Preserve detector evidence\n        if: ${{{{ always() }}}}\n        uses: {}\n        with:\n          name: chrono-detector-evidence-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}\n          path: {}\n          if-no-files-found: error\n{}", c.collection.upload_artifact_action, scalar(directory), super::artifact_hidden_files(c.collection.include_hidden_files)));
+        text.push_str(&super::artifact_retention(g.evidence_retention_days));
     }
     for id in c.units.keys() {
         text.push_str(&job(c, path, Some(id))?);

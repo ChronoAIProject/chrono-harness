@@ -127,6 +127,35 @@ fn declared_startup_is_published_once_and_installed_before_each_actual_consumer(
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
+fn in_run_evidence_window_applies_to_units_and_detector() {
+    let mut declaration = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
+    declaration["collection"]["include_hidden_files"] = json!(true);
+    declaration["job_gating"]["detector"]["evidence_directory"] = json!(".chrono-harness/state/");
+    declaration["job_gating"]["evidence_retention_days"] = json!(1);
+    let config = serde_json::from_value(declaration.clone()).unwrap();
+    let rendered = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
+    let workflow: Value =
+        serde_yaml_ng::from_str(&rendered[".github/workflows/chrono-ci.yml"]).unwrap();
+    for (job, name, retention_days) in [
+        ("detect", "Preserve detector evidence", json!(1)),
+        ("unit_example", "Preserve actual check evidence", json!(1)),
+        ("aggregate", "Preserve actual check evidence", Value::Null),
+    ] {
+        let step = workflow["jobs"][job]["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|step| step["name"] == name)
+            .unwrap();
+        assert_eq!(step["with"]["retention-days"], retention_days, "{job}");
+    }
+    declaration["job_gating"]["evidence_retention_days"] = json!(0);
+    let invalid = serde_json::from_value(declaration).unwrap();
+    assert!(chrono_ci::units::render(&invalid, ".chrono-harness/ci/units.json").is_err());
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
 fn startup_consumers_and_transfer_paths_must_be_explicit_and_separate_from_evidence() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["job_gating"]["startup"] = registration();

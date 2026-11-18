@@ -129,9 +129,7 @@ pub(crate) fn producer(c: &units::Config, s: &Config, body: String) -> Result<St
         s.artifact,
         scalar(&s.directory)
     );
-    if let Some(days) = s.retention_days {
-        upload.push_str(&format!("          retention-days: {days}\n"));
-    }
+    upload.push_str(&super::artifact_retention(s.retention_days));
     Ok(body
         .replacen(marker, &format!("{marker}        id: chrono_startup\n"), 1)
         .replacen(detection, &format!("{upload}{detection}"), 1))
