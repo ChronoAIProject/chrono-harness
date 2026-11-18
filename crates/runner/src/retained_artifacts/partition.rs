@@ -313,6 +313,14 @@ struct Address {
     output: Option<String>,
 }
 #[cfg(not(verus_keep_ghost))]
+#[derive(Clone, Copy, PartialEq)]
+enum PathAccess {
+    Lookup,
+    Reserve,
+    Maintain,
+    Transfer,
+}
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Gate {
     leases: Vec<DirectoryLease>,
     objects: RefCell<BTreeMap<String, Object>>,
@@ -1446,7 +1454,7 @@ impl Inventory {
             "retired_capabilities":record.retired_leases,"metadata_expires":record.metadata_expires})
     }
     pub(super) fn removal_gate(&self, paths: &[String]) -> Result<Gate, String> {
-        let (leases, directories) = self.path_gates(paths, true, true, true)?;
+        let (leases, directories) = self.path_gates(paths, true, PathAccess::Transfer)?;
         let targets = paths
             .iter()
             .map(|path| Ok((path.clone(), self.path_directory(path)?)))
@@ -1855,8 +1863,7 @@ impl Inventory {
         &self,
         paths: &[String],
         wait: bool,
-        read_ancestor_addresses: bool,
-        transfer: bool,
+        access: PathAccess,
     ) -> Result<(Vec<DirectoryLease>, BTreeMap<String, PathBuf>), String> {
         let mut requests = BTreeMap::<String, bool>::new();
         for path in paths {
@@ -1875,16 +1882,34 @@ impl Inventory {
             // If an ancestor is already exclusive, a second flock of one of its
             // descendants adds no exclusion and could reverse another lock order.
             let directory = self.path_directory(&path)?;
-            fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+            if access == PathAccess::Lookup {
+                // A missing prefix is a point-in-time miss. A concurrent birth
+                // may be observed by the next lookup. Never follow a descendant
+                // of a prefix this lookup did not actually lock.
+                if path
+                    .rsplit_once('/')
+                    .is_some_and(|(parent, _)| !directories.contains_key(parent))
+                    || match fs::symlink_metadata(&directory) {
+                        Ok(_) => false,
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                        Err(error) => return Err(error.to_string()),
+                    }
+                {
+                    continue;
+                }
+            } else {
+                fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+            }
             let marker = directory.join("address.json");
             // Maintenance already holds the actual output declarations. It
             // needs each target's mapping, plus physical ancestor exclusion.
             // Ordinary publication also consumes ancestor mappings to detect
             // overlapping reservations and therefore keeps reading them all.
-            let read_address = read_ancestor_addresses || exclusive;
+            let read_address = access != PathAccess::Maintain || exclusive;
             // Birth needs only an absence observation here. Decode and validate
             // an existing declaration once, under the acquired path lease.
-            let missing = read_address
+            let missing = access != PathAccess::Lookup
+                && read_address
                 && match fs::symlink_metadata(&marker) {
                     Ok(_) => false,
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
@@ -1910,7 +1935,7 @@ impl Inventory {
             }
             // External removal belongs to another owner and may explicitly
             // hand its capability to a native child. Metadata calls are local.
-            let acquire = if transfer {
+            let acquire = if access == PathAccess::Transfer {
                 DirectoryLease::acquire
             } else {
                 DirectoryLease::acquire_local
@@ -1996,8 +2021,17 @@ impl Inventory {
         let discovery =
             verified::gate_discovery(membership_only, maintenance, wait, birth.is_some());
         let discover_under_lease = discovery.object_excluded;
-        let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true, false)?;
-        let mut exclusive_paths: BTreeSet<String> = paths.iter().cloned().collect();
+        let access = if birth.is_some() {
+            PathAccess::Reserve
+        } else {
+            PathAccess::Lookup
+        };
+        let (mut leases, mut path_dirs) = self.path_gates(paths, wait, access)?;
+        let mut exclusive_paths: BTreeSet<String> = paths
+            .iter()
+            .filter(|path| path_dirs.contains_key(*path))
+            .cloned()
+            .collect();
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
         if birth.is_some() && !occupied.is_empty() {
@@ -2235,8 +2269,12 @@ impl Inventory {
                 })
                 .map(|r| r.path.clone())
                 .collect();
-            let (additional, dirs) =
-                self.path_gates(&target_paths, wait, !discover_under_lease, false)?;
+            let access = if discover_under_lease {
+                PathAccess::Maintain
+            } else {
+                PathAccess::Reserve
+            };
+            let (additional, dirs) = self.path_gates(&target_paths, wait, access)?;
             leases.extend(additional);
             path_dirs.extend(dirs);
             exclusive_paths.extend(target_paths);
@@ -2260,7 +2298,7 @@ impl Inventory {
                     )
                 })
             }) {
-                match self.path_gates(&[record.path.clone()], false, false, false) {
+                match self.path_gates(&[record.path.clone()], false, PathAccess::Maintain) {
                     Ok((additional, dirs)) => {
                         leases.extend(additional);
                         path_dirs.extend(dirs);
