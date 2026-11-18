@@ -1138,6 +1138,63 @@ fn invalid_terminal_original_handoff_preserves_ledger_and_existing_consumer() {
     }
 }
 
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn maintenance_preserves_an_adopted_absence_without_a_finish_handoff() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for valid in [true, false] {
+        let h = terminal_original_fixture("");
+        let ledger_path = h.record.join("ledger.json");
+        let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        let entry = &mut ledger["entries"][0];
+        let head = entry["terminal"]["head"].clone();
+        let path = ".chrono-harness/state/absent-adoption-original.json";
+        let mut original = value!({
+            "schema":"chrono-worktree-absent-adoption-receipt/v1",
+            "binding":{
+                "path":entry["path"],"branch":entry["branch"],"attachment":entry["attachment"],
+                "policy_sha256":entry["policy_sha256"],
+                "observed_head":entry["enrollment"]["observed_head"],
+                "policy_inputs":entry["enrollment"]["policy_inputs"],
+                "original_receipt":entry["enrollment"]["receipt"],
+                "ownership":null
+            },
+            "head":head,"observed_worktree":"already-absent","original_outcomes":"unchanged",
+            "task_completion":"not-claimed"
+        });
+        if !valid {
+            original["binding"]["attachment"]["metadata_id"] = value!("wrong attachment");
+        }
+        let bytes = serde_json::to_vec(&original).unwrap();
+        fs::write(h.root.join(path), &bytes).unwrap();
+        let receipt = value!({"path":path,"sha256":sha256(&bytes)});
+        entry["enrollment"]["absent_adoption"] = receipt.clone();
+        entry["terminal"]["receipt"] = receipt;
+        entry["terminal"]["retained_commit"] = head;
+        entry["terminal"]["artifacts_only"] = value!(false);
+        entry["status"] = value!("disposed");
+        entry.as_object_mut().unwrap().remove("cleanup");
+        let ledger_bytes = serde_json::to_vec(&ledger).unwrap();
+        fs::write(&ledger_path, &ledger_bytes).unwrap();
+
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code == 0, valid, "{report}");
+        if !valid {
+            assert!(
+                report
+                    .to_string()
+                    .contains("original absence adoption does not bind this enrollment"),
+                "{report}"
+            );
+        }
+        assert_eq!(fs::read(&ledger_path).unwrap(), ledger_bytes);
+        assert_eq!(fs::read(h.root.join(path)).unwrap(), bytes);
+        assert!(!h.target.exists());
+    }
+}
+
 #[cfg(not(verus_keep_ghost))]
 fn cleanup_result_handoff_fixture(fault: &str) -> EnrollmentOriginalsFixture {
     use chrono_harness::retained_artifacts::retention::Inventory;
