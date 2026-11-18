@@ -304,6 +304,59 @@ fn output_metadata_retires_within_the_original_creation_window() {
 }
 
 #[test]
+fn consumer_metadata_keeps_its_creation_deadline_until_release() {
+    if !isolated_capability_test("consumer_metadata_keeps_its_creation_deadline_until_release") {
+        return;
+    }
+    let h = deadline_host();
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_lifetime_seconds"] = json!(3600);
+    policy["metadata_keep_seconds"] = json!(86400);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+
+    let path = ".chrono-harness/state/fixtures/consumer-metadata-window";
+    let physical = h.path().join(path);
+    fs::write(&physical, b"origin with a consumer").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!({}))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete_sealed(json!({"exit_code":0})).unwrap();
+    let owner = inventory(h.path());
+    let consumer = "fixture-consumer-with-deadline";
+    owner.reference(consumer, &[id]).unwrap();
+    let record = retention_state::role_path(h.path(), consumer);
+    let metadata_deadline = || {
+        serde_json::from_slice::<Value>(&fs::read(&record).unwrap()).unwrap()["metadata_expires"]
+            .as_u64()
+            .unwrap()
+    };
+    let deadline = metadata_deadline();
+    let observed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    assert!(
+        deadline <= observed + 3600,
+        "consumer exceeded its creation window"
+    );
+    owner.maintain_at(deadline).unwrap();
+    assert!(record.is_file());
+    assert!(physical.is_file());
+
+    owner.reference(consumer, &[]).unwrap();
+    assert_eq!(metadata_deadline(), deadline);
+    for _ in 0..8 {
+        if !record.exists() {
+            break;
+        }
+        owner.maintain_at(deadline).unwrap();
+    }
+    assert!(!record.parent().unwrap().exists());
+}
+
+#[test]
 fn existing_consumer_can_transfer_expired_originals_without_new_report_dependencies() {
     if !isolated_capability_test(
         "existing_consumer_can_transfer_expired_originals_without_new_report_dependencies",
