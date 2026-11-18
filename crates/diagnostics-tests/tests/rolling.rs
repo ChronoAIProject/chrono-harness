@@ -284,18 +284,33 @@ fn maintenance_retires_only_complete_legacy_log_records_after_the_window() {
     policy["keep_seconds"] = json!(86400);
     fs::write(&config, serde_json::to_vec(&policy).unwrap()).unwrap();
 
-    let birth = current.metadata().unwrap().created().unwrap()
-        .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    let report = runtime::maintain_at(&fixture.0, birth + 86399).unwrap().unwrap();
+    let birth = current
+        .metadata()
+        .unwrap()
+        .created()
+        .unwrap()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let report = runtime::maintain_at(&fixture.0, birth + 86399)
+        .unwrap()
+        .unwrap();
     assert_eq!(report.removed, 0);
     assert_eq!(fs::read(&current).unwrap(), original);
     let lock = fs::File::open(directory.join("runtime.lock")).unwrap();
     lock.lock().unwrap();
-    assert!(runtime::maintain_at(&fixture.0, birth + 86400).unwrap().unwrap().busy);
+    assert!(
+        runtime::maintain_at(&fixture.0, birth + 86400)
+            .unwrap()
+            .unwrap()
+            .busy
+    );
     assert!(current.exists());
     drop(lock);
 
-    let report = runtime::maintain_at(&fixture.0, birth + 86400).unwrap().unwrap();
+    let report = runtime::maintain_at(&fixture.0, birth + 86400)
+        .unwrap()
+        .unwrap();
     assert_eq!(report.removed, 1);
     assert!(!current.exists());
     assert_eq!(fs::read(&malformed).unwrap(), damaged);
