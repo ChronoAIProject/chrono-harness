@@ -54,6 +54,11 @@ Rust 前端按 `.chrono-harness/projects.json` 构建明确列出的 bootstrap �
 .chrono-harness/bin/chrono-ci verify --host-root . --config .chrono-harness/ci/units.json
 ```
 
+本仓为 detector 共享启动工件指定 `job_gating.startup.retention_days: 1`。
+各单元和汇总作业在同一运行中按上传 ID 下载，固定源码的后续部署使用经验证的持久安装。
+需要跨运行使用的启动二进制及构建原件由使用方在窗口内转存。生成器向现有上传操作传递
+保留天数，GitHub 返回的工件期限和实际删除须通过生产运行核验。
+
 所有者升级的阶段构建由 `bootstrap-owner-stage.json` 选择薄 shell 入口 `bootstrap-native.sh`，
 在已有 bootstrap 租约内用固定 Rust 1.95.0 构建并调用本宿主的 `chrono-host-bootstrap`。
 Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及两流，再交出现有 stage 描述符；
