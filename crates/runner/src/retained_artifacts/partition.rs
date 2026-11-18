@@ -940,15 +940,312 @@ impl Inventory {
         if address.path != path {
             return Err("path metadata identity differs".into());
         }
-        Ok(address.output.is_some()
-            || fs::read_dir(directory)
+        if address.output.is_some() {
+            return Ok(true);
+        }
+        for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
+            if entry.map_err(|e| e.to_string())?.file_name() != "address.json" {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    // Only the owner can publish into this namespace. The name carries both
+    // physical identities, including across interruption after unlinking the
+    // marker. No replacement directory at the original address is touched.
+    fn finish_path_retirement(&self, pending: &Path, nodes: &mut usize) -> Result<bool, String> {
+        let relative = pending
+            .strip_prefix(&self.directory)
+            .map_err(|e| e.to_string())?
+            .to_str()
+            .ok_or("path retirement address UTF8")?;
+        no_symlink_parents(&self.directory, relative)?;
+        let Some(gate) = DirectoryLease::acquire_local(pending, true, None)? else {
+            return Ok(false);
+        };
+        let name = pending
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or("invalid retiring path name")?;
+        let mut fields = name
+            .strip_prefix("retiring-")
+            .ok_or("invalid path retirement address")?
+            .split('_');
+        let path_digest = fields.next().unwrap_or_default();
+        let dir_id = fields
+            .next()
+            .ok_or("retiring path directory identity missing")?;
+        let marker_id = fields
+            .next()
+            .ok_or("retiring path marker identity missing")?;
+        if fields.next().is_some()
+            || path_digest.len() != 64
+            || !path_digest.bytes().all(|b| b.is_ascii_hexdigit())
+            || !marker_id
+                .strip_suffix(":file")
+                .and_then(|id| id.split_once(':'))
+                .is_some_and(|(dev, ino)| dev.parse::<u64>().is_ok() && ino.parse::<u64>().is_ok())
+            || identity(pending)? != dir_id
+        {
+            return Err("retiring path identity changed".into());
+        }
+        let marker = pending.join("address.json");
+        for entry in fs::read_dir(pending).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            if entry.file_name() != "address.json" || identity(&marker)? != marker_id {
+                return Err("retiring path contains an unknown or replaced member".into());
+            }
+        }
+        if let Some(address) = self.read_metadata::<Address>(&marker)? {
+            if address.output.is_some() || sha256(address.path.as_bytes()) != path_digest {
+                return Err("retiring path mapping differs".into());
+            }
+            if !self.path_step_available(*nodes) {
+                return Ok(false);
+            }
+            crate::artifact_disposal::dispose_entry(pending, "address.json", marker_id, || {
+                self.stable(&gate)
+            })?;
+            *nodes += 1;
+        }
+        if !self.path_step_available(*nodes) {
+            return Ok(false);
+        }
+        let parent = pending.parent().ok_or("retiring path parent")?;
+        crate::artifact_disposal::dispose_entry(parent, name, dir_id, || self.stable(&gate))?;
+        *nodes += 1;
+        Ok(true)
+    }
+
+    fn path_step_available(&self, nodes: usize) -> bool {
+        nodes < self.policy.max_nodes_per_round
+            && self.metadata_room()
+            && self.round_began.get().unwrap().elapsed().as_millis()
+                < self.policy.max_millis_per_round as u128
+    }
+
+    fn stage_empty_path(
+        &self,
+        directory: &Path,
+        observed: u64,
+        nodes: &mut usize,
+    ) -> Result<bool, String> {
+        if !self.path_step_available(*nodes) {
+            return Ok(false);
+        }
+        let dir_id = identity(directory)?;
+        let initial = fs::symlink_metadata(directory).map_err(|e| e.to_string())?;
+        let window = self
+            .policy
+            .metadata_keep_seconds
+            .min(self.policy.max_lifetime_seconds.unwrap_or(u64::MAX));
+        if window > 0 {
+            let created = initial
+                .created()
                 .map_err(|e| e.to_string())?
-                .any(|entry| {
-                    entry.map_or(true, |entry| {
-                        entry.file_name() != "address.json"
-                            && entry.file_name() != "address.pending"
-                    })
-                }))
+                .duration_since(UNIX_EPOCH)
+                .map_err(|e| e.to_string())?
+                .as_secs();
+            if created.saturating_add(window) > observed {
+                return Ok(false);
+            }
+        }
+        let marker = directory.join("address.json");
+        let initial_address: Address = self
+            .read_metadata(&marker)?
+            .ok_or("path address declaration missing")?;
+        if self.path_directory(&initial_address.path)? != directory {
+            return Err("path declaration address changed".into());
+        }
+        if initial_address.output.is_some() {
+            return Ok(false);
+        }
+        let marker_id = identity(&marker)?;
+        let Some(gate) = DirectoryLease::acquire_local(directory, true, None)? else {
+            return Ok(false);
+        };
+        if identity(directory)? != dir_id || identity(&marker)? != marker_id {
+            return Err("path identity changed during exclusion".into());
+        }
+        Ok(self
+            .detach_empty_path(directory, &initial_address.path, &gate, nodes)?
+            .is_some())
+    }
+
+    fn detach_empty_path(
+        &self,
+        directory: &Path,
+        path: &str,
+        gate: &DirectoryLease,
+        nodes: &mut usize,
+    ) -> Result<Option<PathBuf>, String> {
+        if self.path_metadata_occupied(directory, path)? || !self.path_step_available(*nodes) {
+            return Ok(None);
+        }
+        let dir_id = identity(directory)?;
+        let marker = directory.join("address.json");
+        let marker_id = identity(&marker)?;
+        let pending_root = no_symlink_parents(&self.directory, "paths")?;
+        let pending = pending_root.join(format!(
+            "retiring-{}_{}_{}",
+            sha256(path.as_bytes()),
+            dir_id,
+            marker_id
+        ));
+        let relative = directory
+            .strip_prefix(&self.directory)
+            .map_err(|e| e.to_string())?
+            .to_str()
+            .ok_or("path address UTF8")?;
+        no_symlink_parents(&self.directory, relative)?;
+        if !self.path_step_available(*nodes) {
+            return Ok(None);
+        }
+        self.stable(gate)?;
+        if identity(directory)? != dir_id || identity(&marker)? != marker_id {
+            return Err("empty path identity changed before retirement".into());
+        }
+        crate::artifact_disposal::publish_entry(directory, &pending)?;
+        *nodes += 1;
+        Ok(Some(pending))
+    }
+
+    // Stream the registered hash tree bottom-up. Revalidate each mapping in
+    // its own bounded round. A queued directory retains its marker until the
+    // owner can finish it; the queue also covers a previous interrupted pass.
+    fn sweep_path_metadata(
+        &self,
+        sweep: &mut SweepReport,
+        observed: u64,
+        observer: &mut Option<&mut dyn FnMut(&Value) -> Result<(), String>>,
+    ) -> Result<(), String> {
+        let root = no_symlink_parents(&self.directory, "paths")?;
+        let mut record = |scope: &str,
+                          path: &Path,
+                          mut round: Result<Value, String>|
+         -> Result<(), String> {
+            let address = path
+                .strip_prefix(&self.directory)
+                .map_err(|e| e.to_string())?
+                .to_string_lossy();
+            // Detaching the canonical address leaves actual bytes in custody.
+            // Only removal of the pending directory discharges that obligation.
+            if let Ok(original) = &mut round {
+                if scope == "paths"
+                    && original["disposed"]
+                        .as_array()
+                        .is_some_and(|v| !v.is_empty())
+                {
+                    original["disposed"] = json!([]);
+                    original["retirement_pending"] = json!(true);
+                }
+            }
+            if let Some(observer) = observer.as_deref_mut() {
+                let row = match &round {
+                    Ok(round)
+                        if round["retirement_pending"] != true
+                            && round["disposed"].as_array().is_some_and(|v| v.is_empty())
+                            && round["accounting_errors"]
+                                .as_array()
+                                .is_some_and(|v| v.is_empty()) =>
+                    {
+                        None
+                    }
+                    Ok(round) => Some(
+                        json!({"kind":"round","namespace":scope,"address":address,"original":round}),
+                    ),
+                    Err(error) => Some(
+                        json!({"kind":"round","namespace":scope,"address":address,"error":error}),
+                    ),
+                };
+                if let Some(row) = row {
+                    observer(&row)?;
+                }
+            }
+            sweep.round(scope, &address, round)
+        };
+        let mut stack = Vec::new();
+        match fs::read_dir(&root) {
+            Ok(entries) => stack.push((root.clone(), entries)),
+            Err(error) => record("paths", &root, Err(error.to_string()))?,
+        }
+        while let Some((_, entries)) = stack.last_mut() {
+            match entries.next() {
+                Some(Ok(entry)) => {
+                    let child = entry.path();
+                    let name = entry.file_name();
+                    if child.parent() == Some(root.as_path())
+                        && name.to_str().is_some_and(|s| s.starts_with("retiring-"))
+                    {
+                        continue;
+                    }
+                    if name == "address.json" || name == "address.pending" {
+                        continue;
+                    }
+                    let child_directory = (|| {
+                        let valid_name = name.to_str().is_some_and(|s| {
+                            s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
+                        });
+                        if !valid_name || !entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+                            return Err("unknown path member; preserved".to_string());
+                        }
+                        let relative = child
+                            .strip_prefix(&self.directory)
+                            .map_err(|e| e.to_string())?
+                            .to_str()
+                            .ok_or("path directory UTF8")?;
+                        let verified = no_symlink_parents(&self.directory, relative)?;
+                        fs::read_dir(verified).map_err(|e| e.to_string())
+                    })();
+                    match child_directory {
+                        Ok(entries) => stack.push((child, entries)),
+                        Err(error) => record("paths", &child, Err(error))?,
+                    }
+                }
+                Some(Err(error)) => {
+                    let (path, _) = stack.pop().unwrap();
+                    record("paths", &path, Err(error.to_string()))?;
+                }
+                None => {
+                    let (path, _) = stack.pop().unwrap();
+                    if path != root {
+                        record(
+                            "paths",
+                            &path,
+                            self.metadata_round(|nodes| {
+                                self.stage_empty_path(&path, observed, nodes)
+                            }),
+                        )?;
+                    }
+                }
+            }
+        }
+        let entries = match fs::read_dir(&root) {
+            Ok(entries) => entries,
+            Err(error) => return record("retiring-paths", &root, Err(error.to_string())),
+        };
+        for entry in entries {
+            match entry {
+                Ok(entry) => {
+                    if !entry
+                        .file_name()
+                        .to_str()
+                        .is_some_and(|s| s.starts_with("retiring-"))
+                    {
+                        continue;
+                    }
+                    let path = entry.path();
+                    record(
+                        "retiring-paths",
+                        &path,
+                        self.metadata_round(|nodes| self.finish_path_retirement(&path, nodes)),
+                    )?;
+                }
+                Err(error) => record("retiring-paths", &root, Err(error.to_string()))?,
+            }
+        }
+        Ok(())
     }
 
     fn prune_object(&self, id: &str, observed: u64, nodes: &mut usize) -> Result<(), String> {
@@ -1004,17 +1301,16 @@ impl Inventory {
                     };
                     // The shared observation may already be stale. Recheck the
                     // actual mapping and members under the original exclusion.
-                    if self.path_metadata_occupied(&path_directory, &path)? {
-                        record.prune_path = None;
-                    } else {
-                        self.remove_metadata_directory(
-                            &path_directory,
-                            &path_gate,
-                            &["address.json", "address.pending"],
-                        )?;
-                        *nodes += 3;
-                        record.prune_path = next;
-                    }
+                    let Some(pending) =
+                        self.detach_empty_path(&path_directory, &path, &path_gate, nodes)?
+                    else {
+                        break;
+                    };
+                    drop(path_gate);
+                    // The pending name now owns any work left by this pass or
+                    // an interruption, even after the object cursor is retired.
+                    self.finish_path_retirement(&pending, nodes)?;
+                    record.prune_path = next;
                 }
             }
         }
@@ -1425,6 +1721,7 @@ impl Inventory {
             }
             sweep.value["enumeration"][namespace]["exhausted"] = json!(exhausted);
         }
+        self.sweep_path_metadata(&mut sweep, observed, &mut observer)?;
         // Iterators are not a fixed snapshot, and related components may overlap.
         // Never sum their retained inventories or infer a global remaining count.
         sweep.value["elapsed_millis"] = json!(u64::try_from(began.elapsed().as_millis()).ok());
