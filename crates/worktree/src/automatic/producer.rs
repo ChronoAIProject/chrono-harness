@@ -822,10 +822,11 @@ impl Store {
             || intent["identity"] != object.identity
             || intent["producer"] != producer
             || intent["rolling_directory"].as_bool().unwrap_or(false) != object.rolling.is_some()
-            || object
-                .rolling
-                .as_ref()
-                .is_some_and(|r| intent["born_at"] != r.born_at)
+            || object.rolling.as_ref().is_some_and(|r| {
+                intent["born_at"] != r.born_at
+                    || intent["deadline"] != value!(r.deadline)
+                    || r.deadline.is_some_and(|deadline| deadline < r.born_at)
+            })
             || (object.cache_lease.is_some() && intent["cache_lease"] != value!(object.cache_lease))
         {
             return Err("producer intent changed; preserve object".into());
@@ -1421,12 +1422,16 @@ impl TemporaryHost {
         producer: &str,
         generated_outputs: &[String],
         prefix: &str,
-        owner: Option<rolling::Owner>,
+        owner: Option<(rolling::Owner, &rolling::Policy)>,
     ) -> Result<Self, String> {
         generated_paths(generated_outputs)?;
         if prefix.contains(['/', '\\', '\0']) {
             return Err("temporary allocation prefix must be one literal name".into());
         }
+        let birth_window = owner
+            .as_ref()
+            .map(|(_, policy)| policy.birth_window())
+            .transpose()?;
         fs::create_dir_all(directory).map_err(|e| e.to_string())?;
         let mut store = Store::open(directory, producer, true)?;
         // Keep immediately: even a failed/interrupted enrollment is an unknown
@@ -1442,7 +1447,7 @@ impl TemporaryHost {
             .ok_or("allocation UTF-8")?
             .to_owned();
         let identity = directory_id(&path)?;
-        let rolling = if owner.is_some() {
+        let rolling = if let Some((born_at, deadline)) = birth_window {
             let metadata = format!("rolling-metadata/{}", sha256(object.as_bytes()));
             let physical = no_symlink_parents(directory, &metadata)?;
             fs::create_dir_all(physical.parent().unwrap()).map_err(|e| e.to_string())?;
@@ -1456,7 +1461,8 @@ impl TemporaryHost {
             Some(rolling::Directory {
                 metadata,
                 metadata_identity: directory_id(&physical)?,
-                born_at: rolling::now()?,
+                born_at,
+                deadline: Some(deadline),
                 diagnostics: false,
                 terminal: None,
                 disposal_intent: None,
@@ -1492,6 +1498,7 @@ impl TemporaryHost {
                 "cache_lease":binding,"evidence_disposal":if rolling.is_some() { "terminal-handoff-and-retention" } else { "not-authorized" },
                 "rolling_directory":rolling.is_some(),
                 "born_at":rolling.as_ref().map(|r| r.born_at),
+                "deadline":rolling.as_ref().and_then(|r| r.deadline),
                 "producer_outcome":"not-established","task_completion":"not-claimed"
             }),
         )?;
@@ -1516,7 +1523,7 @@ impl TemporaryHost {
         Ok(Self {
             path,
             lease: Some(lease),
-            owner,
+            owner: owner.map(|(owner, _)| owner),
         })
     }
 
