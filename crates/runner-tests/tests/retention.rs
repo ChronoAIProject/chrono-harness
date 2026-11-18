@@ -317,7 +317,9 @@ fn lengthening_policy_does_not_extend_an_empty_path_address() {
     let guard = retained_artifacts::retention::external_removal_guard(h.path(), path)
         .unwrap()
         .unwrap();
-    let address = h.path().join(".chrono-harness/state/output-retention-v1/paths")
+    let address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths")
         .join(chrono_harness::sha256(b"exports"))
         .join(chrono_harness::sha256(b"stale"));
 
@@ -330,7 +332,10 @@ fn lengthening_policy_does_not_extend_an_empty_path_address() {
     assert!(address.join("address.json").is_file());
     drop(guard);
     owner.maintain_explicit().unwrap();
-    assert!(!address.exists(), "the new policy extended the original address deadline");
+    assert!(
+        !address.exists(),
+        "the new policy extended the original address deadline"
+    );
 }
 
 #[test]
