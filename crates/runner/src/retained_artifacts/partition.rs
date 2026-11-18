@@ -960,7 +960,10 @@ impl Inventory {
             .file_name()
             .and_then(|s| s.to_str())
             .ok_or("invalid retiring path name")?;
-        let mut fields = name.split('_');
+        let mut fields = name
+            .strip_prefix("retiring-")
+            .ok_or("invalid path retirement address")?
+            .split('_');
         let path_digest = fields.next().unwrap_or_default();
         let dir_id = fields
             .next()
@@ -1071,10 +1074,9 @@ impl Inventory {
                 return Ok(false);
             }
         }
-        let pending_root = no_symlink_parents(&self.directory, "retiring-paths")?;
-        fs::create_dir_all(&pending_root).map_err(|e| e.to_string())?;
+        let pending_root = no_symlink_parents(&self.directory, "paths")?;
         let pending = pending_root.join(format!(
-            "{}_{}_{}",
+            "retiring-{}_{}_{}",
             sha256(address.path.as_bytes()),
             dir_id,
             marker_id
@@ -1161,6 +1163,11 @@ impl Inventory {
                 Some(Ok(entry)) => {
                     let child = entry.path();
                     let name = entry.file_name();
+                    if child.parent() == Some(root.as_path())
+                        && name.to_str().is_some_and(|s| s.starts_with("retiring-"))
+                    {
+                        continue;
+                    }
                     if name == "address.json" || name == "address.pending" {
                         continue;
                     }
@@ -1202,15 +1209,20 @@ impl Inventory {
                 }
             }
         }
-        let queue = no_symlink_parents(&self.directory, "retiring-paths")?;
-        let entries = match fs::read_dir(&queue) {
+        let entries = match fs::read_dir(&root) {
             Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(error) => return record("retiring-paths", &queue, Err(error.to_string())),
+            Err(error) => return record("retiring-paths", &root, Err(error.to_string())),
         };
         for entry in entries {
             match entry {
                 Ok(entry) => {
+                    if !entry
+                        .file_name()
+                        .to_str()
+                        .is_some_and(|s| s.starts_with("retiring-"))
+                    {
+                        continue;
+                    }
                     let path = entry.path();
                     record(
                         "retiring-paths",
@@ -1218,7 +1230,7 @@ impl Inventory {
                         self.metadata_round(|nodes| self.finish_path_retirement(&path, nodes)),
                     )?;
                 }
-                Err(error) => record("retiring-paths", &queue, Err(error.to_string()))?,
+                Err(error) => record("retiring-paths", &root, Err(error.to_string()))?,
             }
         }
         Ok(())

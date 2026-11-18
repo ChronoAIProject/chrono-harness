@@ -1549,18 +1549,18 @@ fn interrupted_path_retirement_resumes_without_following_a_replacement() {
         "interrupted after identity-qualified rename"
     );
     assert!(!old.exists());
-    let queue = old
-        .parent()
+    let index_root = old.parent().unwrap();
+    let pending = fs::read_dir(index_root)
         .unwrap()
-        .parent()
-        .unwrap()
-        .join("retiring-paths");
-    let pending = fs::read_dir(&queue)
-        .unwrap()
-        .next()
-        .unwrap()
-        .unwrap()
-        .path();
+        .map(|e| e.unwrap().path())
+        .find(|p| {
+            p.file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("retiring-")
+        })
+        .unwrap();
     assert!(pending.join("address.json").is_file());
     fs::create_dir(&old).unwrap();
     let replacement = br#"{"path":"original","output":"new-owner"}"#;
@@ -1571,6 +1571,11 @@ fn interrupted_path_retirement_resumes_without_following_a_replacement() {
     assert!(!pending.join("address.json").exists());
     owner.maintain_explicit().unwrap();
     assert!(!pending.exists());
+    assert_eq!(
+        fs::read_dir(index_root).unwrap().count(),
+        1,
+        "only the replacement remains"
+    );
     assert_eq!(fs::read(old.join("address.json")).unwrap(), replacement);
 }
 
