@@ -422,6 +422,33 @@ fn linked_retention_status(
 }
 
 #[cfg(not(verus_keep_ghost))]
+fn maintain_logs(
+    root: &Path,
+    inventory: &mut inventory::Report,
+    failures: &mut Vec<String>,
+    results: &mut Vec<Value>,
+) {
+    let scope = format!("runtime logs: {}", root.display());
+    let result = match chrono_harness::maintain_runtime_logs(root) {
+        Ok(None) => return,
+        Ok(Some(result)) => {
+            for error in &result.errors {
+                inventory.error(&scope, error);
+                failures.push(format!("{scope}: {error}"));
+            }
+            value!({"source_root":root.to_str(),"log_retention":result})
+        }
+        Err(error) => {
+            let error = error.to_string();
+            inventory.error(&scope, &error);
+            failures.push(format!("{scope}: {error}"));
+            value!({"source_root":root.to_str(),"error":error})
+        }
+    };
+    results.push(result);
+}
+
+#[cfg(not(verus_keep_ghost))]
 fn maintain_retention_inventory(
     root: &Path,
     inventory: &mut inventory::Report,
@@ -674,6 +701,8 @@ fn run_round(
     );
     report["output_retention"] = retention;
     let mut linked_retention = Vec::new();
+    let mut runtime_logs = Vec::new();
+    maintain_logs(root, &mut inventory, &mut failures, &mut runtime_logs);
     for path in linked_retention_roots {
         if unprotected.contains(&path) {
             inventory.retention(
@@ -694,6 +723,7 @@ fn run_round(
                 inventory.retention(&path, value!({"kind":"source-result","status":status}));
                 return Ok(status);
             }
+            maintain_logs(&path, &mut inventory, &mut failures, &mut runtime_logs);
             let result = maintain_retention_inventory(&path, &mut inventory)?;
             Ok::<_, String>(if result.is_some() {
                 "reported"
@@ -714,6 +744,7 @@ fn run_round(
         }
     }
     report["linked_output_retention"] = value!(linked_retention);
+    report["runtime_logs"] = value!(runtime_logs);
     inventory.worktrees(&observation, r, report, "after");
     if let Err(error) = inventory.finish(report) {
         failures.push(error);
