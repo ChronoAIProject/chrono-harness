@@ -1,13 +1,13 @@
 #[cfg(verus_keep_ghost)]
+use super::policy::gating::unit_evidence_retention;
+#[cfg(verus_keep_ghost)]
 use super::policy::startup::retention_days_valid;
 #[cfg(not(verus_keep_ghost))]
 use super::*;
 #[cfg(not(verus_keep_ghost))]
-use chrono_ci::startup::retention_days_valid;
-#[cfg(verus_keep_ghost)]
-use super::policy::gating::unit_evidence_retention;
-#[cfg(not(verus_keep_ghost))]
 use chrono_ci::gating::unit_evidence_retention;
+#[cfg(not(verus_keep_ghost))]
+use chrono_ci::startup::retention_days_valid;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]

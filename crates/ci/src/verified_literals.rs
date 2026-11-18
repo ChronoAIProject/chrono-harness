@@ -1,13 +1,13 @@
 //! CI 配置的字面单行判断及原生缓存登记准入，供现役投影使用。
 #[cfg(verus_keep_ghost)]
+#[path = "gating.rs"]
+pub mod gating;
+#[cfg(verus_keep_ghost)]
 #[path = "release.rs"]
 mod release_projection;
 #[cfg(verus_keep_ghost)]
 #[path = "startup.rs"]
 pub mod startup;
-#[cfg(verus_keep_ghost)]
-#[path = "gating.rs"]
-pub mod gating;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]

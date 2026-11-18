@@ -202,15 +202,22 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         &artifact,
         c.schema == units::FULL_SCHEMA,
     )?;
-    if let Some(days) = unit_evidence_retention(c.job_gating.evidence_retention_days, unit.is_some()) {
+    if let Some(days) =
+        unit_evidence_retention(c.job_gating.evidence_retention_days, unit.is_some())
+    {
         const UPLOAD_END: &str = "          if-no-files-found: error\n";
         let expected_uploads = 1 + usize::from(
-            w.failure_artifact_directory.as_ref().is_some_and(|directory| directory != &w.artifact_directory),
+            w.failure_artifact_directory
+                .as_ref()
+                .is_some_and(|directory| directory != &w.artifact_directory),
         );
         if body.matches(UPLOAD_END).count() != expected_uploads {
             return Err("unit evidence upload projection differs from registered artifacts".into());
         }
-        body = body.replace(UPLOAD_END, &format!("{UPLOAD_END}          retention-days: {days}\n"));
+        body = body.replace(
+            UPLOAD_END,
+            &format!("{UPLOAD_END}          retention-days: {days}\n"),
+        );
     }
     let old_if = "    if: ${{ github.event.deleted != true }}\n";
     let condition = if let Some(unit) = unit {
