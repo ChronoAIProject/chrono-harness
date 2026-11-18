@@ -2,6 +2,9 @@
 #[cfg(verus_keep_ghost)]
 #[path = "release.rs"]
 mod release_projection;
+#[cfg(verus_keep_ghost)]
+#[path = "startup.rs"]
+pub mod startup;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]

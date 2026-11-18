@@ -12,6 +12,9 @@ mod policy;
 #[cfg(verus_keep_ghost)]
 #[path = "release.rs"]
 mod release_expectations;
+#[cfg(verus_keep_ghost)]
+#[path = "startup.rs"]
+mod startup_expectations;
 #[cfg(not(verus_keep_ghost))]
 use chrono_ci::verified_literals as policy;
 #[cfg(not(verus_keep_ghost))]
