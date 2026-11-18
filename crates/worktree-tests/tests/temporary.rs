@@ -456,6 +456,59 @@ fn rolling_directory_diagnostics_have_a_finite_window_without_permanent_referenc
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn rolling_directory_handoff_cannot_extend_the_birth_window() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = rolling_host(0);
+    let policy_path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    let rolling = &mut policy["retained_producers"][0]["rolling_directory"];
+    rolling["failure_keep_seconds"] = value!(86400);
+    rolling["metadata_keep_seconds"] = value!(3600);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+
+    for failed in [false, true] {
+        let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+            &h.root,
+            POLICY,
+            "test-allocation",
+            "original deadline ",
+        )
+        .unwrap();
+        let path = fixture.path().to_owned();
+        let store = path.parent().unwrap();
+        let member = path.join("original.stderr");
+        let metadata = store
+            .join("rolling-metadata")
+            .join(sha256(path.file_name().unwrap().as_encoded_bytes()));
+        fs::write(&member, b"original diagnostic bytes").unwrap();
+        if !failed {
+            fixture.retain_diagnostic().unwrap();
+        }
+        let reader = fixture.capability().unwrap();
+        assert_eq!(fixture.finish(failed).unwrap()["status"], "finished");
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        assert_eq!(fs::read(&member).unwrap(), b"original diagnostic bytes");
+        drop(reader);
+
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        assert!(
+            !path.exists(),
+            "late handoff must not restart the original lifetime: {report}"
+        );
+        assert!(
+            !metadata.exists(),
+            "terminal metadata must observe the same bound: {report}"
+        );
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal() {
     if !chrono_git_boundary::isolated_git() {
         return;
