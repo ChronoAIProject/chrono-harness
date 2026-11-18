@@ -365,6 +365,15 @@ impl Gate {
 }
 #[cfg(not(verus_keep_ghost))]
 impl Inventory {
+    fn role_creation_expiry(&self) -> Result<u64, String> {
+        let created = now()?;
+        let requested = created.saturating_add(self.policy.metadata_keep_seconds);
+        Ok(match self.policy.max_lifetime_seconds {
+            Some(window) => super::bounded_expiry(requested, created.saturating_add(window)),
+            None => requested,
+        })
+    }
+
     /// The held role is the existing owner's authority. Follow only reciprocal
     /// incoming edges of the requested original, preferring that role's direct
     /// members. Discovery uses one local metadata descriptor at a time; the
@@ -590,7 +599,7 @@ impl Inventory {
             role: consumer.into(),
             ids: vec![],
             attached: BTreeSet::new(),
-            metadata_expires: now()?.saturating_add(self.policy.metadata_keep_seconds),
+            metadata_expires: self.role_creation_expiry()?,
             summaries: vec![],
         });
         // Empty and failed admissions still leave a typed, finitely retained
@@ -2301,7 +2310,7 @@ impl Inventory {
                 role: role.clone(),
                 ids: vec![],
                 attached: BTreeSet::new(),
-                metadata_expires: now()?.saturating_add(self.policy.metadata_keep_seconds),
+                metadata_expires: self.role_creation_expiry()?,
                 summaries: vec![],
             });
             if fresh {
@@ -2744,7 +2753,7 @@ impl Inventory {
                     }
                 }
             }
-            if role.ids != next {
+            if role.ids != next && self.policy.max_lifetime_seconds.is_none() {
                 role.metadata_expires = now()?.saturating_add(self.policy.metadata_keep_seconds);
             }
             role.ids = next;
