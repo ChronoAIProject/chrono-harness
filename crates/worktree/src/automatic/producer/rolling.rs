@@ -25,8 +25,8 @@ pub fn rolling_keep(finished: bool, failed: bool, diagnostics: bool,
 pub fn clamp_rolling_deadline(since: u64, keep: u64, cap: u64) -> (deadline: u64)
     ensures
         deadline <= cap,
-        since as int + keep as int >= cap as int ==> deadline == cap,
-        since as int + keep as int < cap as int ==> deadline as int == since as int + keep as int,
+        (since as int + keep as int) >= (cap as int) ==> deadline == cap,
+        (since as int + keep as int) < (cap as int) ==> deadline as int == since as int + keep as int,
 {
     if since >= cap || keep >= cap - since { cap } else { since + keep }
 }
