@@ -2523,6 +2523,24 @@ impl Manager {
             )?;
             let bytes = self.receipt(&terminal.receipt)?;
             let original = json(&bytes)?;
+            if original["schema"] == "chrono-worktree-absent-adoption-receipt/v1" {
+                if e.status != "disposed"
+                    || e.enrollment["absent_adoption"] != value!(terminal.receipt)
+                    || original["binding"] != Self::birth_binding(e)
+                    || original["head"] != terminal.head
+                    || terminal.head != terminal.retained_commit
+                    || terminal.dispose_evidence
+                    || terminal.artifacts_only
+                    || original["observed_worktree"] != "already-absent"
+                    || original["original_outcomes"] != "unchanged"
+                    || original["task_completion"] != "not-claimed"
+                {
+                    return Err("original absence adoption does not bind this enrollment".into());
+                }
+                // This historical observation supplies no finish or cleanup result.
+                // Keep its original binding available for explicit history retirement.
+                continue;
+            }
             if original["schema"] != "chrono-worktree-terminal/v1"
                 || original["path"] != value!(e.path)
                 || original["attachment"] != value!(e.attachment)
