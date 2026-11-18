@@ -124,6 +124,8 @@ frontend 专属用例的 Git 和探针在命令边界复用只依赖标准库的
 
 旧 Python `host.bootstrap-tests` 及其专属发布验证单元随启动栈退役，对应构建依赖、下载和暂存消费声明同步移除；现役 Rust bootstrap 与薄 shell 测试仍独立执行。
 
+Rust 发布单元通过原 `rustup which --toolchain` 选定实际 Cargo 与 rustc 路径，用实际 Cargo 执行构建、验证，并为 Cargo 子进程设置选定的 `RUSTC`。回执记录该路径及编译器字节，消费端核两者与选择结果一致。macOS 运行 44315516734 中，构建与验证的编译器字节一致，GitHub runner 上的 Homebrew 启动脚本摘要不同，导致组包之前拒绝。新增命令边界回归验证选中的实际编译器入口，沿现役验证及发行操作验收；原生两平台成本待测。
+
 Linux 发行政策保留工作树所有者读取登记所需的完整结构。发布编排和登记验证操作使用 Rust 与薄 shell，不再在发布配方或宿主政策中保留无对应操作的 Python 工具槽。多语言接口测试样本使用各自的工具声明；该登记不声称完成 Linux canonical/full 采用。
 
 Linux 发行政策继承 schema4 必需的 `CHRONO_CHECK_SOURCE`；未设置时仍由现有入口选择 local。旧 Python custody 测试的发布采集声明随生产者退役；已保留失败原件仍按原使用方的诊断和验收期限保护，不因删除源码或声明而删除。

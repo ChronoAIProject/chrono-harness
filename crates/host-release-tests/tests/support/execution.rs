@@ -1,9 +1,30 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+fn compiler_fixture_directory(distinct: bool) -> (path: Option<&'static str>)
+    ensures match path {
+        Some(name) => distinct && name@ == "active"@,
+        None => !distinct,
+    },
+{
+    if distinct { Some("active") } else { None }
+}
+}
+#[cfg(not(verus_keep_ghost))]
 #[path = "context.rs"]
 mod context;
+#[cfg(not(verus_keep_ghost))]
 #[path = "recipe.rs"]
 mod recipe;
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_release::recipe::Loaded;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     os::unix::fs::PermissionsExt,
@@ -11,6 +32,7 @@ use std::{
     process::{Command, Output},
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Fixture {
     pub host: recipe::Fixture,
     _case: tempfile::TempDir,
@@ -21,11 +43,13 @@ pub struct Fixture {
     pub outcomes: serde_json::Map<String, Value>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn capture(command: &mut Command) -> Output {
     chrono_harness::process_fds::forward_command(command, &[]).unwrap();
     command.output().unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Fixture {
     pub fn new(behavior: &str, tracked: bool) -> Self {
         let mut host = recipe::Fixture::new();
@@ -71,6 +95,13 @@ impl Fixture {
             fs::copy(env!("CARGO_BIN_EXE_chrono-test-release-tool"), &file).unwrap();
             fs::set_permissions(&file, fs::Permissions::from_mode(0o755)).unwrap();
             host.config["tools"][name] = json!(file);
+        }
+        if let Some(directory) = compiler_fixture_directory(behavior == "distinct-compilers") {
+            let active = tools.path().join(directory);
+            fs::create_dir(&active).unwrap();
+            for name in ["cargo", "rustc"] {
+                fs::copy(tools.path().join(name), active.join(name)).unwrap();
+            }
         }
         host.config["limits"] = json!({"unit_seconds":120,"platform_seconds":600});
         host.config["failure_evidence"]["test.none"] = json!(["failures/test-a/"]);
@@ -212,6 +243,7 @@ impl Fixture {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Fixture {
     fn drop(&mut self) {
         if std::thread::panicking() {
