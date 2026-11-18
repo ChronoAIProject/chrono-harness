@@ -590,7 +590,9 @@ impl Loaded {
             }
         };
         if policy::requires_rust(&invocation) {
-            required.extend(["rustup", "cargo", "rustc"]);
+            required.remove("cargo");
+            required.remove("rustc");
+            required.insert("rustup");
         }
         required
             .into_iter()

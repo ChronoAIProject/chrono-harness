@@ -475,6 +475,32 @@ impl<'a> Execution<'a> {
             argv.extend(["--component".into(), component.clone()]);
         }
         self.run("toolchain-install", argv, None)?;
+        let mut active = BTreeMap::new();
+        for name in ["cargo", "rustc"] {
+            let path = self.text_run(
+                "compiler-executable",
+                vec![
+                    path_text(&self.tools["rustup"])?,
+                    "which".into(),
+                    "--toolchain".into(),
+                    self.loaded.recipe.rust_toolchain.clone(),
+                    name.into(),
+                ],
+            )?;
+            let path = PathBuf::from(path);
+            active.insert(name, executable(&path)?);
+            self.tools.insert(name.into(), path);
+        }
+        let rustc = &self.tools["rustc"];
+        self.environment
+            .insert("RUSTC".into(), rustc.as_os_str().into());
+        self.report["environment"]["RUSTC"] = json!(rustc);
+        let tools = self.report["execution_tools"]
+            .as_object_mut()
+            .expect("prepared release executable identities");
+        for (name, identity) in &active {
+            tools.insert((*name).into(), identity.clone());
+        }
         let mut versions = BTreeMap::new();
         for name in ["cargo", "rustc"] {
             versions.insert(
@@ -489,27 +515,8 @@ impl<'a> Execution<'a> {
         {
             return Err(error("unexpected compiler"));
         }
-        let mut active = BTreeMap::new();
-        for name in ["cargo", "rustc"] {
-            let path = self.text_run(
-                "compiler-executable",
-                vec![
-                    path_text(&self.tools["rustup"])?,
-                    "which".into(),
-                    "--toolchain".into(),
-                    self.loaded.recipe.rust_toolchain.clone(),
-                    name.into(),
-                ],
-            )?;
-            active.insert(name, executable(Path::new(&path))?);
-        }
-        let tools: BTreeMap<_, _> = self
-            .tools
-            .iter()
-            .map(|(name, path)| Ok((name, executable(path)?)))
-            .collect::<Result<_, String>>()?;
         self.report["toolchain"] =
-            json!({"versions":versions,"tools":tools,"active_compilers":active});
+            json!({"versions":versions,"tools":self.report["execution_tools"],"active_compilers":active});
         Ok(())
     }
 

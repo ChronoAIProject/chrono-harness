@@ -345,6 +345,17 @@ fn verify_toolchain(
     {
         return Err(error("active compiler membership differs"));
     }
+    if let Some(rustc) = receipt["environment"].get("RUSTC") {
+        if *rustc != active["rustc"]["path"]
+            || ["cargo", "rustc"]
+                .iter()
+                .any(|name| identities[*name] != active[*name])
+        {
+            return Err(error(
+                "direct compiler execution differs from selected toolchain",
+            ));
+        }
+    }
     for (index, name) in ["cargo", "rustc"].iter().enumerate() {
         argv(
             versions[index],

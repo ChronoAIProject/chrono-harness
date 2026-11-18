@@ -274,7 +274,7 @@ fn original_unfiltered_action_and_no_rust_choice_are_checked_at_consumption() {
 fn rust_receipt_requires_original_install_versions_compiler_bytes_and_build_action() {
     let f = Fixture::new(true);
     assert!(f.read().unwrap().compiler_fingerprint().is_some());
-    for mutation in 0..10 {
+    for mutation in 0..11 {
         let mut f = Fixture::new(true);
         match mutation {
             0 => f.report["toolchain"]["versions"]["rustc"] = json!("rustc other"),
@@ -294,6 +294,7 @@ fn rust_receipt_requires_original_install_versions_compiler_bytes_and_build_acti
             7 => f.report["processes"][8]["argv"] = json!(["/tools/cargo", "build", "--tests"]),
             8 => f.report["execution_tools"]["cargo"]["size"] = json!(101),
             9 => f.report["toolchain"]["tools"]["cargo"]["mode"] = json!(0),
+            10 => f.report["environment"]["RUSTC"] = json!("/other/rustc"),
             _ => unreachable!(),
         }
         assert!(f.read().is_err(), "mutation {mutation}");
