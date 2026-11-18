@@ -298,7 +298,7 @@ fn output_metadata_retires_within_the_original_creation_window() {
     }
     assert!(!physical.exists());
     assert!(
-        !metadata.exists(),
+        !metadata.parent().unwrap().exists(),
         "retirement renewed output metadata after its original deadline"
     );
 }
@@ -382,10 +382,15 @@ fn existing_consumer_can_transfer_expired_originals_without_new_report_dependenc
     drop(guard);
     let mut rounds = Vec::new();
     for _ in 0..8 {
-        rounds.push(inv.maintain_originals_at(&ids, 3).unwrap());
-        if !h.path().join(leaf).exists() && !h.path().join(parent).exists() {
+        let remaining: Vec<_> = ids
+            .iter()
+            .filter(|id| retention_state::object_path(h.path(), id).is_file())
+            .cloned()
+            .collect();
+        if remaining.is_empty() {
             break;
         }
+        rounds.push(inv.maintain_originals_at(&remaining, 3).unwrap());
     }
     assert!(
         !h.path().join(leaf).exists() && !h.path().join(parent).exists(),
