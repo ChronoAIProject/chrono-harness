@@ -343,6 +343,7 @@
     }
   },
   "job_gating": {
+    "evidence_retention_days": 1,
     "schema": "chrono-job-gating/v1",
     "detector": {
       "runs_on": "macos-26",
