@@ -177,6 +177,17 @@ pub fn missing_cache_observation() -> (observation: MissingCacheObservation)
     }
 }
 
+/// Settled terminal cleanup history has only one current recovery owner.
+/// Age retirement and unknown results keep their separate obligations.
+pub fn retain_cleanup_attempt(age_retirement: bool, pending: bool, current: bool)
+    -> (retain: bool)
+    ensures retain == (age_retirement || pending || current),
+        !age_retirement && !pending ==> retain == current,
+        age_retirement || pending ==> retain,
+{
+    age_retirement || pending || current
+}
+
 }
 
 #[cfg(verus_keep_ghost)]
@@ -2290,8 +2301,15 @@ impl Manager {
                     paths.insert(terminal.receipt.path.clone());
                 }
             }
-            for attempt in &e.attempts {
-                paths.insert(attempt.path.clone());
+            for (index, attempt) in e.attempts.iter().enumerate() {
+                if retain_cleanup_attempt(
+                    !e.enrollment["age_retirement"].is_null(),
+                    attempt.receipt.is_none()
+                        || e.attempts.last().is_some_and(|last| last.receipt.is_none()),
+                    index + 1 == e.attempts.len(),
+                ) {
+                    paths.insert(attempt.path.clone());
+                }
             }
             for attempt in &e.cache_attempts {
                 paths.insert(attempt.intent.path.clone());
@@ -2429,6 +2447,79 @@ impl Manager {
             }
         }
         self.reconcile_terminal_handoffs()?;
+        self.reconcile_cleanup_results()?;
+        Ok(())
+    }
+
+    /// A sealed producer can outlive its caller's ledger update. Recover only
+    /// the original result reference; cleanup effects still require their own
+    /// identity, ownership and Git checks in the normal execution path.
+    fn reconcile_cleanup_results(&mut self) -> Result<(), String> {
+        let root = self.inputs.policy.coordinator_root.clone();
+        let Some(inventory) =
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
+        else {
+            return Ok(());
+        };
+        let role = self.original_role()?;
+        let config: crate::Config = decode(&self.inputs.anchor_config_bytes)?;
+        for i in 0..self.ledger.entries.len() {
+            let e = self.ledger.entries[i].clone();
+            // Age retirement and cache generations have distinct recovery
+            // contracts. This handoff consumes only a terminal cleanup result.
+            if !e.enrollment["age_retirement"].is_null() {
+                continue;
+            }
+            let Some(attempt) = e.attempts.last().filter(|a| a.receipt.is_none()) else {
+                continue;
+            };
+            let terminal = e
+                .terminal
+                .as_ref()
+                .ok_or("cleanup result has no terminal owner")?;
+            let handoff = e
+                .terminal_handoff()?
+                .ok_or("cleanup result terminal facts not established")?;
+            if attempt.path != format!("{}{}.json", config.report_directory, attempt.token) {
+                return Err("cleanup result path differs from its recorded invocation".into());
+            }
+            let _input = chrono_harness::retained_artifacts::retention::consumer_read_guard(
+                &root,
+                &attempt.path,
+                &role,
+            )?;
+            let bytes =
+                crate::recovery::state_bytes_for_consumer(&root, &attempt.path, Some(&role))?;
+            let report = json(&bytes)?;
+            let terminal_matches = if report.get("terminal_handoff").is_some() {
+                report["terminal_handoff"] == handoff
+            } else {
+                report["terminal_receipt"] == value!(terminal.receipt)
+            };
+            if report["schema"] != "chrono-worktree-report/v1"
+                || report["operation"] != "cleanup"
+                || !matches!(report["status"].as_str(), Some("cleaned" | "failed"))
+                || report["source_root"] != value!(root)
+                || report["config_path"] != self.inputs.config_path
+                || report["report_path"] != attempt.path
+                || report["lock_reason"] != attempt.token
+                || report["automatic_cleanup"] != true
+                || !terminal_matches
+            {
+                return Err("cleanup result does not bind this terminal attempt".into());
+            }
+            if !inventory.published_original(&attempt.path, &sha256(&bytes), bytes.len() as u64)? {
+                return Err("cleanup result publication is not established".into());
+            }
+            self.verify_inputs(&report)?;
+            self.ledger.entries[i].attempts.last_mut().unwrap().receipt = Some(Receipt {
+                path: attempt.path.clone(),
+                sha256: sha256(&bytes),
+            });
+            // The path was already a durable member. Preserve that capability
+            // across the atomic update without admitting a new expired reader.
+            self.save_result_handoff()?;
+        }
         Ok(())
     }
 
@@ -4084,7 +4175,11 @@ impl Manager {
                         .as_str()
                         .ok_or("cleanup report path")?
                         .to_owned();
-                    let b = crate::recovery::state_bytes(&root, &path)?;
+                    let b = crate::recovery::state_bytes_for_consumer(
+                        &root,
+                        &path,
+                        Some(&self.original_role()?),
+                    )?;
                     let crate::verified_lifecycle::CleanupOutcome {
                         cache: cache_outcome,
                         cleaned,
@@ -4517,9 +4612,6 @@ impl Manager {
                 .receipt
                 .as_ref()
                 .ok_or("interrupted cleanup has no original result; explicit recovery required")?;
-            let b = self.receipt(receipt)?;
-            let prior_report = json(&b)?;
-            report["prior_report"] = value!({"receipt":receipt,"input":self.retained_input(&receipt.path, &b, "receipt")});
             if e.path.exists() {
                 let locked = r
                     .inventory(&self.inputs.policy.coordinator_root)?
@@ -4527,6 +4619,8 @@ impl Manager {
                     .find(|row| row.get("worktree").is_some_and(|p| Path::new(p) == e.path))
                     .and_then(|row| row.get("locked").cloned());
                 if locked.as_deref() == Some(prior.token.as_str()) {
+                    let b = self.receipt(receipt)?;
+                    let prior_report = json(&b)?;
                     self.check_entry(r, &e, &t.head, Some(&prior.token))?;
                     let tree = r.oid(&e.path, &format!("{}^{{tree}}", t.head))?;
                     maintenance::release_reconciled(
@@ -4538,6 +4632,17 @@ impl Manager {
                         &tree,
                         || self.receipt(receipt).map(|_| ()),
                     )?;
+                    // The new original receives the established recovery facts.
+                    // The old address describes their source, not another
+                    // runtime dependency on all prior cleanup attempts.
+                    report["cleanup_lock_recovery"] = value!({
+                        "schema":"chrono-worktree-cleanup-lock-handoff/v1",
+                        "source_root":self.inputs.policy.coordinator_root,
+                        "source":receipt,"lock_reason":prior.token,
+                        "path":e.path,"attachment":e.attachment,
+                        "head":t.head,"index_tree":tree,
+                        "handoff":"prior-lock-released-under-original-exclusion"
+                    });
                 }
             }
         }
@@ -4596,6 +4701,12 @@ impl Manager {
                 "enrolled checkout disappeared without an original disposal attempt".into(),
             );
         }
+        // The current attempt takes the recovery responsibility only after
+        // the previous lock has been reconciled and all current checks pass.
+        // Preserve unknown originals; their outcome has not been handed off.
+        self.ledger.entries[i]
+            .attempts
+            .retain(|attempt| retain_cleanup_attempt(false, attempt.receipt.is_none(), false));
         self.ledger.entries[i].attempts.push(Attempt {
             path: report["report_path"].as_str().ok_or("report path")?.into(),
             token: token.into(),
