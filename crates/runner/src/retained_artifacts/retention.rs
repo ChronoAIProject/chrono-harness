@@ -300,6 +300,18 @@ impl From<Output> for OutputRecord {
     }
 }
 #[cfg(not(verus_keep_ghost))]
+impl Serialize for OutputRecord {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.value.serialize(serializer)
+    }
+}
+#[cfg(not(verus_keep_ghost))]
+impl<'de> Deserialize<'de> for OutputRecord {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Output::deserialize(deserializer).map(Self::from)
+    }
+}
+#[cfg(not(verus_keep_ghost))]
 impl std::ops::Deref for OutputRecord {
     type Target = Output;
     fn deref(&self) -> &Output {
@@ -777,21 +789,20 @@ impl Inventory {
                     return Err("invalid output creation intent; preserve originals".into());
                 }
             }
+            let descendant_prefix = format!("{}/", o.path);
             let mut manifest_paths = BTreeSet::new();
             for entry in &o.manifest.entries {
                 crate::relative_path(&entry.path)?;
                 if entry.path.len() > 4096
                     || !manifest_paths.insert(&entry.path)
                     || (entry.path != o.path
-                        && (!o.tree || !entry.path.starts_with(&format!("{}/", o.path))))
+                        && (!o.tree || !entry.path.starts_with(&descendant_prefix)))
                 {
                     return Err("invalid sealed descendant manifest; preserve originals".into());
                 }
             }
             for node in &o.stack {
-                if node.path != o.path
-                    && (!o.tree || !node.path.starts_with(&format!("{}/", o.path)))
-                {
+                if node.path != o.path && (!o.tree || !node.path.starts_with(&descendant_prefix)) {
                     return Err("disposal cursor outside exact output identity".into());
                 }
                 if node
