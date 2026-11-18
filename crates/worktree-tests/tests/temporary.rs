@@ -247,7 +247,7 @@ fn private_fixture_retirement_preserves_corrupt_and_pending_metadata_originals()
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    let h = rolling_host(0);
+    let h = rolling_host(86400);
     let policy_path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
     policy["retained_producers"][0]["rolling_directory"]["metadata_keep_seconds"] = value!(3600);
@@ -483,12 +483,16 @@ fn rolling_directory_handoff_cannot_extend_the_birth_window() {
         let metadata = store
             .join("rolling-metadata")
             .join(sha256(path.file_name().unwrap().as_encoded_bytes()));
+        let birth = producer_state(store)["objects"][0]["rolling"].clone();
+        assert_eq!(birth["deadline"], birth["born_at"]);
         fs::write(&member, b"original diagnostic bytes").unwrap();
         if !failed {
             fixture.retain_diagnostic().unwrap();
         }
         let reader = fixture.capability().unwrap();
         assert_eq!(fixture.finish(failed).unwrap()["status"], "finished");
+        let terminal = producer_state(store)["objects"][0]["rolling"].clone();
+        assert_eq!(terminal["deadline"], birth["deadline"]);
         let (code, report, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{report} {error}");
         assert_eq!(fs::read(&member).unwrap(), b"original diagnostic bytes");
@@ -518,7 +522,7 @@ fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal
     ) {
         return;
     }
-    let h = rolling_host(0);
+    let h = rolling_host(86400);
     let policy_path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
     policy["retained_producers"][0]["rolling_directory"]["metadata_keep_seconds"] = value!(86400);
