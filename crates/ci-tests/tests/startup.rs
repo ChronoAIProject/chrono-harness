@@ -1,5 +1,27 @@
+#[cfg(verus_keep_ghost)]
+use super::policy::startup::retention_days_valid;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
+use chrono_ci::startup::retention_days_valid;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
 
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn startup_retention_rejects_zero_and_allows_one_day() {
+    let omitted = retention_days_valid(None);
+    let default_requested = retention_days_valid(Some(0));
+    let one_day = retention_days_valid(Some(1));
+    proof { assert(omitted && !default_requested && one_day); }
+    #[cfg(not(verus_keep_ghost))]
+    assert!(omitted && !default_requested && one_day);
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 fn registration() -> Value {
     json!({"schema":"chrono-shared-startup/v1",
         "directory":".chrono-harness/startup/", "artifact":"fixture-startup",
@@ -11,12 +33,14 @@ fn registration() -> Value {
                 "install":["host-installer","collector"]}}})
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn declared_startup_is_published_once_and_installed_before_each_actual_consumer() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     let base: chrono_ci::units::Config = serde_json::from_value(value.clone()).unwrap();
     let before = chrono_ci::units::render(&base, ".chrono-harness/ci/units.json").unwrap();
     value["job_gating"]["startup"] = registration();
+    value["job_gating"]["startup"]["retention_days"] = json!(1);
     value["persistent_cache"] = adoption("unit_example");
     let config = serde_json::from_value(value.clone()).unwrap();
     let rendered = chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").unwrap();
@@ -49,6 +73,7 @@ fn declared_startup_is_published_once_and_installed_before_each_actual_consumer(
     assert!(produce < upload && upload < detect);
     assert_eq!(steps[upload]["with"]["path"], ".chrono-harness/startup/");
     assert_eq!(steps[upload]["with"]["if-no-files-found"], "error");
+    assert_eq!(steps[upload]["with"]["retention-days"], 1);
     for id in ["unit_example", "aggregate"] {
         let job = &yaml["jobs"][id];
         let steps = job["steps"].as_array().unwrap();
@@ -100,10 +125,15 @@ fn declared_startup_is_published_once_and_installed_before_each_actual_consumer(
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn startup_consumers_and_transfer_paths_must_be_explicit_and_separate_from_evidence() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["job_gating"]["startup"] = registration();
+    let mut zero = value.clone();
+    zero["job_gating"]["startup"]["retention_days"] = json!(0);
+    let config = serde_json::from_value(zero).unwrap();
+    assert!(chrono_ci::units::render(&config, ".chrono-harness/ci/units.json").is_err());
     for (pointer, replacement) in [
         ("/job_gating/startup/schema", json!("unknown")),
         ("/job_gating/startup/directory", json!("../outside/")),

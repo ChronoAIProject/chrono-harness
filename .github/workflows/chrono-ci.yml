@@ -157,6 +157,7 @@ jobs:
           path: ".chrono-harness/startup/"
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
       - name: Detect required units from fixed Git endpoints
         id: detect
         shell: bash
