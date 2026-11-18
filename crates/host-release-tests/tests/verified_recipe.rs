@@ -18,6 +18,16 @@ use vstd::vpanic as panic;
 #[path = "recipe.rs"]
 mod recipe;
 
+#[path = "support/execution.rs"]
+mod execution_fixture;
+
+#[cfg(not(verus_keep_ghost))]
+#[path = "support/receipt.rs"]
+mod receipt_fixture;
+#[cfg(verus_keep_ghost)]
+#[path = "support/release_tool.rs"]
+mod tool_fixture;
+
 verus! {
 
 // 同一预期在 Verus 中证明，在普通 Rust 中实际执行。
@@ -31,10 +41,10 @@ fn expect_recipe(actual: bool)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn direct_compiler_binding_requires_the_path_and_both_identities() {
-    let valid = policy::direct_compiler_binding(true, true, true);
-    let wrong_path = policy::direct_compiler_binding(false, true, true);
-    let wrong_cargo = policy::direct_compiler_binding(true, false, true);
-    let wrong_rustc = policy::direct_compiler_binding(true, true, false);
+    let valid = policy::receipt::direct_compiler_binding(true, true, true);
+    let wrong_path = policy::receipt::direct_compiler_binding(false, true, true);
+    let wrong_cargo = policy::receipt::direct_compiler_binding(true, false, true);
+    let wrong_rustc = policy::receipt::direct_compiler_binding(true, true, false);
     expect_recipe(valid && !wrong_path && !wrong_cargo && !wrong_rustc);
 }
 
@@ -409,4 +419,32 @@ fn receipt_job_run_and_attempt_must_match_the_selected_producer() {
     expect_recipe(valid && !job && !run && !attempt && !zero && !empty_job && !empty_run);
 }
 
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn rust_build_executes_the_compilers_selected_from_the_declared_toolchain() {
+    let mut fixture = execution_fixture::Fixture::new("distinct-compilers", false);
+    fixture.success("build_a");
+    let report = fixture.report("build_a");
+    let active = &report["toolchain"]["active_compilers"];
+    assert_eq!(report["execution_tools"]["cargo"], active["cargo"]);
+    assert_eq!(report["execution_tools"]["rustc"], active["rustc"]);
+    assert_eq!(report["environment"]["RUSTC"], active["rustc"]["path"]);
+    let build = report["processes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|process| process["phase"] == "build")
+        .unwrap();
+    assert_eq!(build["argv"][0], active["cargo"]["path"]);
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn receipt_rejects_a_rustc_override_different_from_the_selected_compiler() {
+    let mut fixture = receipt_fixture::Fixture::new(true);
+    assert!(fixture.read().is_ok());
+    fixture.report["environment"]["RUSTC"] = serde_json::json!("/other/rustc");
+    assert!(fixture.read().is_err());
 }

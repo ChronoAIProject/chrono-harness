@@ -1,36 +1,60 @@
 //! 当前 v5 发布登记；先核完整关系，再为所选单元解析实际工具。
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+fn needs_prepare_binding(rust_required: bool, is_compiler: bool) -> (needed: bool)
+    ensures needed == (!rust_required || !is_compiler),
+{
+    !rust_required || !is_compiler
+}
+}
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_recipe::{self as policy, Invocation};
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{no_symlink_parents, resolve_program};
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_registration::execution::{Method, methods};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub const CONFIG: &str = ".chrono-harness/release/build.json";
 
+#[cfg(not(verus_keep_ghost))]
 fn error(message: impl std::fmt::Display) -> String {
     format!("E_RELEASE_RECIPE: {message}")
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn read_json(root: &Path, relative: &str) -> Result<Value, String> {
     let path = no_symlink_parents(root, relative)?;
     chrono_harness::json(&fs::read(&path).map_err(|e| error(format!("{}: {e}", path.display())))?)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn overlaps(a: &str, b: &str) -> bool {
     chrono_harness::units::overlap(a, b)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn names(values: &[String], nonempty: bool) -> bool {
     (!nonempty || !values.is_empty())
         && values.iter().all(|s| !s.is_empty() && !s.contains('\0'))
         && values.iter().collect::<BTreeSet<_>>().len() == values.len()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn same_members<'a>(
     actual: impl Iterator<Item = &'a str>,
     expected: impl Iterator<Item = &'a str>,
@@ -42,6 +66,7 @@ fn same_members<'a>(
     actual == expected
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
 pub enum Unit {
@@ -63,6 +88,7 @@ pub enum Unit {
     },
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Unit {
     pub fn id(&self) -> &str {
         match self {
@@ -104,6 +130,7 @@ impl Unit {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Collector {
@@ -113,6 +140,7 @@ pub struct Collector {
     pub dependency_metadata: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Limits {
@@ -120,6 +148,7 @@ pub struct Limits {
     pub platform_seconds: u64,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Consumer {
@@ -127,6 +156,7 @@ pub struct Consumer {
     pub release_assets: Vec<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Binding {
@@ -134,6 +164,7 @@ pub struct Binding {
     pub destinations: Vec<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Staging {
@@ -142,6 +173,7 @@ pub struct Staging {
     pub bindings: Vec<Binding>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct NativeFrontend {
@@ -153,10 +185,12 @@ pub struct NativeFrontend {
     pub cost: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn present_bool<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<bool>, D::Error> {
     bool::deserialize(d).map(Some)
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Recipe {
@@ -187,6 +221,7 @@ pub struct Recipe {
     pub verification_consumers: BTreeMap<String, Consumer>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReleasePlan {
@@ -195,6 +230,7 @@ pub struct ReleasePlan {
     pub assets: BTreeMap<String, String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize)]
 pub struct StageRow {
     pub asset: String,
@@ -202,6 +238,7 @@ pub struct StageRow {
     pub destination: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Debug)]
 pub struct Loaded {
     pub recipe: Recipe,
@@ -211,12 +248,14 @@ pub struct Loaded {
     pub contracts: BTreeMap<String, Value>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Copy, Debug)]
 pub enum Scope<'a> {
     Unit(&'a str),
     Collect,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Loaded {
     pub fn load(root: &Path) -> Result<Self, String> {
         let recipe: Recipe = serde_json::from_value(read_json(root, CONFIG)?).map_err(error)?;
@@ -589,13 +628,13 @@ impl Loaded {
                 unit.invocation()
             }
         };
-        if policy::requires_rust(&invocation) {
-            required.remove("cargo");
-            required.remove("rustc");
+        let rust_required = policy::requires_rust(&invocation);
+        if rust_required {
             required.insert("rustup");
         }
         required
             .into_iter()
+            .filter(|name| needs_prepare_binding(rust_required, matches!(*name, "cargo" | "rustc")))
             .map(|name| {
                 let program = self
                     .recipe

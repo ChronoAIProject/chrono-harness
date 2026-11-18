@@ -1,7 +1,23 @@
 //! 发布测试的通用命令替身；高频 frontend Git／探针另由轻量替身负责。
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+fn compiler_fixture_allowed(distinct: bool, compiler: bool, active: bool) -> (allowed: bool)
+    ensures allowed == (!distinct || !compiler || active),
+{
+    !distinct || !compiler || active
+}
+}
+#[cfg(not(verus_keep_ghost))]
 #[path = "context.rs"]
 mod context;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     io::{self, Write},
@@ -10,6 +26,7 @@ use std::{
     process::{Command, ExitCode},
 };
 
+#[cfg(not(verus_keep_ghost))]
 fn run() -> Result<u8, String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     if args.first().map(String::as_str) == Some("--consume-launcher") {
@@ -132,10 +149,11 @@ fn run() -> Result<u8, String> {
         .ok_or("missing tool fixture name")?;
     let tool_directory = executable.parent().ok_or("missing fixture tool parent")?;
     let distinct_compilers = fixture["behavior"] == "distinct-compilers";
-    if distinct_compilers
-        && matches!(name, "cargo" | "rustc")
-        && tool_directory.file_name().and_then(|name| name.to_str()) != Some("active")
-    {
+    if !compiler_fixture_allowed(
+        distinct_compilers,
+        matches!(name, "cargo" | "rustc"),
+        tool_directory.file_name().and_then(|name| name.to_str()) == Some("active"),
+    ) {
         return Err("called the unselected compiler launcher".into());
     }
     match (name, args.as_slice()) {
@@ -247,6 +265,7 @@ fn run() -> Result<u8, String> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn executable_name() -> Option<String> {
     std::env::current_exe()
         .ok()?
@@ -255,6 +274,7 @@ fn executable_name() -> Option<String> {
         .map(str::to_owned)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn main() -> ExitCode {
     match run() {
         Ok(code) => ExitCode::from(code),

@@ -10,6 +10,18 @@ pub(crate) mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_identifiers as identifiers;
 
+#[cfg(verus_keep_ghost)]
+#[path = "execution.rs"]
+pub mod execution;
+#[cfg(verus_keep_ghost)]
+#[path = "receipt.rs"]
+pub mod receipt;
+#[cfg(verus_keep_ghost)]
+#[path = "recipe.rs"]
+pub mod recipe;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::{execution, receipt, recipe};
+
 #[path = "verified_delivery.rs"]
 pub mod delivery;
 
@@ -94,14 +106,6 @@ pub fn executable_file(regular: bool, mode: u32) -> (valid: bool)
     ensures valid == (regular && mode <= 4095 && mode & 73 != 0),
 {
     regular && mode <= 4095 && mode & 73 != 0
-}
-
-pub fn direct_compiler_binding(
-    rustc_path: bool, cargo_identity: bool, rustc_identity: bool,
-) -> (valid: bool)
-    ensures valid <==> (rustc_path && cargo_identity && rustc_identity),
-{
-    rustc_path && cargo_identity && rustc_identity
 }
 
 pub fn same_content(hash: &str, size: u64, expected_hash: &str, expected_size: u64) -> (same: bool)

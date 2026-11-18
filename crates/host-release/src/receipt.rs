@@ -1,22 +1,45 @@
 //! 发布回执的消费边界：当前结果选原生产者，再核原始字节与实际操作。
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn direct_compiler_binding(
+    rustc_path: bool, cargo_identity: bool, rustc_identity: bool,
+) -> (valid: bool)
+    ensures valid <==> (rustc_path && cargo_identity && rustc_identity),
+{
+    rustc_path && cargo_identity && rustc_identity
+}
+
+}
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     recipe::{Loaded, Scope, Unit},
     verified_recipe::{self as policy, DependencyResult},
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{file_identity, no_symlink_parents};
+#[cfg(not(verus_keep_ghost))]
 use chrono_identifiers::valid_digest_text as digest;
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 fn error(message: impl std::fmt::Display) -> String {
     format!("E_RELEASE_RECEIPT: {message}")
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn text<'a>(value: &'a Value, field: &str) -> Result<&'a str, String> {
     value[field]
         .as_str()
@@ -24,10 +47,12 @@ fn text<'a>(value: &'a Value, field: &str) -> Result<&'a str, String> {
         .ok_or_else(|| error(format!("missing {field}")))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn decimal(value: &str) -> bool {
     !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn attempt(value: &str) -> Result<u64, String> {
     if !decimal(value) {
         return Err(error("invalid producing attempt"));
@@ -39,6 +64,7 @@ fn attempt(value: &str) -> Result<u64, String> {
         .ok_or_else(|| error("invalid producing attempt"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -46,6 +72,7 @@ pub enum Kind {
     Github,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Lineage {
@@ -55,6 +82,7 @@ pub struct Lineage {
     pub job: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Lineage {
     pub fn validate(&self) -> Result<(), String> {
         attempt(&self.attempt)?;
@@ -65,6 +93,7 @@ impl Lineage {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Selection {
@@ -74,12 +103,14 @@ pub struct Selection {
     pub attempt: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize)]
 pub struct Dependencies {
     pub units: BTreeMap<String, Selection>,
     pub frontend: Option<Selection>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn select_row(job: &str, row: &Value, lineage: &Lineage) -> Result<Selection, String> {
     let result = match row["result"].as_str() {
         Some("success") => DependencyResult::Success,
@@ -112,6 +143,7 @@ fn select_row(job: &str, row: &Value, lineage: &Lineage) -> Result<Selection, St
 }
 
 /// 原生 needs 精确等于登记的业务依赖与发布工具；工具选择独立保留。
+#[cfg(not(verus_keep_ghost))]
 pub fn select(
     loaded: &Loaded,
     scope: Scope<'_>,
@@ -189,6 +221,7 @@ pub fn select(
 }
 
 /// 只读普通、无链接的已登记原件；先核长度与摘要，再交给调用方读取。
+#[cfg(not(verus_keep_ghost))]
 pub fn original(directory: &Path, declaration: &Value) -> Result<PathBuf, String> {
     let path = no_symlink_parents(directory, text(declaration, "path")?)?;
     let metadata = fs::symlink_metadata(&path).map_err(error)?;
@@ -208,6 +241,7 @@ pub fn original(directory: &Path, declaration: &Value) -> Result<PathBuf, String
     Ok(path)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn executable(value: &Value) -> Result<(), String> {
     let path = text(value, "path")?;
     let size = value["size"]
@@ -227,6 +261,7 @@ fn executable(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn process_list(receipt: &Value) -> Result<&[Value], String> {
     receipt["processes"]
         .as_array()
@@ -235,6 +270,7 @@ fn process_list(receipt: &Value) -> Result<&[Value], String> {
         .ok_or_else(|| error("missing original processes"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn phase<'a>(receipt: &'a Value, name: &str, count: usize) -> Result<Vec<&'a Value>, String> {
     let rows: Vec<_> = process_list(receipt)?
         .iter()
@@ -248,6 +284,7 @@ fn phase<'a>(receipt: &'a Value, name: &str, count: usize) -> Result<Vec<&'a Val
     Ok(rows)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn argv(process: &Value, expected: &[String]) -> Result<(), String> {
     if process["argv"] != json!(expected) {
         return Err(error("original registered invocation differs"));
@@ -255,11 +292,13 @@ fn argv(process: &Value, expected: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn observed_text(directory: &Path, process: &Value) -> Result<String, String> {
     String::from_utf8(fs::read(original(directory, &process["stdout"])?).map_err(error)?)
         .map_err(error)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn tools<'a>(loaded: &Loaded, unit: &Unit, receipt: &'a Value) -> Result<&'a Value, String> {
     let mut required = BTreeSet::from(["git"]);
     if let Some(operation) = unit.operation() {
@@ -301,6 +340,7 @@ fn tools<'a>(loaded: &Loaded, unit: &Unit, receipt: &'a Value) -> Result<&'a Val
     Ok(identities)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn verify_toolchain(
     loaded: &Loaded,
     unit: &Unit,
@@ -346,7 +386,7 @@ fn verify_toolchain(
         return Err(error("active compiler membership differs"));
     }
     if let Some(rustc) = receipt["environment"].get("RUSTC") {
-        if !policy::direct_compiler_binding(
+        if !direct_compiler_binding(
             *rustc == active["rustc"]["path"],
             identities["cargo"] == active["cargo"],
             identities["rustc"] == active["rustc"],
@@ -356,7 +396,7 @@ fn verify_toolchain(
             ));
         }
     }
-    for (index, name) in ["cargo", "rustc"].iter().enumerate() {
+    for (index, name) in crate::execution::compiler_names().iter().enumerate() {
         argv(
             versions[index],
             &[text(&identities[*name], "path")?.into(), "--version".into()],
@@ -383,6 +423,7 @@ fn verify_toolchain(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Debug)]
 pub struct Verified {
     pub directory: PathBuf,
@@ -390,6 +431,7 @@ pub struct Verified {
     pub sha256: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Imported {
     pub original: Verified,
     pub asset: String,
@@ -397,6 +439,7 @@ pub struct Imported {
 }
 
 /// 所选原回执和 tar 共用一条消费路径；不另造未经回执校验的导入入口。
+#[cfg(not(verus_keep_ghost))]
 pub fn import_build(
     loaded: &Loaded,
     root: &Path,
@@ -444,6 +487,7 @@ pub fn import_build(
 }
 
 /// collector 核每项验证实际使用的资产向量，避免改换生产者后沿用旧成功。
+#[cfg(not(verus_keep_ghost))]
 pub fn verify_consumption(
     loaded: &Loaded,
     verified: &Verified,
@@ -534,6 +578,7 @@ pub fn verify_consumption(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Verified {
     /// Git 和 rustup 身份逐回执核验；rustup 的编译器代理按实际编译器比较。
     pub fn compiler_fingerprint(&self) -> Option<Value> {
@@ -563,6 +608,7 @@ impl Verified {
 }
 
 /// parent 是当前消费任务，selection 已由当前 needs 选择；不读漂移 latest。
+#[cfg(not(verus_keep_ghost))]
 pub fn read(
     loaded: &Loaded,
     root: &Path,
