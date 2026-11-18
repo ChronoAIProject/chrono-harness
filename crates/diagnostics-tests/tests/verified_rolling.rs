@@ -10,6 +10,10 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
+#[cfg(verus_keep_ghost)]
+#[path = "rolling.rs"]
+mod boundary;
+
 verus! {
 
 fn expect(condition: bool)

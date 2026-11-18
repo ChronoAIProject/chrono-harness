@@ -1,11 +1,29 @@
 //! Explicit host adoption of runtime logging; absent adoption preserves the caller's sink.
+#[cfg(not(verus_keep_ghost))]
+use crate::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn retention_window_valid(window: Option<u64>) -> (valid: bool)
+    ensures valid == (window != Some(0u64)),
+{
+    match window {
+        None => true,
+        Some(seconds) => seconds > 0,
+    }
+}
+}
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     error::{Failure, NativeIoError},
     logging::{self, Level, Logger},
-    rolling::RollingFile,
+    rolling::{ExpiredLogs, RollingFile},
     verified_runtime,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     ffi::OsString,
     fs::{self, File},
@@ -13,14 +31,17 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub const CONFIG_PATH: &str = ".chrono-harness/logging.json";
 
 /// Record an existing CLI diagnostic without inventing a typed domain cause from its text.
 /// The command still publishes its original diagnostic through its existing output boundary.
+#[cfg(not(verus_keep_ghost))]
 pub fn diagnostic(message: &str) {
     tracing::error!(event_id = "cli.diagnostic", message = message);
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
@@ -29,9 +50,11 @@ pub struct Policy {
     pub directory: String,
     pub max_bytes: u64,
     pub max_files: usize,
+    pub keep_seconds: Option<u64>,
     pub stderr: bool,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Policy {
     fn level(&self) -> Result<Level, Failure> {
         match self.level.as_str() {
@@ -60,6 +83,7 @@ impl Policy {
             || self.max_bytes == 0
             || self.max_bytes > 64 * 1024 * 1024
             || !(1..=crate::rolling::MAX_FILES).contains(&self.max_files)
+            || !retention_window_valid(self.keep_seconds)
         {
             return Err(Failure::new(
                 "E_LOG_CONFIG",
@@ -71,11 +95,13 @@ impl Policy {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct RuntimeSink<W> {
     file: RollingFile,
     stderr: Option<W>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl<W: Write> Write for RuntimeSink<W> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         let (_, _, result) = verified_runtime::write_mirrors(
@@ -123,6 +149,7 @@ impl<W: Write> Write for RuntimeSink<W> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn io_failure(error: io::Error) -> Failure {
     Failure::wrap(
         "E_RUNTIME_LOG",
@@ -131,6 +158,7 @@ fn io_failure(error: io::Error) -> Failure {
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn load_policy(root: &Path) -> Result<Option<Policy>, Failure> {
     let config = root.join(CONFIG_PATH);
     match fs::symlink_metadata(&config) {
@@ -170,12 +198,14 @@ fn load_policy(root: &Path) -> Result<Option<Policy>, Failure> {
     Ok(Some(policy))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn sink<W>(root: &Path, policy: &Policy, stderr: W) -> Result<RuntimeSink<W>, Failure> {
     let root = fs::canonicalize(root).map_err(io_failure)?;
-    let file = RollingFile::open(
+    let file = RollingFile::open_with_window(
         &root.join(&policy.directory),
         policy.max_bytes,
         policy.max_files,
+        policy.keep_seconds,
     )
     .map_err(io_failure)?;
     Ok(RuntimeSink {
@@ -184,6 +214,27 @@ fn sink<W>(root: &Path, policy: &Policy, stderr: W) -> Result<RuntimeSink<W>, Fa
     })
 }
 
+/// Retire adopted log generations even when all log writers are idle.
+#[cfg(not(verus_keep_ghost))]
+pub fn maintain_at(root: &Path, observed: u64) -> Result<Option<ExpiredLogs>, Failure> {
+    let Some(policy) = load_policy(root)? else {
+        return Ok(None);
+    };
+    if policy.keep_seconds.is_none() {
+        return Ok(None);
+    }
+    let root = fs::canonicalize(root).map_err(io_failure)?;
+    RollingFile::expire(&root.join(&policy.directory), observed)
+        .map(Some)
+        .map_err(io_failure)
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub fn maintain(root: &Path) -> Result<Option<ExpiredLogs>, Failure> {
+    maintain_at(root, crate::rolling::unix_seconds().map_err(io_failure)?)
+}
+
+#[cfg(not(verus_keep_ghost))]
 pub fn configured_logger<W: Write + Send + 'static>(
     root: &Path,
     producer: &str,
@@ -200,6 +251,7 @@ pub fn configured_logger<W: Write + Send + 'static>(
 }
 
 /// Preserve a library caller's chosen sink and level when the host has not adopted file logs.
+#[cfg(not(verus_keep_ghost))]
 pub fn logger<W: Write + Send + 'static>(
     root: &Path,
     producer: &str,
@@ -224,6 +276,7 @@ pub fn logger<W: Write + Send + 'static>(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn emergency(producer: &str, failure: &Failure) {
     let logger = Logger::stderr(producer);
     let _ = logger.run(|| {
@@ -239,6 +292,7 @@ fn emergency(producer: &str, failure: &Failure) {
 
 /// Main-boundary adapter. Explicit --host-root wins; otherwise use the actual cwd.
 /// No parent-directory search, environment activation, background task or global subscriber.
+#[cfg(not(verus_keep_ghost))]
 pub fn cli(producer: &str, work: impl FnOnce() -> u8) -> u8 {
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     let root = args
@@ -259,6 +313,7 @@ pub fn cli(producer: &str, work: impl FnOnce() -> u8) -> u8 {
 }
 
 /// Use a host and operation already selected by an entry with positional arguments.
+#[cfg(not(verus_keep_ghost))]
 pub fn cli_at(root: &Path, producer: &str, operation: &str, work: impl FnOnce() -> u8) -> u8 {
     let logger = match configured_logger(root, producer, io::stderr()) {
         Ok(Some(logger)) => logger,

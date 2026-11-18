@@ -4,6 +4,10 @@ use crate::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[cfg(verus_keep_ghost)]
+#[path = "rolling.rs"]
+pub mod owner;
+
 verus! {
 
 pub const MAX_FILES: usize = 64;
