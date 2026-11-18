@@ -220,13 +220,18 @@ pub fn maintain_at(root: &Path, observed: u64) -> Result<Option<ExpiredLogs>, Fa
     let Some(policy) = load_policy(root)? else {
         return Ok(None);
     };
-    if policy.keep_seconds.is_none() {
+    let Some(keep_seconds) = policy.keep_seconds else {
         return Ok(None);
-    }
+    };
     let root = fs::canonicalize(root).map_err(io_failure)?;
-    RollingFile::expire(&root.join(&policy.directory), observed)
-        .map(Some)
-        .map_err(io_failure)
+    RollingFile::expire(
+        &root.join(&policy.directory),
+        observed,
+        keep_seconds,
+        policy.max_bytes,
+    )
+    .map(Some)
+    .map_err(io_failure)
 }
 
 #[cfg(not(verus_keep_ghost))]
