@@ -4,6 +4,10 @@ use crate::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[cfg(verus_keep_ghost)]
+#[path = "runtime.rs"]
+mod owner;
+
 verus! {
 
 pub open spec fn sequence_result<S, E, W, F>(

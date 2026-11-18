@@ -29,6 +29,8 @@ pub use chrono_diagnostics::runtime::cli_at as logged_main_at;
 #[cfg(not(verus_keep_ghost))]
 pub use chrono_diagnostics::runtime::diagnostic as log_cli_error;
 #[cfg(not(verus_keep_ghost))]
+pub use chrono_diagnostics::runtime::maintain as maintain_runtime_logs;
+#[cfg(not(verus_keep_ghost))]
 pub mod artifact_disposal;
 #[cfg(not(verus_keep_ghost))]
 mod canonical_request;
