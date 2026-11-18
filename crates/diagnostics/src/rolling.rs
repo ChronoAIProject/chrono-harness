@@ -214,7 +214,9 @@ impl RollingFile {
 
     fn generation(file: &File) -> io::Result<Option<Generation>> {
         let mut header = Vec::new();
-        BufReader::new(file).take(HEADER_LIMIT).read_until(b'\n', &mut header)?;
+        BufReader::new(file)
+            .take(HEADER_LIMIT)
+            .read_until(b'\n', &mut header)?;
         // A former v1 log opens directly with a chrono-log/v1 record.
         if !header.starts_with(GENERATION_PREFIX) {
             return Ok(None);
@@ -222,14 +224,18 @@ impl RollingFile {
         if !header.ends_with(b"\n") {
             return Err(invalid("incomplete log generation header"));
         }
-        serde_json::from_slice(&header).map(Some).map_err(io::Error::other)
+        serde_json::from_slice(&header)
+            .map(Some)
+            .map_err(io::Error::other)
     }
 
     fn clear_pending(directory: &Path) -> io::Result<()> {
         let path = directory.join("runtime.pending");
         if regular(&path)? {
             let mut bytes = Vec::new();
-            File::open(&path)?.take(HEADER_LIMIT + 1).read_to_end(&mut bytes)?;
+            File::open(&path)?
+                .take(HEADER_LIMIT + 1)
+                .read_to_end(&mut bytes)?;
             if bytes.len() as u64 > HEADER_LIMIT
                 || (!GENERATION_PREFIX.starts_with(&bytes) && !bytes.starts_with(GENERATION_PREFIX))
             {
@@ -280,7 +286,10 @@ impl RollingFile {
         // This exact staging name holds only the generation header. A failed
         // or interrupted first write leaves no unreported business row there.
         let pending = self.directory.join("runtime.pending");
-        let mut file = OpenOptions::new().write(true).create_new(true).open(&pending)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&pending)?;
         file.write_all(&header)?;
         file.sync_all()?;
         fs::rename(pending, path)?;
@@ -324,9 +333,7 @@ impl RollingFile {
             return Ok(());
         }
         match Self::generation(&File::open(path)?)? {
-            Some(generation)
-                if generation_expired(generation.deadline, observed) =>
-            {
+            Some(generation) if generation_expired(generation.deadline, observed) => {
                 fs::remove_file(path)?;
                 result.removed += 1;
             }

@@ -1,12 +1,12 @@
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
 use super::policy::owner;
+#[cfg(not(verus_keep_ghost))]
+use chrono_diagnostics::{rolling as owner, verus};
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
-#[cfg(not(verus_keep_ghost))]
-use chrono_diagnostics::{rolling as owner, verus};
 
 verus! {
 fn expect_generation(condition: bool)
