@@ -96,6 +96,14 @@ pub fn executable_file(regular: bool, mode: u32) -> (valid: bool)
     regular && mode <= 4095 && mode & 73 != 0
 }
 
+pub fn direct_compiler_binding(
+    rustc_path: bool, cargo_identity: bool, rustc_identity: bool,
+) -> (valid: bool)
+    ensures valid <==> (rustc_path && cargo_identity && rustc_identity),
+{
+    rustc_path && cargo_identity && rustc_identity
+}
+
 pub fn same_content(hash: &str, size: u64, expected_hash: &str, expected_size: u64) -> (same: bool)
     ensures same == (hash@ == expected_hash@ && size == expected_size),
 {

@@ -346,11 +346,11 @@ fn verify_toolchain(
         return Err(error("active compiler membership differs"));
     }
     if let Some(rustc) = receipt["environment"].get("RUSTC") {
-        if *rustc != active["rustc"]["path"]
-            || ["cargo", "rustc"]
-                .iter()
-                .any(|name| identities[*name] != active[*name])
-        {
+        if !policy::direct_compiler_binding(
+            *rustc == active["rustc"]["path"],
+            identities["cargo"] == active["cargo"],
+            identities["rustc"] == active["rustc"],
+        ) {
             return Err(error(
                 "direct compiler execution differs from selected toolchain",
             ));

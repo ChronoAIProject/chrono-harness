@@ -30,6 +30,15 @@ fn expect_recipe(actual: bool)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn direct_compiler_binding_requires_the_path_and_both_identities() {
+    let valid = policy::direct_compiler_binding(true, true, true);
+    let wrong_path = policy::direct_compiler_binding(false, true, true);
+    let wrong_cargo = policy::direct_compiler_binding(true, false, true);
+    let wrong_rustc = policy::direct_compiler_binding(true, true, false);
+    expect_recipe(valid && !wrong_path && !wrong_cargo && !wrong_rustc);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn promotion_requires_one_unexpired_original_with_the_selected_identity() {
     let one = delivery::single_original(Some(1), 1);
     let missing = delivery::single_original(Some(0), 0);
