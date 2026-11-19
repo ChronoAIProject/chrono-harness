@@ -974,6 +974,63 @@ fn explicit_cleanup_adoption_rejects_live_use_and_target_undeclared_outputs() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn explicit_custody_adoption_checks_target_ownership_without_loading_target_projects() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let (h, target, used) = checkout_result_fixture();
+    restore_interrupted_use(&h, &target, &used);
+    let result_path = h
+        .root
+        .join(used["managed_use_receipt"]["path"].as_str().unwrap());
+    let saved_result = result_path.with_extension("saved-original");
+    fs::rename(&result_path, &saved_result).unwrap();
+    edit(&target, PROJECTS, |projects| {
+        projects["retired_execution_field"] = value!(true);
+    });
+    let filemap = fs::read(target.join(FM)).unwrap();
+    edit(&target, FM, |filemap| {
+        filemap["files"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|row| row["path"] != CLEANUP);
+    });
+    commit(&target);
+    let ledger = h.ledger_path(&target);
+    let original = fs::read(&ledger).unwrap();
+    let args = ["--path", target.to_str().unwrap(), "--adopt-cleanup-policy"];
+    let (code, report, _) = h.auto("migrate", &args);
+    assert_ne!(code, 0);
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("explicitly registered in FILEMAP"),
+        "{report}"
+    );
+    assert_eq!(fs::read(&ledger).unwrap(), original);
+
+    fs::write(target.join(FM), filemap).unwrap();
+    commit(&target);
+    assert_ne!(h.auto("migrate", &args[..2]).0, 0);
+    let (code, report, error) = h.auto("migrate", &args);
+    assert_eq!(code, 0, "{report} {error}");
+    let entry = &json(&fs::read(&ledger).unwrap()).unwrap()["entries"][0];
+    assert_eq!(entry["uses"], value!([]));
+    let receipt = &entry["enrollment"]["interrupted_uses"][0];
+    let raw = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
+    assert_eq!(sha256(&raw), receipt["sha256"]);
+    let recovered = json(&raw).unwrap();
+    assert_eq!(recovered["original_result"]["presence"], "absent");
+    assert_eq!(recovered["task_completion"], "not-claimed");
+    assert!(entry["terminal"].is_null());
+    assert!(!result_path.exists());
+    fs::rename(saved_result, &result_path).unwrap();
+    assert_eq!(report["policy_migration"]["disposal"], "not-performed");
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_cleanup_adoption_preserves_changed_inputs_and_corrupt_source_evidence() {
     if !chrono_git_boundary::isolated_git() {
         return;

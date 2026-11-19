@@ -61,6 +61,22 @@ use std::{
     fs,
     path::Path,
 };
+/// A policy custodian consumes the committed artifact and file declarations.
+#[cfg(not(verus_keep_ghost))]
+pub fn read_custody_inputs(
+    config_path: &str,
+    mut read: impl FnMut(&str) -> Result<Vec<u8>>,
+) -> Result<(Value, Value)> {
+    let config = facts::selected_config_with(config_path, &mut read)?;
+    schema::config(&config).map_err(|e| format!("config: {e}"))?;
+    let path = config["registries"]["filemap"]
+        .as_str()
+        .ok_or("missing filemap registry path")?;
+    let filemap = chrono_harness::json(&read(path)?)?;
+    schema::filemap(&filemap).map_err(|e| format!("filemap: {e}"))?;
+    Ok((config, filemap))
+}
+
 /// Validate the explicit projects document without requiring a full-governance host.
 #[cfg(not(verus_keep_ghost))]
 pub fn validate_projects(projects: &Value) -> std::result::Result<(), String> {

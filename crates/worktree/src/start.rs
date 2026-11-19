@@ -627,7 +627,21 @@ pub(crate) fn registered_policy(
     policy: &str,
     report_directory: &str,
 ) -> Result<(), String> {
-    if !registrations.filemap()["files"]
+    registered_policy_inputs(
+        registrations.config(),
+        registrations.filemap(),
+        policy,
+        report_directory,
+    )
+}
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn registered_policy_inputs(
+    config: &Value,
+    filemap: &Value,
+    policy: &str,
+    report_directory: &str,
+) -> Result<(), String> {
+    if !filemap["files"]
         .as_array()
         .unwrap()
         .iter()
@@ -635,17 +649,12 @@ pub(crate) fn registered_policy(
     {
         return Err("worktree configuration is not explicitly registered in FILEMAP".into());
     }
-    if !registrations.config()["artifacts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|a| {
-            a["tracked"] == false
-                && a["path"]
-                    .as_str()
-                    .is_some_and(|p| report_directory.starts_with(p))
-        })
-    {
+    if !config["artifacts"].as_array().unwrap().iter().any(|a| {
+        a["tracked"] == false
+            && a["path"]
+                .as_str()
+                .is_some_and(|p| report_directory.starts_with(p))
+    }) {
         return Err("worktree report directory lacks a registered untracked artifact owner".into());
     }
     Ok(())
