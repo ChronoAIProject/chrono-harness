@@ -97,26 +97,28 @@ impl Drop for Owner {
         if !std::thread::panicking() {
             return;
         }
-        let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        match self.publish_failure(&checkout) {
-            Ok(Some(path)) => eprintln!(
-                "original receipt-owner failure evidence: {}",
-                path.display()
-            ),
-            Ok(None) => (),
-            Err(error) => {
-                self._dir.disable_cleanup(true);
-                eprintln!(
-                    "CI failure evidence handoff failed: {error}; original: {}",
-                    self._dir.path().display()
-                );
-            }
-        }
+        let _ = self.handoff_failure(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
     }
 }
 
 #[cfg(not(verus_keep_ghost))]
 impl Owner {
+    pub(super) fn handoff_failure(&mut self, checkout: &Path) -> Result<Option<PathBuf>, String> {
+        let result = self.publish_failure(checkout);
+        match &result {
+            Ok(Some(path)) => eprintln!("CI diagnostic batch: {}", path.display()),
+            Ok(None) => (),
+            Err(error) => {
+                self._dir.disable_cleanup(true);
+                eprintln!(
+                    "CI diagnostic handoff failed: {error}; original: {}",
+                    self.root.display()
+                );
+            }
+        }
+        result
+    }
+
     fn publish_failure(&self, checkout: &Path) -> Result<Option<PathBuf>, String> {
         let main = self.root.join(".chrono-harness/state");
         let linked = self._dir.path().join("linked/.chrono-harness/state");
@@ -152,14 +154,6 @@ impl Owner {
             },
         )
         .map(Some)
-    }
-
-    pub(super) fn preserve_diagnostic(&mut self) {
-        self._dir.disable_cleanup(true);
-        eprintln!(
-            "original CI diagnostic receipt owner: {}",
-            self.root.display()
-        );
     }
 
     pub(super) fn new() -> Self {
@@ -234,11 +228,7 @@ impl Owner {
             &root,
             &["commit", "-qm", "explicit receipt lifecycle fixture"],
         );
-        let mut owner = Self { _dir: dir, root };
-        if std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_some() {
-            owner.preserve_diagnostic();
-        }
-        owner
+        Self { _dir: dir, root }
     }
 
     fn drain(&self) -> (i32, Value) {
@@ -300,7 +290,7 @@ fn receipt_owner_failure_retires_main_and_linked_evidence_together() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    let owner = Owner::new();
+    let mut owner = Owner::new();
     let main = owner.root.join(".chrono-harness/state");
     let linked = owner._dir.path().join("linked/.chrono-harness/state");
     fs::create_dir_all(&main).unwrap();
@@ -322,7 +312,9 @@ fn receipt_owner_failure_retires_main_and_linked_evidence_together() {
         policy.to_string(),
     )
     .unwrap();
-    let batch = owner.publish_failure(&root).unwrap().unwrap();
+    let batch = owner.handoff_failure(&root).unwrap().unwrap();
+    drop(owner);
+    assert!(!main.exists() && !linked.exists());
     assert_eq!(batch.parent(), Some(root.join(FAMILY).as_path()));
     assert_eq!(fs::read(batch.join("error.txt")).unwrap(), b"main failure");
     assert_eq!(
@@ -352,7 +344,6 @@ fn receipt_owner_failure_retires_main_and_linked_evidence_together() {
         }
     }
     assert!(!batch.exists());
-    assert!(main.join("error.txt").exists() && linked.join("error.txt").exists());
 }
 
 #[test]
@@ -363,11 +354,20 @@ fn explicit_receipt_export_keeps_original_bytes_and_independent_diagnostic_refer
     }
     let owner = Owner::new();
     let export = tempfile::tempdir().unwrap();
-    let (execution, output, argv) = cargo_result(true);
+    let execution = tempfile::tempdir().unwrap();
+    let state = execution.path().join(".chrono-harness/state");
+    fs::create_dir_all(&state).unwrap();
+    fs::write(state.join("recovery.bin"), b"original state").unwrap();
+    fs::write(state.parent().unwrap().join("config.json"), b"{}").unwrap();
+    let output = std::process::Output {
+        status: std::os::unix::process::ExitStatusExt::from_raw(101 << 8),
+        stdout: vec![0, 255],
+        stderr: b"command failed".to_vec(),
+    };
     let receipt = retain_command_result_exported(
         &owner.root,
         execution.path(),
-        &argv,
+        &["fixture".into()],
         &json!({"consumer":"explicit diagnostic export"}),
         &output,
         Some(101),
@@ -375,34 +375,50 @@ fn explicit_receipt_export_keeps_original_bytes_and_independent_diagnostic_refer
         None,
         Some(export.path()),
     );
-    let references: Vec<_> = fs::read_dir(export.path()).unwrap().collect();
-    assert_eq!(references.len(), 1);
-    let descriptor: Value =
-        serde_json::from_slice(&fs::read(references[0].as_ref().unwrap().path()).unwrap()).unwrap();
-    assert_eq!(descriptor["producer_root"], json!(owner.root));
-    assert_eq!(descriptor["artifact"], json!(owner.object()));
-    for (name, original) in [
-        ("stdout.bin", &output.stdout),
-        ("stderr.bin", &output.stderr),
-    ] {
-        let record = &descriptor["originals"][name];
-        let bytes = fs::read(record["path"].as_str().unwrap()).unwrap();
-        assert_eq!(&bytes, original);
-        assert_eq!(record["sha256"], chrono_harness::sha256(&bytes));
-        assert_eq!(record["size"], bytes.len());
-    }
+    let binding = fs::read(owner.object().join("binding.json")).unwrap();
     receipt
         .release("command-assertion", "expected original error consumed")
         .unwrap();
-    let (code, protected) = owner.drain();
-    assert_eq!(code, 0, "{protected}");
-    assert_eq!(producer_objects(&protected)[0]["status"], "protected");
-    receipt
-        .release("diagnostic", "export assertions finished")
-        .unwrap();
-    let (code, released) = owner.drain();
-    assert_eq!(code, 0, "{released}");
-    assert_eq!(producer_objects(&released)[0]["status"], "cleaned");
+    let records = registry(&owner.root.join(FAMILY));
+    assert_eq!(
+        records["objects"][0]["consumers"]["diagnostic"]["released"],
+        true
+    );
+    let original = owner.object();
+    drop(owner);
+    drop(execution);
+    assert!(!original.exists());
+    let mut descriptors = fs::read_dir(export.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|ext| ext == "json"));
+    let descriptor: Value =
+        serde_json::from_slice(&fs::read(descriptors.next().unwrap()).unwrap()).unwrap();
+    assert!(descriptors.next().is_none());
+    let artifact = Path::new(descriptor["artifact"].as_str().unwrap());
+    assert!(artifact.starts_with(fs::canonicalize(export.path()).unwrap()));
+    for (name, bytes) in [
+        ("stdout.bin", output.stdout),
+        ("stderr.bin", output.stderr),
+        ("binding.json", binding),
+    ] {
+        let record = &descriptor["originals"][name];
+        assert_eq!(
+            Path::new(record["path"].as_str().unwrap()),
+            artifact.join(name)
+        );
+        assert_eq!(fs::read(artifact.join(name)).unwrap(), bytes);
+        assert_eq!(record["sha256"], chrono_harness::sha256(&bytes));
+        assert_eq!(record["size"], bytes.len());
+    }
+    assert_eq!(
+        fs::read(artifact.join("configuration/config.json")).unwrap(),
+        b"{}"
+    );
+    assert_eq!(
+        fs::read(artifact.join("original-state/recovery.bin")).unwrap(),
+        b"original state"
+    );
 }
 
 #[test]
