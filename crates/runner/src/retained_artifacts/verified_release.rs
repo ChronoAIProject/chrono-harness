@@ -102,6 +102,54 @@ pub proof fn retirement_stays_complete(
     finished
 }
 
+/// Fixed output generations are numbered with each retaining consumer before
+/// its inputs. Debt includes both the original and its retirement metadata.
+pub open spec fn parents_retired(edge: spec_fn(nat, nat) -> bool,
+    debt: spec_fn(nat, nat) -> nat, id: nat, at: nat) -> bool {
+    forall|parent: nat| #[trigger] edge(parent, id) ==> debt(parent, at) == 0
+}
+
+pub open spec fn retired_prefix(debt: spec_fn(nat, nat) -> nat, count: nat, at: nat) -> bool {
+    forall|id: nat, later: nat| id < count && at <= later ==> #[trigger] debt(id, later) == 0
+}
+
+/// Once root handoffs are complete, local progress for eligible objects
+/// suffices. The scheduler need not lower total debt at every timer tick.
+pub proof fn finite_dependency_batch_retires(
+    edge: spec_fn(nat, nat) -> bool, debt: spec_fn(nat, nat) -> nat, count: nat, start: nat,
+) -> (finished: nat)
+    requires
+        forall|parent: nat, id: nat| id < count && #[trigger] edge(parent, id) ==> parent < id,
+        forall|id: nat, a: nat, b: nat| id < count && start <= a <= b ==>
+            #[trigger] debt(id, b) <= #[trigger] debt(id, a),
+        forall|id: nat, at: nat| id < count && start <= at && debt(id, at) > 0
+            && #[trigger] parents_retired(edge, debt, id, at) ==>
+            exists|later: nat| at < later && #[trigger] debt(id, later) < debt(id, at),
+    ensures start <= finished, retired_prefix(debt, count, finished),
+    decreases count,
+{
+    if count == 0 {
+        start
+    } else {
+        let id = (count - 1) as nat;
+        let ready = finite_dependency_batch_retires(edge, debt, id, start);
+        let local = |at: nat| debt(id, at);
+        assert forall|at: nat| ready <= at && #[trigger] local(at) > 0 implies
+            exists|later: nat| at < later && #[trigger] local(later) < local(at) by {
+            assert forall|parent: nat| #[trigger] edge(parent, id) implies debt(parent, at) == 0 by {
+                assert(parent < id);
+            }
+            assert(parents_retired(edge, debt, id, at));
+        }
+        let finished = retirement_stays_complete(local, ready);
+        assert forall|member: nat, later: nat| member < count && finished <= later implies
+            #[trigger] debt(member, later) == 0 by {
+            if member == id { assert(local(later) == 0); }
+        }
+        finished
+    }
+}
+
 /// 一个已到期且身份固定的路径代际。OS 改名、unlink、rmdir 的实际结果
 /// 分别对应三个有效转换；占用、失败或中断可让状态停在任何一项。
 pub ghost enum PathCustody { Indexed, Queued, EmptyDirectory, Absent }
