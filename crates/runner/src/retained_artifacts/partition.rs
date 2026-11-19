@@ -311,6 +311,8 @@ struct ObservationOrder {
 struct Address {
     path: String,
     output: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    metadata_expires: Option<u64>,
 }
 #[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Copy, PartialEq)]
@@ -1035,23 +1037,8 @@ impl Inventory {
             return Ok(false);
         }
         let dir_id = identity(directory)?;
-        let initial = fs::symlink_metadata(directory).map_err(|e| e.to_string())?;
-        let window = self
-            .policy
-            .metadata_keep_seconds
-            .min(self.policy.max_lifetime_seconds.unwrap_or(u64::MAX));
-        if window > 0 {
-            let created = initial
-                .created()
-                .map_err(|e| e.to_string())?
-                .duration_since(UNIX_EPOCH)
-                .map_err(|e| e.to_string())?
-                .as_secs();
-            if created.saturating_add(window) > observed {
-                return Ok(false);
-            }
-        }
         let marker = directory.join("address.json");
+        let marker_id = identity(&marker)?;
         let initial_address: Address = self
             .read_metadata(&marker)?
             .ok_or("path address declaration missing")?;
@@ -1061,7 +1048,31 @@ impl Inventory {
         if initial_address.output.is_some() {
             return Ok(false);
         }
-        let marker_id = identity(&marker)?;
+        let deadline = match initial_address.metadata_expires {
+            Some(deadline) => deadline,
+            None => {
+                // Older markers only have the directory's birth time. A zero
+                // window also works on file systems that lack birth times.
+                let keep = self
+                    .policy
+                    .metadata_keep_seconds
+                    .min(self.policy.max_lifetime_seconds.unwrap_or(u64::MAX));
+                if keep == 0 {
+                    0
+                } else {
+                    fs::symlink_metadata(directory)
+                        .and_then(|entry| entry.created())
+                        .map_err(|e| e.to_string())?
+                        .duration_since(UNIX_EPOCH)
+                        .map_err(|e| e.to_string())?
+                        .as_secs()
+                        .saturating_add(keep)
+                }
+            }
+        };
+        if observed < deadline {
+            return Ok(false);
+        }
         let Some(gate) = DirectoryLease::acquire_local(directory, true, None)? else {
             return Ok(false);
         };
@@ -2225,6 +2236,7 @@ impl Inventory {
                         &Address {
                             path: path.clone(),
                             output: None,
+                            metadata_expires: Some(self.metadata_creation_expiry()?),
                         },
                     )?;
                 }
@@ -2941,13 +2953,15 @@ impl Inventory {
                     .paths
                     .get(&output.path)
                     .ok_or("publication requires addressed path exclusion")?;
-                self.write_metadata(
-                    &directory.join("address.json"),
-                    &Address {
-                        path: output.path.clone(),
-                        output: Some(output.id.clone()),
-                    },
-                )?;
+                let marker = directory.join("address.json");
+                let mut address = self
+                    .read_metadata::<Address>(&marker)?
+                    .ok_or("path declaration missing")?;
+                if address.path != output.path {
+                    return Err("path declaration address changed".into());
+                }
+                address.output = Some(output.id.clone());
+                self.write_metadata(&marker, &address)?;
             }
         }
         for role in roles.values_mut() {
@@ -3062,17 +3076,12 @@ impl Inventory {
             {
                 if let Some(directory) = gate.paths.get(&record.path) {
                     let marker = directory.join("address.json");
-                    let address = self
+                    let mut address = self
                         .read_metadata::<Address>(&marker)?
                         .ok_or("path declaration missing")?;
                     if address.output.as_deref() == Some(id.as_str()) {
-                        self.write_metadata(
-                            &marker,
-                            &Address {
-                                path: record.path.clone(),
-                                output: None,
-                            },
-                        )?;
+                        address.output = None;
+                        self.write_metadata(&marker, &address)?;
                     }
                 }
             }

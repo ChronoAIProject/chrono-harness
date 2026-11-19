@@ -360,6 +360,44 @@ fn longer_policy_keeps_the_short_object_metadata_deadline_at_retirement() {
 }
 
 #[test]
+fn lengthening_policy_does_not_extend_an_empty_path_address() {
+    if !isolated_capability_test("lengthening_policy_does_not_extend_an_empty_path_address") {
+        return;
+    }
+    let h = deadline_host();
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["metadata_keep_seconds"] = json!(0);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let path = "exports/stale";
+    let guard = retained_artifacts::retention::external_removal_guard(h.path(), path)
+        .unwrap()
+        .unwrap();
+    let address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths")
+        .join(chrono_harness::sha256(b"exports"))
+        .join(chrono_harness::sha256(b"stale"));
+
+    inventory(h.path()).maintain_explicit().unwrap();
+    guard.stable().unwrap();
+    assert!(address.join("address.json").is_file());
+    drop(guard);
+
+    policy["metadata_keep_seconds"] = json!(86400);
+    policy["max_lifetime_seconds"] = json!(86400);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let legacy = legacy_empty_address(h.path(), "previous/stale");
+    let result = inventory(h.path()).maintain_explicit().unwrap();
+    assert_eq!(result["observations"]["accounting_errors"], 0, "{result}");
+    assert!(legacy.join("address.json").is_file());
+    assert!(
+        !address.exists(),
+        "the new policy extended the original address deadline"
+    );
+}
+
+#[test]
 fn consumer_metadata_keeps_its_creation_deadline_until_release() {
     if !isolated_capability_test("consumer_metadata_keeps_its_creation_deadline_until_release") {
         return;
