@@ -22,6 +22,9 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 
 | 要做的事 | 阅读位置 |
 | --- | --- |
+| 给已登记的业务测试加一条断言 | [只改示例断言](examples/ci-host-job-gating/README.md#给已有测试加一条断言) |
+| 改动选测实现后，检查是否漏选或误选 | [用三个独立改动核对选测](examples/ci-host-job-gating/README.md#用三个独立改动核对选测) |
+| 核实某个版本是否已在下游安装并运行 | [从产品提交查到下游业务结果](docs/examples.md#从产品提交查到下游业务结果) |
 | 按固定流程开发、自动合并与发布 | [开发、集成与发布流程](docs/development.md) |
 | 生成 AI 工作指南和技能文件 | [指南生成](docs/instructions.md) |
 | 生成 CI、准备事件输入 | [CI 使用说明](docs/ci.md) |
