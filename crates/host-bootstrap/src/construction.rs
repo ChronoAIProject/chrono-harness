@@ -1,4 +1,18 @@
 //! 源码构建报告的实际生产者；所有者保护、升级和共享交接由外层现役入口编排。
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn published_slot<'a>(declared: Option<&'a str>, passed: bool) -> (slot: Option<&'a str>)
+    ensures slot == (if passed { declared } else { None }),
+{
+    if passed { declared } else { None }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Declarations, Environment},
     environment::{Failure, Prepared, Selected},
@@ -7,9 +21,13 @@ use crate::{
     source::{self, SourceIdentity, SourceObservation},
     verified_bindings::{self as policy, BuildStatus},
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{file_identity, resolve_program, retained_artifacts::retention};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     ffi::OsStr,
@@ -20,10 +38,12 @@ use std::{
 };
 
 #[derive(Debug)]
+#[cfg(not(verus_keep_ghost))]
 pub struct BuildFailure {
     pub message: String,
     pub exit_code: Option<i32>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl From<String> for BuildFailure {
     fn from(message: String) -> Self {
         Self {
@@ -32,11 +52,13 @@ impl From<String> for BuildFailure {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl From<&str> for BuildFailure {
     fn from(message: &str) -> Self {
         message.to_owned().into()
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl From<Failure> for BuildFailure {
     fn from(failure: Failure) -> Self {
         let exit_code = match &failure {
@@ -52,6 +74,7 @@ impl From<Failure> for BuildFailure {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Installed {
     pub path: String,
     pub sha256: String,
@@ -59,6 +82,7 @@ pub struct Installed {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Report {
     pub schema: String,
     pub config: String,
@@ -83,6 +107,7 @@ pub struct Report {
     pub error: Option<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Construction<'a> {
     pub root: &'a Path,
     pub profile: Profile,
@@ -99,12 +124,14 @@ pub struct Construction<'a> {
     _inputs: retention::ReadScope,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Published {
     pub original: PathBuf,
     pub report: Report,
     pub outcome: Result<(), BuildFailure>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn environment_text(environment: &Environment, key: &str) -> Result<Option<String>, String> {
     environment
         .get(OsStr::new(key))
@@ -117,6 +144,7 @@ fn environment_text(environment: &Environment, key: &str) -> Result<Option<Strin
         .transpose()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn configured(
     root: &Path,
     name: &str,
@@ -133,6 +161,7 @@ fn configured(
     resolve_program(root, program, search)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn execute(
     root: &Path,
     directory: &Path,
@@ -172,6 +201,7 @@ fn execute(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl<'a> Construction<'a> {
     pub fn begin(
         root: &'a Path,
@@ -180,13 +210,18 @@ impl<'a> Construction<'a> {
     ) -> Result<Self, BuildFailure> {
         let host_root = root.to_str().ok_or("non UTF-8 host root")?.to_owned();
         let before = source::observe(root, inherited);
-        let destination = loaded.profile.report_destination(root)?;
-        let parent = destination
-            .parent()
-            .ok_or("missing bootstrap report parent")?;
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        let parent = match &loaded.profile.report_path {
+            Some(_) => loaded
+                .profile
+                .report_destination(root)?
+                .parent()
+                .ok_or("missing bootstrap report parent")?
+                .to_owned(),
+            None => chrono_harness::no_symlink_parents(root, ".chrono-harness/state")?,
+        };
+        fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
         let inputs = retention::read_scope(root)?;
-        let directory = retention::unique_path(parent, "bootstrap-", "")?;
+        let directory = retention::unique_path(&parent, "bootstrap-", "")?;
         // 整个真实生产目录共用一次发布和子孙租约，不逐文件登记。
         let publication = retention::create_adopted(
             root,
@@ -554,12 +589,7 @@ impl<'a> Construction<'a> {
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("non UTF-8 bootstrap directory")?;
-            let destination = self.profile.report_destination(self.root)?;
-            let slot = destination
-                .strip_prefix(self.root)
-                .map_err(|e| e.to_string())?
-                .to_str()
-                .ok_or("non UTF-8 bootstrap report slot")?;
+            let slot = published_slot(self.profile.report_path.as_deref(), outcome.is_ok());
             let adopted = self.publication.is_some();
             let dependencies: Vec<String> = self
                 .report
@@ -582,16 +612,18 @@ impl<'a> Construction<'a> {
                 .collect();
             // Protect both generations and all explicitly reused originals before
             // releasing the producer or replacing the selected report bytes.
-            let _slot = if adopted && outcome.is_ok() {
-                retention::reference_report(self.root, slot, directory, &dependencies, None)?
-            } else {
-                None
+            let _slot = match (adopted, slot) {
+                (true, Some(slot)) => {
+                    retention::reference_report(self.root, slot, directory, &dependencies, None)?
+                }
+                (true, None) => {
+                    retention::Inventory::adopted(self.root)?
+                        .ok_or("bootstrap retention policy disappeared")?
+                        .dependencies_paths(directory, &dependencies)?;
+                    None
+                }
+                (false, _) => None,
             };
-            if adopted && outcome.is_err() {
-                retention::Inventory::adopted(self.root)?
-                    .ok_or("bootstrap retention policy disappeared")?
-                    .dependencies_paths(directory, &dependencies)?;
-            }
             if let Some(publication) = self.publication.take() {
                 let completion = publication
                     .complete(json!({"status":self.report.status,"error":self.report.error}));
@@ -610,12 +642,12 @@ impl<'a> Construction<'a> {
                     _ => (),
                 }
             }
-            if outcome.is_ok() {
+            if let Some(slot) = slot {
                 let mut selected = OpenOptions::new()
                     .create(true)
                     .truncate(true)
                     .write(true)
-                    .open(&destination)
+                    .open(self.profile.report_destination(self.root)?)
                     .map_err(|error| error.to_string())?;
                 selected
                     .write_all(&raw)

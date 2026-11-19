@@ -23,7 +23,7 @@
   },
   "require_tool_bindings": true,
   "tool_bindings_registry": ".chrono-harness/ci/bootstrap-toolchains.json",
-  "report_path": ".chrono-harness/state/verus-bootstrap.json",
+  "report_path": null,
   "host_environment": {
     "TMPDIR": ".chrono-harness/cache/bootstrap-owner-tooling/tmp"
   }
