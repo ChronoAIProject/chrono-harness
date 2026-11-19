@@ -448,7 +448,7 @@
     {"path":"crates/runner/src/prepared.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/worktree/src/check_inputs.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/ci/src/check_inputs.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
-    {"path":"crates/ci-tests/tests/short.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
+    {"path":"crates/ci-tests/tests/short.rs","verification":{"role":"program","roots":[{"path":"crates/ci-tests/tests/verified_literals.rs","operation":"verify.ci-literals-tests"}]},"owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
     {"path":"crates/worktree-tests/tests/check_inputs.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":"crates/runner/src/prepared_binding.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner/src/prepared_artifacts.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
