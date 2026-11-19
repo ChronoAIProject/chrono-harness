@@ -8394,6 +8394,7 @@ fn archived_run_requires_all_members_and_releases_the_exact_expired_slot() {
     archived_install_run_handoff(Some(86400));
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn archived_install_run_handoff(diagnostic_window: Option<u64>) {
     let host = deadline_host();
     let root = host.path();
@@ -8408,7 +8409,10 @@ fn archived_install_run_handoff(diagnostic_window: Option<u64>) {
     let mut policy: Value = serde_json::from_slice(&fs::read(&policy_file).unwrap()).unwrap();
     policy["producers"]["check-original"] = json!([".chrono-harness/state/fixtures/"]);
     if let Some(seconds) = diagnostic_window {
-        policy.as_object_mut().unwrap().remove("max_lifetime_seconds");
+        policy
+            .as_object_mut()
+            .unwrap()
+            .remove("max_lifetime_seconds");
         policy["diagnostic_keep_seconds"] = json!(seconds);
     }
     fs::write(policy_file, serde_json::to_vec(&policy).unwrap()).unwrap();
@@ -8475,10 +8479,20 @@ fn archived_install_run_handoff(diagnostic_window: Option<u64>) {
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     assert!(!root.join(slot).exists());
     if diagnostic_window.is_some() {
-        let born = fs::metadata(root.join(run)).unwrap().created().unwrap()
-            .duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let born = fs::metadata(root.join(run))
+            .unwrap()
+            .created()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let saved = ledger(root);
-        let run = saved["outputs"].as_array().unwrap().iter().find(|o| o["id"] == id).unwrap();
+        let run = saved["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["id"] == id)
+            .unwrap();
         assert_eq!(run["lifetime"], json!({"created_at":born,"deadline":born}));
     }
     assert!(ledger(root)["roots"].get(&role).is_none());

@@ -867,7 +867,11 @@ impl Inventory {
         }
         Ok(())
     }
-    fn lifetime_for_existing(&self, output: &Output, window: Option<u64>) -> Result<Option<Lifetime>, String> {
+    fn lifetime_for_existing(
+        &self,
+        output: &Output,
+        window: Option<u64>,
+    ) -> Result<Option<Lifetime>, String> {
         let Some(seconds) = window else {
             return Ok(output.lifetime.clone());
         };
@@ -914,10 +918,7 @@ impl Inventory {
         if created_at > now()? {
             return Err("original birth time is in the future; preserve before migration".into());
         }
-        Ok(Some(Lifetime::new(
-            created_at,
-            seconds,
-        )?))
+        Ok(Some(Lifetime::new(created_at, seconds)?))
     }
     fn save(&self, l: &Ledger, gate: &Gate) -> Result<(), String> {
         self.stable(gate)?;
@@ -1165,7 +1166,12 @@ impl Inventory {
                 let lifetimes = l
                     .outputs
                     .iter()
-                    .map(|output| Ok((output.id.clone(), self.lifetime_for_existing(output, self.policy.max_lifetime_seconds)?)))
+                    .map(|output| {
+                        Ok((
+                            output.id.clone(),
+                            self.lifetime_for_existing(output, self.policy.max_lifetime_seconds)?,
+                        ))
+                    })
                     .collect::<Result<BTreeMap<_, _>, String>>()?;
                 if publish {
                     for owner in &owners {
@@ -2342,10 +2348,8 @@ impl Inventory {
             && output.phase == "released"
             && output.expires <= now()?
         {
-            output.lifetime = self.lifetime_for_existing(
-                output,
-                Some(self.policy.diagnostic_keep_seconds),
-            )?;
+            output.lifetime =
+                self.lifetime_for_existing(output, Some(self.policy.diagnostic_keep_seconds))?;
         }
         let output = &ledger.outputs[index];
         if output.tree && archived_slot.is_none() {
