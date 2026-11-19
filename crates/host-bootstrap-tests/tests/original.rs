@@ -1,12 +1,44 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::policy::execution::operation_argument;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::execution::operation_argument;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_the_declared_argument_uses_the_current_attempt_output() {
+    let output = ".chrono-harness/state/bootstrap-current/0.output";
+    let bound = operation_argument("{operation-output}", output);
+    let literal = operation_argument("verus-download.headers", output);
+    proof {
+        reveal_strlit("{operation-output}");
+        reveal_strlit("verus-download.headers");
+        assert("{operation-output}"@.len() != "verus-download.headers"@.len());
+    }
+    assert(bound@ == output@);
+    assert(literal@ == "verus-download.headers"@);
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 #[path = "support/construction.rs"]
 mod support;
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::{
     bindings::NativePlatform, original::Producer, profile, source::SourceObservation,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::fs;
+#[cfg(not(verus_keep_ghost))]
 use support::Fixture;
 
+#[cfg(not(verus_keep_ghost))]
 fn original(fixture: &Fixture) -> Vec<u8> {
     let mut build = fixture.committed();
     build.prerequisites(&mut vec![], &mut vec![]).unwrap();
@@ -20,10 +52,12 @@ fn original(fixture: &Fixture) -> Vec<u8> {
     fs::read(published.original).unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn input(fixture: &Fixture, path: &str) -> Result<Vec<u8>, String> {
     profile::read(&fixture.root, path, b"")
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn producer(fixture: &Fixture) -> Producer {
     Producer::read(
         ".chrono-harness/ci/build.json",
@@ -36,11 +70,13 @@ fn producer(fixture: &Fixture) -> Producer {
     .unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn observed(raw: &[u8]) -> SourceObservation {
     let report: Value = serde_json::from_slice(raw).unwrap();
     serde_json::from_value(report["source"]["before"].clone()).unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn download_headers_belong_to_the_recorded_operation_directory() {
     let mut fixture = Fixture::new();
@@ -87,6 +123,7 @@ fn download_headers_belong_to_the_recorded_operation_directory() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn qualifies_actual_ordered_execution_and_binary_streams_without_rerunning_tools() {
     let mut fixture = Fixture::new();
@@ -111,6 +148,7 @@ fn qualifies_actual_ordered_execution_and_binary_streams_without_rerunning_tools
     assert_eq!(fs::read(fixture.tools.join("calls.json")).unwrap(), calls);
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn rejects_missing_or_forged_execution_source_and_selection_facts() {
     let fixture = Fixture::new();
@@ -204,6 +242,7 @@ fn rejects_missing_or_forged_execution_source_and_selection_facts() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn rejects_changed_missing_shared_or_escaping_original_streams() {
     let fixture = Fixture::new();
@@ -244,6 +283,7 @@ fn rejects_changed_missing_shared_or_escaping_original_streams() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn fixed_native_producer_data_survives_current_source_drift_without_execution_or_home_effects() {
     use chrono_host_bootstrap::source::Committed;
@@ -343,6 +383,7 @@ fn fixed_native_producer_data_survives_current_source_drift_without_execution_or
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn immutable_reader_rejects_symbolic_missing_and_mismatched_producer_identities() {
     use chrono_host_bootstrap::source::Committed;
@@ -382,6 +423,7 @@ fn immutable_reader_rejects_symbolic_missing_and_mismatched_producer_identities(
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn fixed_original_validation_binds_the_host_and_streams_without_rerunning_tools() {
     use chrono_host_bootstrap::original::validate_fixed_execution;

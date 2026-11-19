@@ -1,11 +1,31 @@
 //! 在现有生命周期所有者的限时／限量内执行登记操作，保留并实时转交原字节。
+#[cfg(verus_keep_ghost)]
+use super::identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{verified_identifiers::equal_text, verus};
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn operation_argument<'a>(declared: &'a str, output: &'a str) -> (actual: &'a str)
+    ensures actual@ == if declared@ == "{operation-output}"@ { output@ } else { declared@ },
+{
+    if equal_text(declared, "{operation-output}") { output } else { declared }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{self, Environment},
     verified_bindings as policy,
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{copy_hashed, file_identity};
+#[cfg(not(verus_keep_ghost))]
 pub use chrono_judge_registration::execution::{Method, methods};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs::OpenOptions,
     io::{self, Read, Write},
@@ -16,6 +36,7 @@ use std::{
     time::Instant,
 };
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Stream {
@@ -24,6 +45,7 @@ pub struct Stream {
     pub size: u64,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Operation {
@@ -41,6 +63,7 @@ pub struct Operation {
     pub reused_from: Option<StreamOrigin>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StreamOrigin {
@@ -48,10 +71,12 @@ pub struct StreamOrigin {
     pub sha256: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Tee<F: Write> {
     file: std::fs::File,
     forward: F,
 }
+#[cfg(not(verus_keep_ghost))]
 impl<F: Write> Write for Tee<F> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         self.file.write_all(bytes)?;
@@ -65,6 +90,7 @@ impl<F: Write> Write for Tee<F> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn stream(
     root: &Path,
     path: &Path,
@@ -90,27 +116,28 @@ fn stream(
 }
 
 /// Bind a declared side file to the same attempt and operation as its stdout.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn operation_argv(
     executable: String,
     method: &Method,
     stdout: &Path,
 ) -> Result<Vec<String>, String> {
+    let output = stdout.with_extension("output");
+    let relative = output.to_str().ok_or("non UTF-8 bootstrap output path")?;
+    chrono_harness::relative_path(relative)?;
     let mut argv = vec![executable];
-    for argument in &method.argv {
-        if argument == "{operation-output}" {
-            let output = stdout.with_extension("output");
-            let relative = output.to_str().ok_or("non UTF-8 bootstrap output path")?;
-            chrono_harness::relative_path(relative)?;
-            argv.push(relative.to_owned());
-        } else {
-            argv.push(argument.clone());
-        }
-    }
+    argv.extend(
+        method
+            .argv
+            .iter()
+            .map(|arg| operation_argument(arg, relative).to_owned()),
+    );
     Ok(argv)
 }
 
 /// 调用方供应当前宿主输出；测试使用标准 Write 接口观察同一条转交链。
 /// 返回前等待原 Child 和两条流结束；这里不另造调度、限额或租约协议。
+#[cfg(not(verus_keep_ghost))]
 pub fn run_operation(
     root: &Path,
     directory: &Path,
