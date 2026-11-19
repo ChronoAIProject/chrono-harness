@@ -7028,12 +7028,29 @@ jobs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
       run_id: ${{ steps.release_identity.outputs.run_id }}
       attempt: ${{ steps.release_identity.outputs.attempt }}
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
     steps:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
+      - name: Restore download cache cargo.release-build
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/host-release/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Bind original producing attempt
         id: release_identity
         if: ${{ always() }}
@@ -7067,6 +7084,18 @@ jobs:
           path: ".chrono-harness/cache/release-frontend/"
           if-no-files-found: error
           include-hidden-files: true
+      - name: Save download cache cargo.release-build
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/host-release/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   linux_verify_host_release_native_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_cache"]
@@ -7125,12 +7154,29 @@ jobs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
       run_id: ${{ steps.release_identity.outputs.run_id }}
       attempt: ${{ steps.release_identity.outputs.attempt }}
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
     steps:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
+      - name: Restore download cache cargo.release-build
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('crates/host-bootstrap/Cargo.lock', 'crates/host-release/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Bind original producing attempt
         id: release_identity
         if: ${{ always() }}

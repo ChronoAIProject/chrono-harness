@@ -1,10 +1,19 @@
 //! CI 配置的字面单行判断及原生缓存登记准入，供现役投影使用。
 #[cfg(verus_keep_ghost)]
+#[path = "cache.rs"]
+pub mod cache_projection;
+#[cfg(verus_keep_ghost)]
+#[path = "downloads.rs"]
+pub mod download_projection;
+#[cfg(verus_keep_ghost)]
 #[path = "gating.rs"]
 pub mod gating;
 #[cfg(verus_keep_ghost)]
 #[path = "release.rs"]
 mod release_projection;
+#[cfg(verus_keep_ghost)]
+#[path = "lib.rs"]
+pub mod single_projection;
 #[cfg(verus_keep_ghost)]
 #[path = "startup.rs"]
 pub mod startup;
@@ -168,10 +177,10 @@ pub fn cache_save_event_guard(push_only: bool) -> (guard: &'static str)
     if push_only { "github.event_name == 'push' && " } else { "" }
 }
 
-pub fn valid_download_config(schema: &str, entries: usize, environment: usize) -> (valid: bool)
-    ensures valid == (schema@ == "chrono-github-downloads/v1"@ && entries > 0 && environment > 0),
+pub fn valid_download_config(schema: &str, entries: usize) -> (valid: bool)
+    ensures valid == (schema@ == "chrono-github-downloads/v1"@ && entries > 0),
 {
-    identifiers::equal_text(schema, "chrono-github-downloads/v1") && entries > 0 && environment > 0
+    identifiers::equal_text(schema, "chrono-github-downloads/v1") && entries > 0
 }
 
 pub fn valid_download_environment(key: &str) -> (valid: bool)

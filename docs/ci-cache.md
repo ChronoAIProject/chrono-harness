@@ -174,6 +174,10 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 原生 `hashFiles` 对明确文件列表求键，平台、架构及兼容文件限定恢复范围。
 基础缓存必须使用相同路径和兼容文件；缺登记或不相容时，在写投影前失败。
 
+采用固定 Release 的宿主可以只登记下载缓存。普通 v4 检查使用 `check`，分单元的宿主在父 provider 中列出实际消费的 job。此时 `jobs` 为空，`downloads.artifact_registry` 指向产物登记，可省去编译计划所需的程序和配置。`environment` 可以为空。缓存键由平台、架构、安装锁及登记的输入文件限定。恢复后运行原安装入口，由锁定的 Release 清单核对已有工具的摘要、大小与执行权限，并补齐缺失或校验失败的资产。安装回执和检查报告由当次运行产生。
+
+本仓两个发布前端恢复普通 CI 的 `cargo.release-build` 兼容域。Linux 前端保存该平台的下载资料，macOS 从普通发布构建检查保存的资料恢复。后续编译缓存继续由各发布作业的实际操作负责。
+
 本仓把初始 launcher、受保护 bootstrap 和业务 Cargo 调用统一到工作树自己的
 `.chrono-harness/cache/bootstrap-owner-tooling/cargo`。缓存只运输包归档、索引、源码及 Git 依赖资料，
 不运输 Cargo 配置、凭据或本轮结果。各 job 保存自己的依赖集合；首次未命中时可恢复 detector 的基础依赖。
