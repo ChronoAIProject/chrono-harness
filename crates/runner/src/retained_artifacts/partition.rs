@@ -1391,9 +1391,10 @@ impl Inventory {
             return Ok(false);
         }
         let mut role = initial;
-        if role.metadata_expires > observed
-            && let Some(window) = self.policy.max_lifetime_seconds
-        {
+        if role.metadata_expires > observed {
+            let Some(window) = self.policy.max_lifetime_seconds else {
+                return Ok(false);
+            };
             // Older writers renewed this deadline on membership changes.
             // The validated physical directory identifies the role generation.
             let metadata = fs::symlink_metadata(directory).map_err(|e| e.to_string())?;
