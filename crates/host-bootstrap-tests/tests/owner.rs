@@ -13,6 +13,10 @@ use vstd::prelude::*;
 verus! {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn stage_recovery_requires_the_same_source_and_installed_bytes() {
+    proof {
+        reveal_strlit("stage"); reveal_strlit("earlier");
+        reveal_strlit("first"); reveal_strlit("later");
+    }
     let exact = stage_owner::stage_reuse_matches("stage", "first", "stage", "first");
     let other_slot = stage_owner::stage_reuse_matches("earlier", "first", "stage", "first");
     let other_digest = stage_owner::stage_reuse_matches("stage", "later", "stage", "first");
