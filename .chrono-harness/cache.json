@@ -846,11 +846,6 @@
       "path": ".chrono-harness/release/consume.sh",
       "presence": "present"
     },
-    "release.config": {
-      "kind": "file",
-      "path": ".chrono-harness/release/build.json",
-      "presence": "present"
-    },
     "check.environment": {
       "kind": "json-value",
       "path": ".chrono-harness/ci/check.json",
@@ -908,6 +903,296 @@
       "edges": [
         "compile"
       ]
+    },
+    "release.schema": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/schema"
+    },
+    "release.rust-toolchain": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/rust_toolchain"
+    },
+    "release.rust-components": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/rust_components"
+    },
+    "release.rust-incremental": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/rust_incremental"
+    },
+    "release.tools": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/tools"
+    },
+    "release.frontend.linux": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/native_frontends/linux"
+    },
+    "release.unit.build_runner": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/0"
+    },
+    "release.unit.build_instructions": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/1"
+    },
+    "release.unit.build_judge_ci": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/2"
+    },
+    "release.unit.build_ci": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/3"
+    },
+    "release.unit.build_judge_registration": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/4"
+    },
+    "release.unit.build_judge_filemap": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/5"
+    },
+    "release.unit.build_judge_routes": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/6"
+    },
+    "release.unit.build_judge_projects": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/7"
+    },
+    "release.unit.build_judge_cost": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/8"
+    },
+    "release.unit.build_judge_mixed": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/9"
+    },
+    "release.unit.build_judge_workflow": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/10"
+    },
+    "release.unit.build_inputs": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/11"
+    },
+    "release.unit.build_distribution": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/12"
+    },
+    "release.unit.build_worktree": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/13"
+    },
+    "release.unit.verify_distribution_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/14"
+    },
+    "release.projects": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/projects"
+    },
+    "release.action.test.distribution-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/27/actions/execute"
+    },
+    "release.unit.verify_worktree_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/15"
+    },
+    "release.action.test.worktree-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/29/actions/execute"
+    },
+    "release.staging.release-plan": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/consumer_staging/release_plan"
+    },
+    "release.staging.host-config": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/consumer_staging/host_config"
+    },
+    "release.staging.chrono-ci": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/consumer_staging/bindings/3"
+    },
+    "release.unit.verify_runner_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/17"
+    },
+    "release.action.test.runner-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/3/actions/execute"
+    },
+    "release.unit.verify_inputs_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/18"
+    },
+    "release.action.test.inputs-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/25/actions/execute"
+    },
+    "release.unit.verify_ci_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/19"
+    },
+    "release.action.test.ci-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/9/actions/execute"
+    },
+    "release.unit.verify_judge_ci_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/20"
+    },
+    "release.action.test.judge-ci-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/7/actions/execute"
+    },
+    "release.unit.verify_judge_registration_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/21"
+    },
+    "release.action.test.judge-registration-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/11/actions/execute"
+    },
+    "release.unit.verify_judge_projects_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/22"
+    },
+    "release.action.test.judge-projects-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/17/actions/execute"
+    },
+    "release.unit.verify_judge_workflow_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/23"
+    },
+    "release.action.test.judge-workflow-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/23/actions/execute"
+    },
+    "release.unit.verify_instructions_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/24"
+    },
+    "release.action.test.instructions-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/5/actions/execute"
+    },
+    "release.unit.verify_judge_filemap_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/25"
+    },
+    "release.action.test.judge-filemap-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/13/actions/execute"
+    },
+    "release.unit.verify_judge_routes_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/26"
+    },
+    "release.action.test.judge-routes-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/15/actions/execute"
+    },
+    "release.unit.verify_judge_cost_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/27"
+    },
+    "release.action.test.judge-cost-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/19/actions/execute"
+    },
+    "release.unit.verify_judge_mixed_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/28"
+    },
+    "release.action.test.judge-mixed-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/21/actions/execute"
+    },
+    "release.unit.verify_diagnostics_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/30"
+    },
+    "release.action.test.diagnostics-tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/31/actions/execute"
+    },
+    "release.unit.build_cache": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/31"
+    },
+    "release.unit.verify_cache_tests": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/32"
+    },
+    "release.frontend.macos": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/native_frontends/macos"
+    },
+    "release.unit.build_pr": {
+      "kind": "json-value",
+      "path": ".chrono-harness/release/build.json",
+      "pointer": "/units/36"
     }
   },
   "artifacts": {
@@ -2035,7 +2320,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_runner"
       ],
       "source_inputs": [
         "runner.sources"
@@ -2075,7 +2366,13 @@
         "instructions.manifest",
         "instructions.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_instructions"
       ],
       "source_inputs": [
         "instructions.sources"
@@ -2129,7 +2426,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_judge_ci"
       ],
       "source_inputs": [
         "judge-ci.sources"
@@ -2185,7 +2488,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_ci"
       ],
       "source_inputs": [
         "ci.sources"
@@ -2229,7 +2538,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_judge_registration"
       ],
       "source_inputs": [
         "judge-registration.sources"
@@ -2277,7 +2592,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_judge_filemap"
       ],
       "source_inputs": [
         "judge-filemap.sources"
@@ -2327,7 +2648,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_judge_routes"
       ],
       "source_inputs": [
         "judge-routes.sources"
@@ -2379,7 +2706,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_judge_projects"
       ],
       "source_inputs": [
         "judge-projects.sources"
@@ -2429,7 +2762,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_judge_cost"
       ],
       "source_inputs": [
         "judge-cost.sources"
@@ -2475,7 +2814,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_judge_mixed"
       ],
       "source_inputs": [
         "judge-mixed.sources"
@@ -2529,7 +2874,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_judge_workflow"
       ],
       "source_inputs": [
         "judge-workflow.sources"
@@ -2581,7 +2932,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_inputs"
       ],
       "source_inputs": [
         "inputs.sources"
@@ -2625,7 +2982,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_distribution"
       ],
       "source_inputs": [
         "distribution.sources"
@@ -2681,7 +3044,13 @@
         "worktree.manifest",
         "worktree.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_worktree"
       ],
       "source_inputs": [
         "worktree.sources"
@@ -2727,7 +3096,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_distribution_tests",
+        "release.projects",
+        "release.action.test.distribution-tests"
       ],
       "source_inputs": [
         "distribution-tests.sources"
@@ -2785,7 +3162,18 @@
         "worktree-tests.manifest",
         "worktree-tests.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_worktree_tests",
+        "release.projects",
+        "release.action.test.worktree-tests",
+        "release.staging.release-plan",
+        "release.staging.host-config",
+        "release.staging.chrono-ci"
       ],
       "source_inputs": [
         "worktree-tests.sources"
@@ -2829,7 +3217,15 @@
         "runner-tests.manifest",
         "runner-tests.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_runner_tests",
+        "release.projects",
+        "release.action.test.runner-tests"
       ],
       "source_inputs": [
         "runner-tests.sources"
@@ -2885,7 +3281,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config",
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_inputs_tests",
+        "release.projects",
+        "release.action.test.inputs-tests",
         "judge-projects.manifest",
         "judge-projects.lock",
         "judge-workflow.manifest",
@@ -2947,7 +3351,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_ci_tests",
+        "release.projects",
+        "release.action.test.ci-tests"
       ],
       "source_inputs": [
         "ci-tests.sources"
@@ -3003,7 +3415,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_judge_ci_tests",
+        "release.projects",
+        "release.action.test.judge-ci-tests"
       ],
       "source_inputs": [
         "judge-ci-tests.sources"
@@ -3049,7 +3469,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_judge_registration_tests",
+        "release.projects",
+        "release.action.test.judge-registration-tests"
       ],
       "source_inputs": [
         "judge-registration-tests.sources"
@@ -3105,7 +3533,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_judge_projects_tests",
+        "release.projects",
+        "release.action.test.judge-projects-tests"
       ],
       "source_inputs": [
         "judge-projects-tests.sources"
@@ -3163,7 +3599,18 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config",
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_judge_workflow_tests",
+        "release.projects",
+        "release.action.test.judge-workflow-tests",
+        "release.staging.release-plan",
+        "release.staging.host-config",
+        "release.staging.chrono-ci",
         "inputs.manifest",
         "inputs.lock"
       ],
@@ -3207,7 +3654,15 @@
         "instructions-tests.manifest",
         "instructions-tests.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_instructions_tests",
+        "release.projects",
+        "release.action.test.instructions-tests"
       ],
       "source_inputs": [
         "instructions-tests.sources"
@@ -3257,7 +3712,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config",
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_judge_filemap_tests",
+        "release.projects",
+        "release.action.test.judge-filemap-tests",
         "judge-projects.manifest",
         "judge-projects.lock",
         "judge-routes.manifest",
@@ -3313,7 +3776,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_judge_routes_tests",
+        "release.projects",
+        "release.action.test.judge-routes-tests"
       ],
       "source_inputs": [
         "judge-routes-tests.sources"
@@ -3365,7 +3836,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_judge_cost_tests",
+        "release.projects",
+        "release.action.test.judge-cost-tests"
       ],
       "source_inputs": [
         "judge-cost-tests.sources"
@@ -3417,7 +3896,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_judge_mixed_tests",
+        "release.projects",
+        "release.action.test.judge-mixed-tests"
       ],
       "source_inputs": [
         "judge-mixed-tests.sources"
@@ -3459,7 +3946,15 @@
         "diagnostics-tests.manifest",
         "diagnostics-tests.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_diagnostics_tests",
+        "release.projects",
+        "release.action.test.diagnostics-tests"
       ],
       "source_inputs": [
         "diagnostics-tests.sources"
@@ -3503,7 +3998,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_cache"
       ],
       "source_inputs": [
         "cache.sources"
@@ -3549,7 +4050,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.verify_cache_tests",
+        "release.projects",
+        "cache-tests.producer"
       ],
       "source_inputs": [
         "cache-tests.sources"
@@ -3592,7 +4101,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_runner"
       ],
       "source_inputs": [
         "runner.sources"
@@ -3633,7 +4148,13 @@
         "instructions.manifest",
         "instructions.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_instructions"
       ],
       "source_inputs": [
         "instructions.sources"
@@ -3688,7 +4209,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_judge_ci"
       ],
       "source_inputs": [
         "judge-ci.sources"
@@ -3745,7 +4272,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_ci"
       ],
       "source_inputs": [
         "ci.sources"
@@ -3790,7 +4323,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_judge_registration"
       ],
       "source_inputs": [
         "judge-registration.sources"
@@ -3839,7 +4378,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_judge_filemap"
       ],
       "source_inputs": [
         "judge-filemap.sources"
@@ -3890,7 +4435,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_judge_routes"
       ],
       "source_inputs": [
         "judge-routes.sources"
@@ -3943,7 +4494,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_judge_projects"
       ],
       "source_inputs": [
         "judge-projects.sources"
@@ -3994,7 +4551,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_judge_cost"
       ],
       "source_inputs": [
         "judge-cost.sources"
@@ -4041,7 +4604,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_judge_mixed"
       ],
       "source_inputs": [
         "judge-mixed.sources"
@@ -4096,7 +4665,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_judge_workflow"
       ],
       "source_inputs": [
         "judge-workflow.sources"
@@ -4149,7 +4724,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_inputs"
       ],
       "source_inputs": [
         "inputs.sources"
@@ -4194,7 +4775,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_distribution"
       ],
       "source_inputs": [
         "distribution.sources"
@@ -4251,7 +4838,13 @@
         "worktree.manifest",
         "worktree.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_worktree"
       ],
       "source_inputs": [
         "worktree.sources"
@@ -4298,7 +4891,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_distribution_tests",
+        "release.projects",
+        "release.action.test.distribution-tests"
       ],
       "source_inputs": [
         "distribution-tests.sources"
@@ -4357,7 +4958,18 @@
         "worktree-tests.manifest",
         "worktree-tests.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_worktree_tests",
+        "release.projects",
+        "release.action.test.worktree-tests",
+        "release.staging.release-plan",
+        "release.staging.host-config",
+        "release.staging.chrono-ci"
       ],
       "source_inputs": [
         "worktree-tests.sources"
@@ -4402,7 +5014,15 @@
         "runner-tests.manifest",
         "runner-tests.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_runner_tests",
+        "release.projects",
+        "release.action.test.runner-tests"
       ],
       "source_inputs": [
         "runner-tests.sources"
@@ -4459,7 +5079,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config",
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_inputs_tests",
+        "release.projects",
+        "release.action.test.inputs-tests",
         "judge-projects.manifest",
         "judge-projects.lock",
         "judge-workflow.manifest",
@@ -4522,7 +5150,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_ci_tests",
+        "release.projects",
+        "release.action.test.ci-tests"
       ],
       "source_inputs": [
         "ci-tests.sources"
@@ -4579,7 +5215,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_judge_ci_tests",
+        "release.projects",
+        "release.action.test.judge-ci-tests"
       ],
       "source_inputs": [
         "judge-ci-tests.sources"
@@ -4626,7 +5270,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_judge_registration_tests",
+        "release.projects",
+        "release.action.test.judge-registration-tests"
       ],
       "source_inputs": [
         "judge-registration-tests.sources"
@@ -4683,7 +5335,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_judge_projects_tests",
+        "release.projects",
+        "release.action.test.judge-projects-tests"
       ],
       "source_inputs": [
         "judge-projects-tests.sources"
@@ -4742,7 +5402,18 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config",
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_judge_workflow_tests",
+        "release.projects",
+        "release.action.test.judge-workflow-tests",
+        "release.staging.release-plan",
+        "release.staging.host-config",
+        "release.staging.chrono-ci",
         "inputs.manifest",
         "inputs.lock"
       ],
@@ -4787,7 +5458,15 @@
         "instructions-tests.manifest",
         "instructions-tests.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_instructions_tests",
+        "release.projects",
+        "release.action.test.instructions-tests"
       ],
       "source_inputs": [
         "instructions-tests.sources"
@@ -4838,7 +5517,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config",
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_judge_filemap_tests",
+        "release.projects",
+        "release.action.test.judge-filemap-tests",
         "judge-projects.manifest",
         "judge-projects.lock",
         "judge-routes.manifest",
@@ -4895,7 +5582,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_judge_routes_tests",
+        "release.projects",
+        "release.action.test.judge-routes-tests"
       ],
       "source_inputs": [
         "judge-routes-tests.sources"
@@ -4948,7 +5643,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_judge_cost_tests",
+        "release.projects",
+        "release.action.test.judge-cost-tests"
       ],
       "source_inputs": [
         "judge-cost-tests.sources"
@@ -5001,7 +5704,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_judge_mixed_tests",
+        "release.projects",
+        "release.action.test.judge-mixed-tests"
       ],
       "source_inputs": [
         "judge-mixed-tests.sources"
@@ -5044,7 +5755,15 @@
         "diagnostics-tests.manifest",
         "diagnostics-tests.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_diagnostics_tests",
+        "release.projects",
+        "release.action.test.diagnostics-tests"
       ],
       "source_inputs": [
         "diagnostics-tests.sources"
@@ -5089,7 +5808,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_cache"
       ],
       "source_inputs": [
         "cache.sources"
@@ -5136,7 +5861,15 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.verify_cache_tests",
+        "release.projects",
+        "cache-tests.producer"
       ],
       "source_inputs": [
         "cache-tests.sources"
@@ -5606,7 +6339,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.linux",
+        "release.unit.build_pr"
       ],
       "source_inputs": [
         "pr.sources"
@@ -5651,7 +6390,13 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.schema",
+        "release.rust-toolchain",
+        "release.rust-components",
+        "release.rust-incremental",
+        "release.tools",
+        "release.frontend.macos",
+        "release.unit.build_pr"
       ],
       "source_inputs": [
         "pr.sources"
