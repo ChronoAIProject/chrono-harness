@@ -2351,7 +2351,7 @@ impl Inventory {
                 if verify(&archived_slot)? == slot.identity
                     || !self
                         .verified_archive_members(&ledger, slot, survivor_root)?
-                        .contains(&run_report)
+                        .contains(run_report.as_str())
                 {
                     return Err("archived report must include the sealed run and an independent copy of its slot".into());
                 }
@@ -2448,18 +2448,21 @@ impl Inventory {
             );
         }
         let members = self.verified_archive_members(ledger, slot, archive)?;
-        if originals.iter().any(|path| !members.contains(path)) {
+        if originals
+            .iter()
+            .any(|path| !members.contains(path.as_str()))
+        {
             return Err("archived check does not cover its published inputs".into());
         }
         Ok((sha256(&pointer_raw), pointer_raw.len() as u64))
     }
 
-    fn verified_archive_members(
+    fn verified_archive_members<'a>(
         &self,
-        ledger: &Ledger,
+        ledger: &'a Ledger,
         slot: &ArchivedSlot,
         archive: &Path,
-    ) -> Result<BTreeSet<String>, String> {
+    ) -> Result<BTreeSet<&'a str>, String> {
         let mut members = BTreeSet::new();
         let mut source_ids = BTreeSet::from([slot.identity.clone()]);
         let mut archived_ids =
@@ -2483,7 +2486,7 @@ impl Inventory {
                             || !copy.identity.ends_with(":file")))
                     || source.bytes != copy.bytes
                     || entry.path == slot.path
-                    || !members.insert(&entry.path)
+                    || !members.insert(entry.path.as_str())
                 {
                     return Err(format!(
                         "archived entry identity/type differs: {}",

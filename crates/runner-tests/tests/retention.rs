@@ -8448,11 +8448,11 @@ fn archived_run_requires_all_members_and_releases_the_exact_expired_slot() {
     fs::write(survivor.join(&stream), b"changed contents!").unwrap();
     reject();
     fs::copy(root.join(&stream), survivor.join(&stream)).unwrap();
-    fs::remove_file(survivor.join(slot)).unwrap();
-    fs::hard_link(root.join(&report), survivor.join(slot)).unwrap();
+    fs::remove_file(survivor.join(&report)).unwrap();
+    fs::hard_link(root.join(slot), survivor.join(&report)).unwrap();
     reject();
-    fs::remove_file(survivor.join(slot)).unwrap();
-    fs::write(survivor.join(slot), raw).unwrap();
+    fs::remove_file(survivor.join(&report)).unwrap();
+    fs::copy(root.join(&report), survivor.join(&report)).unwrap();
     let result = consumer_call(root, request.clone());
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     assert!(!root.join(slot).exists());
