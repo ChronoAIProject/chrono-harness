@@ -13,6 +13,22 @@ mod identifiers;
 verus! {
 
 #[cfg(verus_keep_ghost)]
+fn another_operations_compiler_output_cannot_be_claimed(flat: bool, canonical: bool) {
+    let owned = state::operation_io::owned_compiler_output(false, flat, canonical);
+    assert(!owned);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn compiler_release_needs_success_join_and_operation_ownership() {
+    let completed = state::can_release_compiler_files("passed", true, true);
+    let failed = state::can_release_compiler_files("error", true, true);
+    let incomplete = state::can_release_compiler_files("passed", false, true);
+    let external = state::can_release_compiler_files("passed", true, false);
+    proof { reveal_strlit("passed"); reveal_strlit("error"); }
+    assert(completed && !failed && !incomplete && !external);
+}
+
+#[cfg(verus_keep_ghost)]
 fn any_terminal_process_is_known_without_a_status_success_claim(status: &str) {
     let row = state::OperationObservation { status, process_terminal: Some(true) };
     let known = state::terminal(&row);
@@ -125,4 +141,94 @@ fn original_identity_requires_the_complete_digest_and_exact_length() {
     assert(unbound.is_ok());
 }
 
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn joined_compiler_retires_only_its_own_outputs_after_writing_the_receipt() {
+    use chrono_judge_projects::execute;
+    use chrono_judge_registration::execution::{Method, Plan};
+    use chrono_judge_routes::prepare;
+    use serde_json::json;
+    use std::collections::BTreeMap;
+
+    for (output, create_library, passes, retains_files) in [
+        ("{operation_state}/compile.rlib", true, true, false),
+        ("{operation_state}/compile.rlib", false, false, true),
+        ("external.rlib", true, true, true),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let compiler = Method {
+            operation: "compile".into(),
+            owner: "script:compiler".into(),
+            tool: "compiler".into(),
+            argv: vec![
+                "--crate-type=lib",
+                "--no-cheating",
+                "--no-external-by-default",
+                "--num-threads",
+                "2",
+                "--output-json",
+                "--compile",
+                &format!("--emit=link={output},dep-info={output}.d"),
+                "fixture.rs",
+                "-o",
+                output,
+                "-Zchecksum-hash-algorithm=sha256",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+            output_contract: Some(chrono_harness::verified_verifier::OutputContract {
+                version: "fixture".into(),
+                commit: "fixture".into(),
+            }),
+        };
+        let test = "test:compile".to_owned();
+        let operation = "compile".to_owned();
+        let execution = prepare(
+            dir.path(), json!({"operation_state":".chrono-harness/state/compile-run"}),
+            &[test.clone()].into_iter().collect(),
+            &BTreeMap::from([(test.clone(), Plan {
+                operations: vec![operation.clone()], timeout_seconds: 10, output_limit_bytes: 4096,
+                operation_bounds: BTreeMap::new(),
+            })]),
+            &BTreeMap::from([(operation.clone(), vec![compiler])]),
+            &BTreeMap::from([(test, operation)]),
+            &json!([{"id":"compiler","program":env!("CARGO_BIN_EXE_chrono-projects-test-compiler"),
+                "version_argv":["--version"],"expected_version":"chrono-judge-routes-test-tool 0.1.0"}]),
+            BTreeMap::new(), &BTreeMap::new(),
+        ).unwrap();
+        if create_library {
+            std::fs::write(dir.path().join("library.fixture"), b"library").unwrap();
+        }
+        let results = execute(&execution).unwrap();
+        let row = &results.executed[0];
+        assert_eq!(results.passed(), passes, "{:?}", row.error);
+        let receipt = row.receipt.as_ref().unwrap();
+        let path = output.replace("{operation_state}", ".chrono-harness/state/compile-run");
+        assert_eq!(execution.operations[0].method.argv[10], path);
+        assert_eq!(dir.path().join(format!("{path}.d")).exists(), retains_files);
+        assert_eq!(
+            dir.path().join(&path).exists(),
+            retains_files && create_library
+        );
+        let original = row.original.as_ref().unwrap();
+        let raw = std::fs::read(dir.path().join(original["path"].as_str().unwrap())).unwrap();
+        assert_eq!(chrono_harness::sha256(&raw), original["sha256"]);
+        let stored: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(
+            stored["receipt"]["compiler_dependency"],
+            json!(receipt.compiler_dependency)
+        );
+        assert_eq!(
+            stored["receipt"]["compiler_artifact"],
+            json!(receipt.compiler_artifact)
+        );
+        assert_eq!(
+            chrono_judge_routes::compare(&execution, &execution.operations[0], Some(receipt))
+                .is_ok(),
+            passes
+        );
+    }
 }
