@@ -323,15 +323,18 @@ fn lengthening_policy_does_not_extend_an_empty_path_address() {
         .join(chrono_harness::sha256(b"exports"))
         .join(chrono_harness::sha256(b"stale"));
 
-    policy["metadata_keep_seconds"] = json!(86400);
-    policy["max_lifetime_seconds"] = json!(86400);
-    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
-    let owner = inventory(h.path());
-    owner.maintain_explicit().unwrap();
+    inventory(h.path()).maintain_explicit().unwrap();
     guard.stable().unwrap();
     assert!(address.join("address.json").is_file());
     drop(guard);
-    owner.maintain_explicit().unwrap();
+
+    policy["metadata_keep_seconds"] = json!(86400);
+    policy["max_lifetime_seconds"] = json!(86400);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let legacy = legacy_empty_address(h.path(), "previous/stale");
+    let result = inventory(h.path()).maintain_explicit().unwrap();
+    assert_eq!(result["observations"]["accounting_errors"], 0, "{result}");
+    assert!(legacy.join("address.json").is_file());
     assert!(
         !address.exists(),
         "the new policy extended the original address deadline"
