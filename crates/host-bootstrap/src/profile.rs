@@ -1,12 +1,33 @@
 //! 当前宿主启动配置与构建操作的预检；只读取显式输入，不选择或启动进程。
+#[cfg(verus_keep_ghost)]
+use super::identifiers as stage_identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as stage_identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn state_input_guard(prefix: &[u8]) -> (required: bool)
+    ensures required == (prefix@ == b".chrono-harness/state/"@),
+{
+    stage_identifiers::equal_bytes(prefix, b".chrono-harness/state/")
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Declarations, Environment, NativePlatform},
     environment::Prepared,
     execution::{Method, methods},
     verified_bindings as policy,
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{json, no_symlink_parents, sha256};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     fs,
@@ -15,6 +36,7 @@ use std::{
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Installation {
     pub source: String,
     pub destination: String,
@@ -22,6 +44,7 @@ pub struct Installation {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Participation {
     pub coordinator_root: String,
     pub program: String,
@@ -31,6 +54,7 @@ pub struct Participation {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Entrypoint {
     pub tool: String,
     pub script: String,
@@ -38,6 +62,7 @@ pub struct Entrypoint {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct OwnerStage {
     pub source: String,
     pub selected: String,
@@ -45,6 +70,7 @@ pub struct OwnerStage {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Profile {
     pub schema: String,
     pub projects: String,
@@ -69,6 +95,7 @@ pub struct Profile {
     pub reuse_owner_operations: Vec<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn path(root: &Path, declared: &str, prefix: &[u8]) -> Result<PathBuf, String> {
     if !policy::host_path(declared.as_bytes(), prefix) {
         return Err(format!("invalid bootstrap path: {declared}"));
@@ -76,11 +103,25 @@ pub fn path(root: &Path, declared: &str, prefix: &[u8]) -> Result<PathBuf, Strin
     no_symlink_parents(root, declared)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn read(root: &Path, declared: &str, prefix: &[u8]) -> Result<Vec<u8>, String> {
-    let _original = if prefix == b".chrono-harness/state/" {
-        chrono_harness::retained_artifacts::retention::read_guard(root, declared)?
-    } else {
-        None
+    read_original(root, declared, prefix, None)
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn read_original(
+    root: &Path,
+    declared: &str,
+    prefix: &[u8],
+    report_slot: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    use chrono_harness::retained_artifacts::retention;
+    let _original = match report_slot {
+        Some(slot) => {
+            retention::consumer_read_guard(root, declared, &retention::current_report_role(slot))?
+        }
+        None if state_input_guard(prefix) => retention::read_guard(root, declared)?,
+        None => None,
     };
     let file = path(root, declared, prefix)?;
     if !file.is_file() {
@@ -89,6 +130,7 @@ pub fn read(root: &Path, declared: &str, prefix: &[u8]) -> Result<Vec<u8>, Strin
     fs::read(file).map_err(|error| error.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Profile {
     /// 解析固定 producer 数据时不查询当前工作树，也不选择其可写环境。
     pub fn parse(bytes: &[u8]) -> Result<Self, String> {
@@ -180,6 +222,7 @@ impl Profile {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Loaded {
     pub profile: Profile,
     pub config: String,
@@ -189,6 +232,7 @@ pub struct Loaded {
     pub declarations: Declarations,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Loaded {
     pub fn read(
         root: &Path,

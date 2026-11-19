@@ -1,4 +1,22 @@
 //! owner 原始构建／发布资格的候选读取器；发布和租约仍由现有生命周期所有者执行。
+#[cfg(verus_keep_ghost)]
+use super::identifiers as stage_identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as stage_identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn stage_reuse_matches(path: &str, digest: &str, adopted_path: &str, adopted_digest: &str) -> (matches: bool)
+    ensures matches == (path@ == adopted_path@ && digest@ == adopted_digest@),
+{
+    stage_identifiers::equal_text(path, adopted_path) && stage_identifiers::equal_text(digest, adopted_digest)
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Environment, NativePlatform},
     construction::Report,
@@ -6,20 +24,27 @@ use crate::{
     source,
     verified_bindings::{self as policy, owner_publication as publication},
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{decode, file_identity, json, retained_artifacts::retention, sha256};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
+#[cfg(not(verus_keep_ghost))]
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ffi::OsStr,
     fs,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub const STAGES: &str = ".chrono-harness/bin/owner-stages/";
+#[cfg(not(verus_keep_ghost))]
 pub const CURRENT: &str = ".chrono-harness/state/bootstrap-owner-current.json";
 
+#[cfg(not(verus_keep_ghost))]
 pub fn coordinator_root(
     root: &Path,
     profile: &Profile,
@@ -61,6 +86,7 @@ pub fn coordinator_root(
     Ok(path)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn check_shared_install(
     root: &Path,
     environment: &Environment,
@@ -112,12 +138,14 @@ pub fn check_shared_install(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Reuse {
     pub operations: BTreeMap<String, crate::execution::Operation>,
     pub source: Option<PathBuf>,
 }
 
 /// 原操作只沿用当前 adoption 指向的原始构建，保留 PID、退出和两流，不伪造第二次执行。
+#[cfg(not(verus_keep_ghost))]
 pub fn reuse_construction(
     root: &Path,
     environment: &Environment,
@@ -143,26 +171,25 @@ pub fn reuse_construction(
     if current.get("source_commit").and_then(Value::as_str) != observed.commit.as_deref() {
         return Err("owner construction must belong to the current candidate".into());
     }
-    qualified_publication(
+    let qualification = qualified_publication(
         root,
         environment,
         native,
         &current,
         &profile.participation.program,
+        profile
+            .report_path
+            .as_deref()
+            .unwrap_or(".chrono-harness/state/bootstrap.json"),
     )?;
     let qualified = stage_report(
         root,
         environment,
         native,
-        current["stage_result"]
-            .as_str()
-            .ok_or("owner stage result is missing")?,
-        Some(
-            current["stage_sha256"]
-                .as_str()
-                .ok_or("owner stage digest is missing")?,
-        ),
+        &qualification.path,
+        Some(&qualification.sha256),
         None,
+        qualification.report_slot.as_deref(),
     )?;
     let previous = serde_json::to_value(&qualified.profile).map_err(|error| error.to_string())?;
     let candidate = serde_json::to_value(profile).map_err(|error| error.to_string())?;
@@ -210,8 +237,8 @@ pub fn reuse_construction(
             ));
         }
         row.reused_from = Some(crate::execution::StreamOrigin {
-            path: current["stage_result"].as_str().unwrap().into(),
-            sha256: current["stage_sha256"].as_str().unwrap().into(),
+            path: qualification.path.clone(),
+            sha256: qualification.sha256.clone(),
         });
         reused.insert(name.clone(), row);
     }
@@ -224,28 +251,34 @@ pub fn reuse_construction(
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Reference {
     pub path: String,
     pub sha256: String,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg(not(verus_keep_ghost))]
 pub struct ProducerSource {
     pub commit: String,
     pub tree: String,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Qualification {
     pub schema: &'static str,
     pub path: String,
     pub sha256: String,
     pub source: ProducerSource,
     pub selected: publication::Binding,
+    #[serde(skip)]
+    pub(crate) report_slot: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Publication {
     schema: String,
     stage: publication::Stage,
@@ -256,6 +289,7 @@ struct Publication {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Adoption {
     schema: String,
     source_commit: String,
@@ -270,6 +304,7 @@ struct Adoption {
     receipt: Reference,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct QualifiedStage {
     pub report: Report,
     pub profile: Profile,
@@ -277,6 +312,7 @@ pub struct QualifiedStage {
     pub raw: Vec<u8>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn file_binding(path: &Path) -> Result<publication::Binding, String> {
     let identity = chrono_harness::ownership::identity(path)?;
     let before = fs::metadata(path).map_err(|error| error.to_string())?;
@@ -302,6 +338,7 @@ pub fn file_binding(path: &Path) -> Result<publication::Binding, String> {
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn require_capabilities(root: &Path, environment: &Environment) -> Result<(), String> {
     if environment
         .get(OsStr::new("CHRONO_WORKTREE_BOOTSTRAP"))
@@ -317,6 +354,7 @@ pub fn require_capabilities(root: &Path, environment: &Environment) -> Result<()
 }
 
 /// 只构造独立 stage，不改选中 owner；独占发布仍由原 Rust 生命周期入口执行。
+#[cfg(not(verus_keep_ghost))]
 pub fn stage(
     root: &Path,
     environment: &Environment,
@@ -390,6 +428,7 @@ pub fn stage(
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn stage_report(
     root: &Path,
     environment: &Environment,
@@ -397,8 +436,14 @@ pub fn stage_report(
     reference: &str,
     expected_sha: Option<&str>,
     producer_commit: Option<&str>,
+    report_slot: Option<&str>,
 ) -> Result<QualifiedStage, String> {
-    let raw = profile::read(root, reference, b".chrono-harness/state/bootstrap-")?;
+    let raw = profile::read_original(
+        root,
+        reference,
+        b".chrono-harness/state/bootstrap-",
+        report_slot,
+    )?;
     if let Some(expected) = expected_sha {
         if !chrono_harness::verified_identifiers::equal_text(&sha256(&raw), expected) {
             return Err("owner stage original report differs".into());
@@ -442,7 +487,7 @@ pub fn stage_report(
     }
     let producer = crate::original::Producer::read(&decoded.config, native, &input)?;
     let report = producer.validate(&raw, &observed, &|path| {
-        profile::read(root, path, b".chrono-harness/state/")
+        profile::read_original(root, path, b".chrono-harness/state/", report_slot)
     })?;
     let stage: publication::Stage = serde_json::from_value(
         report
@@ -473,11 +518,13 @@ pub fn stage_report(
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn qualification(
     reference: &str,
     raw: &[u8],
     report: &Report,
     selected: publication::Binding,
+    report_slot: Option<&str>,
 ) -> Result<Qualification, String> {
     let identity = report
         .source
@@ -500,22 +547,98 @@ fn qualification(
                 .clone(),
         },
         selected,
+        report_slot: report_slot.map(str::to_owned),
     })
 }
 
+// Older adoptions could name a rotating slot. The installed report's reused
+// operations record the original stream paths and the exact stage digest.
+#[cfg(not(verus_keep_ghost))]
+fn adopted_stage_source<'a>(
+    root: &Path,
+    adoption: &'a Adoption,
+    installation_report: &'a str,
+) -> Result<(String, &'a str), String> {
+    let stage = Path::new(&adoption.stage_result);
+    let state = Path::new(".chrono-harness/state");
+    if stage.parent() != Some(state) {
+        return Ok((adoption.stage_result.clone(), CURRENT));
+    }
+    let fixed_slot = profile::path(
+        root,
+        &adoption.stage_result,
+        b".chrono-harness/state/bootstrap-",
+    )?;
+    if fixed_slot.try_exists().map_err(|e| e.to_string())?
+        && sha256(&profile::read_original(
+            root,
+            &adoption.stage_result,
+            b".chrono-harness/state/bootstrap-",
+            Some(&adoption.stage_result),
+        )?) == adoption.stage_sha256
+    {
+        return Ok((adoption.stage_result.clone(), &adoption.stage_result));
+    }
+    let report: Report = decode(&profile::read_original(
+        root,
+        installation_report,
+        b".chrono-harness/state/",
+        Some(installation_report),
+    )?)?;
+    if Path::new(&report.host_root) != root
+        || !matches!(report.status, policy::BuildStatus::Passed)
+        || report.source.as_ref().and_then(|s| s.commit.as_deref()) != Some(&adoption.source_commit)
+    {
+        return Err("installed report does not belong to the adopted stage".into());
+    }
+    let mut directories = BTreeSet::new();
+    for row in &report.operations {
+        if row.reused_from.as_ref().is_some_and(|source| {
+            stage_reuse_matches(
+                &source.path,
+                &source.sha256,
+                &adoption.stage_result,
+                &adoption.stage_sha256,
+            )
+        }) {
+            for stream in [&row.stdout, &row.stderr] {
+                let (directory, _) = stream
+                    .path
+                    .rsplit_once('/')
+                    .ok_or("stage stream directory missing")?;
+                if Path::new(directory).parent() != Some(state) {
+                    return Err("invalid stage stream directory".into());
+                }
+                profile::path(root, &stream.path, b".chrono-harness/state/bootstrap-")?;
+                directories.insert(directory);
+            }
+        }
+    }
+    if directories.len() != 1 {
+        return Err("installed stage stream directory missing or ambiguous".into());
+    }
+    Ok((
+        format!("{}/report.json", directories.first().unwrap()),
+        installation_report,
+    ))
+}
+
+#[cfg(not(verus_keep_ghost))]
 pub fn qualified_publication(
     root: &Path,
     environment: &Environment,
     native: &NativePlatform,
     current: &Value,
     selected: &str,
+    installation_report: &str,
 ) -> Result<Qualification, String> {
     let adoption: Adoption =
         serde_json::from_value(current.clone()).map_err(|error| error.to_string())?;
-    let raw = profile::read(
+    let raw = profile::read_original(
         root,
         &adoption.receipt.path,
         b".chrono-harness/state/automatic-cleanup-v2/",
+        Some(CURRENT),
     )?;
     let mut expected = current.clone();
     expected
@@ -528,14 +651,21 @@ pub fn qualified_publication(
     {
         return Err("selected owner adoption original differs".into());
     }
+    let (reference, report_slot) = adopted_stage_source(root, &adoption, installation_report)?;
     let qualified = stage_report(
         root,
         environment,
         native,
-        &adoption.stage_result,
+        &reference,
         Some(&adoption.stage_sha256),
         Some(&adoption.source_commit),
+        Some(report_slot),
     )?;
+    if reference != adoption.stage_result
+        && qualified.profile.report_path.as_deref() != Some(adoption.stage_result.as_str())
+    {
+        return Err("adopted slot differs from the original stage profile".into());
+    }
     let record = &qualified.stage;
     let selected_path = profile::path(root, selected, b".chrono-harness/bin/")?;
     let installed = file_binding(&selected_path)?;
@@ -591,13 +721,15 @@ pub fn qualified_publication(
         return Err("selected owner changed during publication qualification".into());
     }
     qualification(
-        &adoption.stage_result,
+        &reference,
         &qualified.raw,
         &qualified.report,
         installed,
+        Some(report_slot),
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn qualified_selected_original(
     root: &Path,
     environment: &Environment,
@@ -613,7 +745,7 @@ pub fn qualified_selected_original(
         if current.get("installed")
             == Some(&serde_json::to_value(&before).map_err(|error| error.to_string())?)
         {
-            return qualified_publication(root, environment, native, &current, selected);
+            return qualified_publication(root, environment, native, &current, selected, reference);
         }
     }
     let raw = profile::read(root, reference, b".chrono-harness/state/")?;
@@ -678,5 +810,5 @@ pub fn qualified_selected_original(
     {
         return Err("selected owner or its original changed during qualification".into());
     }
-    qualification(reference, &raw, &report, before)
+    qualification(reference, &raw, &report, before, None)
 }

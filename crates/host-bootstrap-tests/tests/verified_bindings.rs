@@ -11,6 +11,10 @@ use policy::Executable;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[cfg(verus_keep_ghost)]
+#[path = "owner.rs"]
+mod stage_tests;
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
