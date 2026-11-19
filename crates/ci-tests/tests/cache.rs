@@ -135,18 +135,29 @@ fn install_layout_controls_compatible_restores_and_binds_the_full_lock_to_exact_
     let scope = &steps[1];
     assert_eq!(scope["id"], "chrono_layout_0");
     let restore = &steps[2];
-    assert_eq!(restore["if"], "${{ steps.chrono_layout_0.outcome == 'success' }}");
+    assert_eq!(
+        restore["if"],
+        "${{ steps.chrono_layout_0.outcome == 'success' }}"
+    );
     let key = restore["with"]["key"].as_str().unwrap();
     assert!(key.contains("layout-v1-${{ steps.chrono_layout_0.outputs.digest }}-"));
     assert!(key.contains("hashFiles('.chrono-harness/distribution.json')"));
     let fallback = restore["with"]["restore-keys"].as_str().unwrap();
     assert!(!fallback.contains("hashFiles("));
-    assert!(fallback.lines().all(|line| line.ends_with("layout-v1-${{ steps.chrono_layout_0.outputs.digest }}-")));
-    assert_eq!(steps.last().unwrap()["with"]["key"], key);
+    assert!(
+        fallback
+            .lines()
+            .all(|line| line.ends_with("layout-v1-${{ steps.chrono_layout_0.outputs.digest }}-"))
+    );
+    let save = steps.last().unwrap();
+    assert_eq!(save["with"]["key"], key);
+    assert!(save["if"].as_str().unwrap().contains("success()"));
     let mut mixed = value.clone();
-    mixed["persistent_cache"]["downloads"]["entries"]["seed"]["release_install_layout"] = json!(false);
+    mixed["persistent_cache"]["downloads"]["entries"]["seed"]["release_install_layout"] =
+        json!(false);
     assert!(render(mixed).is_err());
-    value["persistent_cache"]["downloads"]["entries"]["unit"]["compatibility_files"] = json!(["first", "second"]);
+    value["persistent_cache"]["downloads"]["entries"]["unit"]["compatibility_files"] =
+        json!(["first", "second"]);
     assert!(render(value).is_err());
 }
 

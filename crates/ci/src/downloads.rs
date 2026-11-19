@@ -113,8 +113,13 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
             entry.compatibility_files.len(),
             entry.source_files.len(),
             entry.consumers.len(),
-            !matches!(download_domain(entry.release_install_layout, entry.compatibility_files.len()), DownloadDomain::Invalid)
-                && unique(&entry.paths)
+            !matches!(
+                download_domain(
+                    entry.release_install_layout,
+                    entry.compatibility_files.len()
+                ),
+                DownloadDomain::Invalid
+            ) && unique(&entry.paths)
                 && unique(&entry.compatibility_files)
                 && unique(&entry.source_files)
                 && unique(&entry.consumers),
@@ -208,8 +213,7 @@ fn hash(files: &[String]) -> String {
 fn prefix(c: &Config, id: &str, domain: &str) -> String {
     format!(
         "chrono-download-v1-{}-{id}-${{{{ runner.os }}}}-${{{{ runner.arch }}}}-{}-",
-        c.namespace,
-        domain
+        c.namespace, domain
     )
 }
 
@@ -252,24 +256,42 @@ pub(crate) fn project(
     let event_guard = policy::cache_save_event_guard(parent.save_on_push_only);
     for (index, (id, entry)) in selected.iter().enumerate() {
         let compatibility = hash(&entry.compatibility_files);
-        let (domain, restore_guard, pin) = match download_domain(
+        let (domain, restore_guard, pin, save_status) = match download_domain(
             entry.release_install_layout,
             entry.compatibility_files.len(),
         ) {
             DownloadDomain::InstallLayout => {
-            let lock = shell(&entry.compatibility_files[0]);
-            let step = format!("chrono_layout_{index}");
-            restore.push_str(&format!(
-                "      - name: Read release install layout {id}\n        id: {step}\n        continue-on-error: true\n        shell: bash\n        run: |\n          set -eo pipefail\n          digest=$(jq -cSe '[.schema, .install]' < {lock} | shasum -a 256)\n          printf 'digest=%s\\n' \"${{digest%% *}}\" >> \"$GITHUB_OUTPUT\"\n"
-            ));
-            (
-                format!("layout-v1-${{{{ steps.{step}.outputs.digest }}}}"),
-                format!("        if: ${{{{ steps.{step}.outcome == 'success' }}}}\n"),
-                format!("{compatibility}-"),
-            )
+                let lock = shell(&entry.compatibility_files[0]);
+                let step = format!("chrono_layout_{index}");
+                restore.push_str(&format!(
+                    r#"      - name: Read release install layout {id}
+        id: {step}
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -eo pipefail
+          digest=$(jq -sceS '
+            select(length == 1) | .[0]
+            | select(.schema == "chrono-install/v1")
+            | select(.install | type == "object" and length > 0 and all(.[]; type == "string" and length > 0))
+            | [.schema, .install]
+          ' < {lock} | shasum -a 256)
+          printf 'digest=%s\n' "${{digest%% *}}" >> "$GITHUB_OUTPUT"
+"#
+                ));
+                (
+                    format!("layout-v1-${{{{ steps.{step}.outputs.digest }}}}"),
+                    format!("        if: ${{{{ steps.{step}.outcome == 'success' }}}}\n"),
+                    format!("{compatibility}-"),
+                    "success()",
+                )
             }
-            DownloadDomain::Files => (compatibility, String::new(), String::new()),
-            DownloadDomain::Invalid => return Err(format!("release install layout requires one lock file: {id}")),
+            DownloadDomain::Files => (compatibility, String::new(), String::new(), "always()"),
+            DownloadDomain::Invalid => {
+                return Err(format!(
+                    "release install layout requires one lock file: {id}"
+                ));
+            }
         };
         let stem = prefix(c, id, &domain);
         let key = format!("{stem}{pin}{}", hash(&entry.source_files));
@@ -289,7 +311,7 @@ pub(crate) fn project(
             .as_deref()
             .is_some_and(|writer| saves_download(writer, job))
         {
-            save.push_str(&format!("      - name: Save download cache {id}\n        if: ${{{{ {event_guard}always() && !cancelled() && steps.chrono_download_{index}.outcome == 'success' && steps.chrono_download_{index}.outputs.cache-hit != 'true' }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}", parent.save_action, scalar(&key)));
+            save.push_str(&format!("      - name: Save download cache {id}\n        if: ${{{{ {event_guard}{save_status} && !cancelled() && steps.chrono_download_{index}.outcome == 'success' && steps.chrono_download_{index}.outputs.cache-hit != 'true' }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}", parent.save_action, scalar(&key)));
         }
     }
     let mut body = body
