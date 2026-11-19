@@ -2596,7 +2596,7 @@ impl Inventory {
                 let output = record.output.as_ref().unwrap();
                 match verified::original_expansion(
                     protected,
-                    finalized(record),
+                    finalized(record) || archived_interrupted_report(record, output),
                     initial.as_deref(),
                     &id,
                     record.incoming.len(),
@@ -3328,6 +3328,30 @@ impl Inventory {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
+fn archived_interrupted_report(record: &Object, output: &Output) -> bool {
+    if output.tree
+        || !output.manifest.sealed
+        || output.phase != "sealing"
+        || output.outcome["publication"] != "interrupted"
+        || output.outcome["completion"] != "not-established"
+        || !record.retired_leases.is_empty()
+        || !record.incoming.is_empty()
+        || !record.roles.is_empty()
+    {
+        return false;
+    }
+    // The release receipt was written under the original and survivor checks.
+    // An interrupted command still has no execution outcome.
+    record.summaries.iter().any(|receipt| {
+        let original = &receipt["original"];
+        receipt["schema"] == "chrono-preserved-original-release/v1"
+            && original["id"] == record.id
+            && original["path"] == output.path
+            && original["identity"] == output.identity
+    })
+}
+
 #[cfg(not(verus_keep_ghost))]
 fn finalized(record: &Object) -> bool {
     verified::original_finalized(

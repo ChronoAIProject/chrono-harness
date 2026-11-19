@@ -8291,6 +8291,98 @@ fn preserved_original_release_requires_exact_archive_roles_and_closed_users() {
 }
 
 #[test]
+fn archived_interrupted_report_retires_when_its_transitive_inputs_exceed_the_round_limit() {
+    if !isolated_capability_test(
+        "archived_interrupted_report_retires_when_its_transitive_inputs_exceed_the_round_limit",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let root = h.path();
+    let config = root.join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(4);
+    fs::write(config, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let archive = tempfile::tempdir().unwrap();
+    let inv = inventory(root);
+    let path = ".chrono-harness/state/fixtures/interrupted-parent";
+    let role = format!("recovery:{path}");
+    fs::write(root.join(path), b"").unwrap();
+    fs::write(archive.path().join("parent"), b"").unwrap();
+    let parent = inventory(root)
+        .begin_rooted("fixture", path, json!(null), std::slice::from_ref(&role))
+        .unwrap();
+    let id = parent.id().to_owned();
+    let publish = |name: &str| {
+        let path = format!(".chrono-harness/state/fixtures/{name}");
+        fs::write(root.join(&path), b"independent input").unwrap();
+        let output = inventory(root)
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = output.id().to_owned();
+        output.complete_sealed(json!({"exit":7})).unwrap();
+        (id, path)
+    };
+    let children = [publish("first-child"), publish("second-child")];
+    let child_ids = children
+        .iter()
+        .map(|(id, _)| id.clone())
+        .collect::<Vec<_>>();
+    inv.dependencies(&id, &child_ids).unwrap();
+    drop(parent);
+    let record_path = retention_state::object_path(root, &id);
+    let record = || serde_json::from_slice::<Value>(&fs::read(&record_path).unwrap()).unwrap();
+    let round = inv.maintain_originals(std::slice::from_ref(&id)).unwrap();
+    assert_eq!(round["accounting_errors"], json!([]));
+    let interrupted = record()["output"].clone();
+    assert_eq!(interrupted["phase"], "sealing");
+    assert_eq!(interrupted["manifest"]["sealed"], true);
+    assert_eq!(interrupted["outcome"]["publication"], "interrupted");
+    let moved = consumer_call(
+        root,
+        json!({
+            "operation":"release-preserved","original":original_identity(root,&id,path),"roles":[role],
+            "survivor_root":fs::canonicalize(archive.path()).unwrap(),"survivor_path":"parent",
+            "sha256":chrono_harness::sha256(b""),"length":0,"current_consumers_released":true,
+            "reason":"recovery read back the interrupted parent from its independent copy"
+        }),
+    );
+    assert_eq!(moved.exit_code, 0, "{}", moved.stderr);
+    // Each independent child adds its inputs after the parent has been handed off.
+    // Every update fits the limit, while expanding the whole graph would require seven objects.
+    let mut originals = Vec::new();
+    for (index, (child_id, child_path)) in children.into_iter().enumerate() {
+        let (first, first_path) = publish(&format!("{index}-a"));
+        let (second, second_path) = publish(&format!("{index}-b"));
+        inv.dependencies(&child_id, &[first, second]).unwrap();
+        originals.extend([child_path, first_path, second_path]);
+    }
+    let mut disposed = None;
+    for _ in 0..12 {
+        let round = inv.maintain_originals(std::slice::from_ref(&id)).unwrap();
+        assert_eq!(round["accounting_errors"], json!([]), "{round}");
+        if let Some(summary) = round["disposed"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == id)
+        {
+            disposed = Some(summary.clone());
+            break;
+        }
+    }
+    assert_eq!(
+        disposed.unwrap()["original_outcome"],
+        interrupted["outcome"]
+    );
+    assert!(!root.join(path).exists());
+    assert_eq!(fs::read(archive.path().join("parent")).unwrap(), b"");
+    for original in originals {
+        assert_eq!(fs::read(root.join(original)).unwrap(), b"independent input");
+    }
+}
+
+#[test]
 fn archived_check_requires_its_slot_and_every_sealed_input_before_release() {
     if !isolated_capability_test(
         "archived_check_requires_its_slot_and_every_sealed_input_before_release",
