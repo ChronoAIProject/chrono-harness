@@ -1269,6 +1269,33 @@ impl Inventory {
         Ok(())
     }
 
+    // Old writers could restart the metadata TTL when a body or role member
+    // retired. The excluded, identity-checked directory is the same generation
+    // across atomic replacements of record.json.
+    fn metadata_directory_deadline(
+        &self,
+        directory: &Path,
+        stored: u64,
+        observed: u64,
+    ) -> Result<u64, String> {
+        if stored <= observed {
+            return Ok(stored);
+        }
+        let Some(window) = self.policy.max_lifetime_seconds else {
+            return Ok(stored);
+        };
+        let metadata = fs::symlink_metadata(directory).map_err(|e| e.to_string())?;
+        let birth = match metadata.created() {
+            Ok(time) => time.duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?,
+            Err(error) if error.kind() == std::io::ErrorKind::Unsupported => return Ok(stored),
+            Err(error) => return Err(error.to_string()),
+        };
+        Ok(super::bounded_expiry(
+            stored,
+            birth.as_secs().saturating_add(window),
+        ))
+    }
+
     fn prune_object(
         &self,
         id: &str,
@@ -1285,11 +1312,26 @@ impl Inventory {
             || !record.incoming.is_empty()
             || !record.roles.is_empty()
             || !record.retired_leases.is_empty()
-            || record.metadata_expires > observed
             || self.directory.join(id).exists()
         {
             return Ok(());
         }
+        let deadline =
+            self.metadata_directory_deadline(&directory, record.metadata_expires, observed)?;
+        if deadline > observed {
+            if deadline < record.metadata_expires
+                && *nodes < self.policy.max_nodes_per_round
+                && self.metadata_room()
+            {
+                record.metadata_expires = deadline;
+                self.stable(&gate)?;
+                self.write_metadata(&directory.join("record.json"), &record)?;
+                *nodes += 1;
+            }
+            return Ok(());
+        }
+        let previous_deadline = record.metadata_expires;
+        record.metadata_expires = deadline;
         let initial_prune_path = record.prune_path.clone();
         while let Some(path) = record.prune_path.clone() {
             if *nodes + 4 > self.policy.max_nodes_per_round
@@ -1345,7 +1387,9 @@ impl Inventory {
             self.remove_metadata_directory(&directory, &gate, &["record.json", "record.pending"])?;
             *nodes += 3;
             retired.push(id.to_owned());
-        } else if record.prune_path != initial_prune_path {
+        } else if record.prune_path != initial_prune_path
+            || record.metadata_expires != previous_deadline
+        {
             // Missing path declarations are recoverable from the old cursor:
             // every resumed step checks its current identity, occupancy and
             // exclusion again. Persist once when this bounded pass pauses;
@@ -1408,29 +1452,14 @@ impl Inventory {
             return Ok(false);
         }
         let mut role = initial;
-        if role.metadata_expires > observed {
-            let Some(window) = self.policy.max_lifetime_seconds else {
-                return Ok(false);
-            };
-            // Older writers renewed this deadline on membership changes.
-            // The validated physical directory identifies the role generation.
-            let metadata = fs::symlink_metadata(directory).map_err(|e| e.to_string())?;
-            let birth = match metadata.created() {
-                Ok(time) => time.duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?,
-                Err(error) if error.kind() == std::io::ErrorKind::Unsupported => return Ok(false),
-                Err(error) => return Err(error.to_string()),
-            };
-            let deadline = super::bounded_expiry(
-                role.metadata_expires,
-                birth.as_secs().saturating_add(window),
-            );
-            if deadline < role.metadata_expires {
-                role.metadata_expires = deadline;
-                if deadline > observed {
-                    self.stable(&gate)?;
-                    self.write_metadata(&record_path, &role)?;
-                    *nodes += 1;
-                }
+        let deadline =
+            self.metadata_directory_deadline(directory, role.metadata_expires, observed)?;
+        if deadline < role.metadata_expires {
+            role.metadata_expires = deadline;
+            if deadline > observed {
+                self.stable(&gate)?;
+                self.write_metadata(&record_path, &role)?;
+                *nodes += 1;
             }
         }
         if role.metadata_expires <= observed {
