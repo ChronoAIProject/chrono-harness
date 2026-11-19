@@ -2,7 +2,7 @@
 use crate::{
     bindings::{Declarations, NativePlatform},
     construction::Report,
-    execution::{Method, methods},
+    execution::{Method, methods, operation_argv},
     profile::Profile,
     source::SourceObservation,
     verified_bindings::{self as policy, BuildStatus, Executable},
@@ -275,8 +275,7 @@ impl Producer {
                     configured.clone()
                 }
             };
-            let mut argv = vec![executable];
-            argv.extend(method.argv.iter().cloned());
+            let argv = operation_argv(executable, method, Path::new(&row.stdout.path))?;
             if !policy::operation_record_matches(
                 &row.tool,
                 &method.tool,

@@ -42,6 +42,52 @@ fn observed(raw: &[u8]) -> SourceObservation {
 }
 
 #[test]
+fn download_headers_belong_to_the_recorded_operation_directory() {
+    let mut fixture = Fixture::new();
+    let body = b"fixture archive";
+    fs::write(fixture.root.join("download-body"), body).unwrap();
+    fs::write(
+        fixture.root.join(".chrono-harness/ci/archive.sha256"),
+        format!(
+            "{}  .chrono-harness/cache/package.zip\n",
+            chrono_harness::sha256(body)
+        ),
+    )
+    .unwrap();
+    fixture.config["tools"]["native"] = json!(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
+    fixture.projects["scripts"][0]["actions"]["execute"]["argv"] = json!([
+        "download",
+        ".",
+        ".chrono-harness/ci/archive.sha256",
+        env!("CARGO_BIN_EXE_chrono-test-bootstrap-download"),
+        "{operation-output}",
+        "https://example.invalid/archive.zip"
+    ]);
+    let raw = original(&fixture);
+    let judge = producer(&fixture);
+    let source = observed(&raw);
+    let report = judge
+        .validate(&raw, &source, &|path| input(&fixture, path))
+        .unwrap();
+    let operation = &report.operations[0];
+    let expected = std::path::Path::new(&operation.stdout.path).with_extension("output");
+    assert_eq!(std::path::Path::new(&operation.argv[5]), expected);
+    assert_eq!(
+        fs::read(fixture.root.join(expected)).unwrap(),
+        b"fixture response headers\n"
+    );
+    let mut changed: Value = serde_json::from_slice(&raw).unwrap();
+    changed["operations"][0]["argv"][5] = json!(".chrono-harness/state/verus-download.headers");
+    assert!(
+        judge
+            .validate(&serde_json::to_vec(&changed).unwrap(), &source, &|path| {
+                input(&fixture, path)
+            })
+            .is_err()
+    );
+}
+
+#[test]
 fn qualifies_actual_ordered_execution_and_binary_streams_without_rerunning_tools() {
     let mut fixture = Fixture::new();
     fixture.projects["scripts"][0]["actions"]["execute"]["argv"] = json!([

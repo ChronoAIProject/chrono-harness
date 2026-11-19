@@ -89,6 +89,26 @@ fn stream(
     })
 }
 
+/// Bind a declared side file to the same attempt and operation as its stdout.
+pub(crate) fn operation_argv(
+    executable: String,
+    method: &Method,
+    stdout: &Path,
+) -> Result<Vec<String>, String> {
+    let mut argv = vec![executable];
+    for argument in &method.argv {
+        if argument == "{operation-output}" {
+            let output = stdout.with_extension("output");
+            let relative = output.to_str().ok_or("non UTF-8 bootstrap output path")?;
+            chrono_harness::relative_path(relative)?;
+            argv.push(relative.to_owned());
+        } else {
+            argv.push(argument.clone());
+        }
+    }
+    Ok(argv)
+}
+
 /// 调用方供应当前宿主输出；测试使用标准 Write 接口观察同一条转交链。
 /// 返回前等待原 Child 和两条流结束；这里不另造调度、限额或租约协议。
 pub fn run_operation(
@@ -107,9 +127,10 @@ pub fn run_operation(
         .ok_or("non UTF-8 operation executable")?
         .to_owned();
     let cwd = root.to_str().ok_or("non UTF-8 operation root")?.to_owned();
-    let mut argv = vec![program];
-    argv.extend(method.argv.iter().cloned());
-    let arguments: Vec<_> = method.argv.iter().map(String::as_str).collect();
+    let output_path = directory.join(format!("{index}.stdout"));
+    let relative = output_path.strip_prefix(root).map_err(|e| e.to_string())?;
+    let argv = operation_argv(program, method, relative)?;
+    let arguments: Vec<_> = argv[1..].iter().map(String::as_str).collect();
     let mut command = bindings::command(root, executable, &arguments, environment)?;
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     let started = Instant::now();
@@ -117,7 +138,6 @@ pub fn run_operation(
     let pid = child.id();
     let output = child.stdout.take().ok_or("missing operation stdout")?;
     let errors = child.stderr.take().ok_or("missing operation stderr")?;
-    let output_path = directory.join(format!("{index}.stdout"));
     let error_path = directory.join(format!("{index}.stderr"));
     let (status, output, errors) = thread::scope(|scope| {
         let output = scope.spawn(|| stream(root, &output_path, output, stdout));
