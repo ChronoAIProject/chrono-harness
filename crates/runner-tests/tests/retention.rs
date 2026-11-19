@@ -281,6 +281,12 @@ fn output_metadata_retires_within_the_original_creation_window() {
         .unwrap();
     let metadata = retention_state::object_path(h.path(), &id);
 
+    let at_birth: Value = serde_json::from_slice(&fs::read(&metadata).unwrap()).unwrap();
+    assert!(
+        at_birth["metadata_expires"].as_u64().unwrap() <= deadline,
+        "object metadata exceeded the creation window before retirement"
+    );
+
     let active = owner.consume(&id).unwrap();
     owner
         .maintain_originals_at(std::slice::from_ref(&id), deadline)
@@ -300,6 +306,56 @@ fn output_metadata_retires_within_the_original_creation_window() {
     assert!(
         !metadata.parent().unwrap().exists(),
         "retirement renewed output metadata after its original deadline"
+    );
+}
+
+#[test]
+fn longer_policy_keeps_the_short_object_metadata_deadline_at_retirement() {
+    if !isolated_capability_test(
+        "longer_policy_keeps_the_short_object_metadata_deadline_at_retirement",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["metadata_keep_seconds"] = json!(0);
+    policy["keep_seconds"] = json!(0);
+    let previous = serde_json::to_vec(&policy).unwrap();
+    fs::write(&policy_path, &previous).unwrap();
+    let path = ".chrono-harness/state/fixtures/short-object-metadata";
+    let physical = h.path().join(path);
+    fs::write(&physical, b"releasable original").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!({}))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete_sealed(json!({"exit_code":0})).unwrap();
+    let metadata = retention_state::object_path(h.path(), &id);
+    let record: Value = serde_json::from_slice(&fs::read(&metadata).unwrap()).unwrap();
+    let observed = record["metadata_expires"]
+        .as_u64()
+        .unwrap()
+        .max(record["output"]["expires"].as_u64().unwrap());
+
+    policy["metadata_keep_seconds"] = json!(86400);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(h.path());
+    owner
+        .migrate_policy(&previous, Some(std::slice::from_ref(&id)))
+        .unwrap();
+    for _ in 0..8 {
+        if !metadata.exists() {
+            break;
+        }
+        owner
+            .maintain_originals_at(std::slice::from_ref(&id), observed)
+            .unwrap();
+    }
+    assert!(!physical.exists());
+    assert!(
+        !metadata.parent().unwrap().exists(),
+        "metadata window was extended"
     );
 }
 
