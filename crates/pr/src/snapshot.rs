@@ -1,7 +1,11 @@
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_snapshot;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) const QUERY: &str = r#"query($owner:String!,$name:String!,$number:Int!,$head:GitObjectID!) {
   repository(owner:$owner,name:$name) {
     nameWithOwner
@@ -33,6 +37,7 @@ pub(crate) const QUERY: &str = r#"query($owner:String!,$name:String!,$number:Int
   }
 }"#;
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn field<'a>(value: &'a Value, pointer: &str) -> Result<&'a str, String> {
     value
         .pointer(pointer)
@@ -40,6 +45,7 @@ pub(crate) fn field<'a>(value: &'a Value, pointer: &str) -> Result<&'a str, Stri
         .ok_or_else(|| format!("invalid remote field {pointer}"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn repository(value: &Value, expected: &str) -> Result<(), String> {
     if !value.is_object()
         || value
@@ -52,10 +58,12 @@ pub(crate) fn repository(value: &Value, expected: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn sha(value: &str) -> bool {
     verified_snapshot::valid_sha_text(value)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct Snapshot {
     pub number: u64,
     pub url: String,
@@ -68,6 +76,7 @@ pub(crate) struct Snapshot {
     pub outcome: &'static str,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn pull_request(
     value: &Value,
     repo: &str,
@@ -95,7 +104,7 @@ pub(crate) fn pull_request(
     if url != expected_url {
         return Err("PR URL mismatch (only github.com is supported)".into());
     }
-    let merge_commit = if verified_snapshot::pull_request_merged(state) {
+    let merge_commit = if pull_request_merged(state) {
         let oid = field(pr, "/mergeCommit/oid")?;
         if !verified_snapshot::valid_sha_text(oid) {
             return Err("invalid actual merge commit".into());
@@ -120,6 +129,7 @@ pub(crate) fn pull_request(
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn evaluate_checks(
     value: &Value,
     result: &mut Snapshot,
@@ -264,6 +274,7 @@ pub(crate) fn evaluate_checks(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn complete(value: &Value) -> Result<(), String> {
     if value
         .pointer("/pageInfo/hasNextPage")
@@ -275,10 +286,26 @@ fn complete(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn classify(state: &str) -> Result<&'static str, String> {
     let class = verified_snapshot::classify_check(state);
     match class {
         verified_snapshot::CheckClass::Unknown => Err(format!("unknown check conclusion {state}")),
         _ => Ok(verified_snapshot::check_class_label(class)),
     }
+}
+
+#[cfg(verus_keep_ghost)]
+use super::super::identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{verified_identifiers as identifiers, verus};
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
+
+verus! {
+pub fn pull_request_merged(state: &str) -> (merged: bool)
+    ensures merged == (state@ == "MERGED"@),
+{ identifiers::equal_text(state, "MERGED") }
 }
