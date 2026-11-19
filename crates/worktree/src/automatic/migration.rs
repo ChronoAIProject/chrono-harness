@@ -356,7 +356,11 @@ impl Manager {
             );
         }
         let host_config = decode::<crate::Config>(&self.inputs.config_bytes)?.host_config;
-        let (target_regs, _) = start::registrations(r, &target, &head, &host_config)?;
+        // Ordinary migration has already admitted the target's executable policy.
+        // Explicit adoption executes the caller's policy. Its target supplies
+        // only the fixed artifact declarations and registered policy paths.
+        let (target_config, target_filemap) =
+            Registrations::read_custody_inputs(&host_config, |path| r.blob(&target, &head, path))?;
         artifact_disposal::registered(
             &self
                 .inputs
@@ -365,10 +369,15 @@ impl Manager {
                 .iter()
                 .map(|a| a.path.clone())
                 .collect::<Vec<_>>(),
-            &[self.inputs.registrations.config(), target_regs.config()],
+            &[self.inputs.registrations.config(), &target_config],
         )?;
         for path in next.inputs.keys() {
-            start::registered_policy(&target_regs, path, &self.inputs.policy.state_directory)?;
+            start::registered_policy_inputs(
+                &target_config,
+                &target_filemap,
+                path,
+                &self.inputs.policy.state_directory,
+            )?;
         }
         let policy_changed = previous.policy_sha256 != next.policy_sha256
             || previous.inputs != next.inputs

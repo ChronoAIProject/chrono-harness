@@ -772,6 +772,8 @@ chrono-worktree migrate --host-root /exact/policy-host --path /exact/enrolled-wo
 这适用于已交接旧检出仍将可重建下载缓存长期 retain 的情况。先部署兼容程序，再逐目标
 明确迁移；retained 项继续履行原来的新责任交接，实际回收与空间复测另验。该能力不自动
 释放 bin／state，也不解析未知在研执行登记。
+显式采用从目标固定提交读取平台配置和 FILEMAP，以核实未跟踪产物和政策地址。
+调用方提供执行登记。目标的项目、判官与工作流定义不参与这次保管资格判断。
 
 原登记、birth policy hash、birth receipt、uses、旧清理尝试保留身份。独立不可变迁移记录旧新绑定、原字节、观察提交，再次核新绑定后才向账本追加回执。普通 use／cleanup／finish 核整条链，使用最后绑定；回执或原输入缺失／改变，拒绝后续 use／处置。
 

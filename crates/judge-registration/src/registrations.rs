@@ -63,6 +63,20 @@ impl Registrations {
         crate::execution::scheduling(s.filemap(), s.projects(), &s.config()["artifacts"])?;
         Ok(s)
     }
+    /// A policy custodian consumes the committed artifact and file declarations.
+    pub fn read_custody_inputs(
+        config_path: &str,
+        mut read: impl FnMut(&str) -> Result<Vec<u8>>,
+    ) -> Result<(Value, Value)> {
+        let config = facts::selected_config_with(config_path, &mut read)?;
+        schema::config(&config).map_err(|e| format!("config: {e}"))?;
+        let path = config["registries"]["filemap"]
+            .as_str()
+            .ok_or("missing filemap registry path")?;
+        let filemap = chrono_harness::json(&read(path)?)?;
+        schema::filemap(&filemap).map_err(|e| format!("filemap: {e}"))?;
+        Ok((config, filemap))
+    }
     /// Structurally validated values; semantic admissibility is still registration policy.
     pub fn config(&self) -> &Value {
         &self.config
