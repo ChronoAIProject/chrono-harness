@@ -1034,13 +1034,20 @@ fn expired_terminal_original_transfers_facts_without_renewal_and_retires_after_r
     let reader = read_guard(&h.root, path).unwrap();
     let before = json(&fs::read(h.record.join("ledger.json")).unwrap()).unwrap();
     let raw = fs::read(h.root.join(path)).unwrap();
-    let mut output = retention_state::snapshot(&h.root)["outputs"]
-        .as_array()
+    let role = format!(
+        "worktree-enrollment:{}",
+        sha256(h.target.to_str().unwrap().as_bytes())
+    );
+    let (id, original_path, _, _) = inventory
+        .rooted_original("lifecycle-original", &role)
         .unwrap()
-        .iter()
-        .find(|output| output["path"] == path)
-        .unwrap()
-        .clone();
+        .unwrap();
+    assert_eq!(original_path, path);
+    let record_path = retention_state::object_path(&h.root, &id);
+    let read_output = || json(&fs::read(&record_path).unwrap()).unwrap()["output"].clone();
+    let mut output = read_output();
+    assert_eq!(output["id"], id);
+    assert_eq!(output["path"], path);
     output["lifetime"] = value!({"created_at":1,"deadline":2});
     output["expires"] = value!(2);
     retention_state::replace_output(&h.root, &output);
@@ -1061,31 +1068,29 @@ fn expired_terminal_original_transfers_facts_without_renewal_and_retires_after_r
         "transfer must preserve the original work and cleanup states"
     );
     assert_eq!(fs::read(h.root.join(path)).unwrap(), raw);
-    let snapshot = retention_state::snapshot(&h.root);
-    let observed = snapshot["outputs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|observed| observed["id"] == output["id"])
-        .unwrap();
+    let observed = read_output();
+    assert_eq!(observed["id"], id);
     assert_eq!(observed["lifetime"], output["lifetime"]);
     assert_eq!(observed["expires"], output["expires"]);
-    let role = format!(
-        "worktree-enrollment:{}",
-        sha256(h.target.to_str().unwrap().as_bytes())
-    );
-    assert!(
-        snapshot["roots"][&role]
-            .as_array()
-            .is_none_or(|ids| !ids.contains(&output["id"]))
-    );
+    match fs::read(retention_state::role_path(&h.root, &role)) {
+        Ok(bytes) => {
+            let role_record = json(&bytes).unwrap();
+            assert!(
+                !role_record["ids"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&output["id"])
+            );
+        }
+        Err(error) => assert_eq!(error.kind(), std::io::ErrorKind::NotFound),
+    }
     assert!(read_guard(&h.root, path).is_err());
     drop(reader);
     maintain_original_until_absent(&inventory, &h.root.join(path));
     for _ in 0..8 {
         inventory.maintain_explicit().unwrap();
     }
-    assert!(!retention_state::object_path(&h.root, output["id"].as_str().unwrap()).exists());
+    assert!(!record_path.exists());
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(
         code, 0,
