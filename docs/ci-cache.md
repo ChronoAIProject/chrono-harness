@@ -212,7 +212,7 @@ distribution 测试项目直接编译生产 `main.rs`，其单元仅订阅 `chec
 
 inputs 与 workflow 专属测试均在各自 target 从唯一生产 `main.rs` 编译 inputs／workflow 测试 CLI，删除对应独立生产构建；已无使用方的 `check.inputs`、`check.judge-workflow` 缓存及其订阅退役。生产发布缓存与资产保留。完整成本收益未测。
 
-发布缓存按登记选择项目输出，验证与包收集操作由现役 Rust 发布配方执行。分组测试中不同生产者使用不同条目。
+发布缓存按登记选择项目输出，验证与包收集操作由现役 Rust 发布配方执行。分组测试中不同生产者使用不同条目。两平台的发布编译缓存键读取各自单元、平台前端和共享 Rust 设置。验证单元还读取所用项目操作，有发布资产依赖时读取相应暂存位置。修改一个验证单元的依赖时，其他单元可以继续命中自己的键。首次采用这份登记会生成新键，实际构建和验证仍由原发布作业执行。
 
 缓存种子运行 `host.bootstrap-cache`，通过已有 bootstrap 所有者和 `build.cache` 构建候选 planner，再安装二进制。其配方明确 `report_path: .chrono-harness/state/cache-bootstrap.json`；之后 core bootstrap 保留默认 `.chrono-harness/state/bootstrap.json`。
 

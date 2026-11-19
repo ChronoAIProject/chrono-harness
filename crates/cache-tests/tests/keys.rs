@@ -1215,6 +1215,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         if input["path"] != ".chrono-harness/ci/check.json"
             && input["path"] != ".chrono-harness/ci/bootstrap-core.json"
             && input["path"] != ".chrono-harness/projects.json"
+            && input["path"] != ".chrono-harness/release/build.json"
             && input["path"] != ".chrono-harness/git/macos-27.json"
         {
             *input = json!({"kind":"literal","value":{"fixed_input":id}});
@@ -1446,6 +1447,49 @@ fn json_value_inputs_bind_selected_semantics_and_retain_whole_file_provenance() 
             .unwrap_err()
             .contains("inside a selected cache artifact")
     );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn release_recipe_changes_only_invalidate_the_consuming_compilation_caches() {
+    let build = "release.linux_build_runner";
+    let verify = "release.macos_verify_inputs_tests";
+    let (root, config) = host_cache_fixture(&[build, verify]);
+    let compatibility = |consumer, cache: &str| {
+        let planned = plan(root.path(), &config, consumer).unwrap();
+        planned["caches"][cache]["restore_keys"][0]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let keys = || {
+        [
+            compatibility(build, "release.linux.release.runner"),
+            compatibility(verify, "release.macos.verify.inputs-tests"),
+        ]
+    };
+    let original_keys = keys();
+    let recipe = root.path().join(".chrono-harness/release/build.json");
+    let original: Value = serde_json::from_slice(&fs::read(&recipe).unwrap()).unwrap();
+    let mut changed = original.clone();
+    let verifier = changed["units"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|u| u["id"] == "verify_inputs_tests")
+        .unwrap();
+    verifier["needs"] = json!(["build_judge_workflow"]);
+    fs::write(&recipe, serde_json::to_vec(&changed).unwrap()).unwrap();
+    let changed_keys = keys();
+    assert_eq!(original_keys[0], changed_keys[0]);
+    assert_ne!(original_keys[1], changed_keys[1]);
+
+    let mut shared = original;
+    shared["rust_incremental"] = json!(false);
+    fs::write(&recipe, serde_json::to_vec(&shared).unwrap()).unwrap();
+    let shared_keys = keys();
+    assert_ne!(original_keys[0], shared_keys[0]);
+    assert_ne!(original_keys[1], shared_keys[1]);
 }
 
 #[test]
