@@ -2446,6 +2446,15 @@ impl Inventory {
             fs::File::open(path.parent().ok_or("report slot parent")?)
                 .and_then(|dir| dir.sync_all())
                 .map_err(|e| e.to_string())?;
+            self.expire_archived_slot_address(
+                &slot_owner,
+                &slot.path,
+                output
+                    .lifetime
+                    .as_ref()
+                    .ok_or("archived slot deadline missing")?
+                    .deadline,
+            )?;
         }
         for role in roles {
             let remaining = crate::verified_release::without(&ledger.roots[role], &original.id);
