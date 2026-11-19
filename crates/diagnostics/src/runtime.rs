@@ -81,7 +81,7 @@ impl Policy {
                 != Some(self.directory.trim_end_matches('/'))
             || Path::new(&self.directory).components().count() < 3
             || self.max_bytes == 0
-            || self.max_bytes > 64 * 1024 * 1024
+            || self.max_bytes > crate::rolling::MAX_RUNTIME_LOG_BYTES
             || !(1..=crate::rolling::MAX_FILES).contains(&self.max_files)
             || !retention_window_valid(self.keep_seconds)
         {
@@ -224,14 +224,9 @@ pub fn maintain_at(root: &Path, observed: u64) -> Result<Option<ExpiredLogs>, Fa
         return Ok(None);
     };
     let root = fs::canonicalize(root).map_err(io_failure)?;
-    RollingFile::expire(
-        &root.join(&policy.directory),
-        observed,
-        keep_seconds,
-        policy.max_bytes,
-    )
-    .map(Some)
-    .map_err(io_failure)
+    RollingFile::expire(&root.join(&policy.directory), observed, keep_seconds)
+        .map(Some)
+        .map_err(io_failure)
 }
 
 #[cfg(not(verus_keep_ghost))]
