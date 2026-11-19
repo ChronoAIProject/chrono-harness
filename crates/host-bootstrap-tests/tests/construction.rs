@@ -77,6 +77,35 @@ fn adopted_bootstrap_rotates_whole_directories_after_current_report_and_readers_
 }
 
 #[test]
+fn run_only_report_expires_after_its_reader_releases_without_another_build() {
+    if !isolated_capability_test(
+        "run_only_report_expires_after_its_reader_releases_without_another_build",
+    ) {
+        return;
+    }
+    let mut fixture = Fixture::new();
+    fixture.adopt_retention(0);
+    fixture.config["report_path"] = Value::Null;
+    let selected = fixture.root.join(".chrono-harness/state/bootstrap.json");
+    fs::create_dir_all(selected.parent().unwrap()).unwrap();
+    fs::write(&selected, b"existing core report").unwrap();
+    let run = successful_build(&fixture);
+    let path = run
+        .original
+        .strip_prefix(&fixture.root)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let reader = retention::read_guard(&fixture.root, path).unwrap().unwrap();
+    maintain(&fixture);
+    assert_eq!(fixture.report(&run)["status"], "passed");
+    drop(reader);
+    maintain(&fixture);
+    assert!(!run.original.parent().unwrap().exists());
+    assert_eq!(fs::read(selected).unwrap(), b"existing core report");
+}
+
+#[test]
 fn adopted_bootstrap_keeps_reused_streams_until_their_last_report_retires() {
     if !isolated_capability_test(
         "adopted_bootstrap_keeps_reused_streams_until_their_last_report_retires",

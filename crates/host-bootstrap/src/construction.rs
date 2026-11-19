@@ -180,13 +180,18 @@ impl<'a> Construction<'a> {
     ) -> Result<Self, BuildFailure> {
         let host_root = root.to_str().ok_or("non UTF-8 host root")?.to_owned();
         let before = source::observe(root, inherited);
-        let destination = loaded.profile.report_destination(root)?;
-        let parent = destination
-            .parent()
-            .ok_or("missing bootstrap report parent")?;
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        let parent = match &loaded.profile.report_path {
+            Some(_) => loaded
+                .profile
+                .report_destination(root)?
+                .parent()
+                .ok_or("missing bootstrap report parent")?
+                .to_owned(),
+            None => chrono_harness::no_symlink_parents(root, ".chrono-harness/state")?,
+        };
+        fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
         let inputs = retention::read_scope(root)?;
-        let directory = retention::unique_path(parent, "bootstrap-", "")?;
+        let directory = retention::unique_path(&parent, "bootstrap-", "")?;
         // 整个真实生产目录共用一次发布和子孙租约，不逐文件登记。
         let publication = retention::create_adopted(
             root,
@@ -554,12 +559,11 @@ impl<'a> Construction<'a> {
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("non UTF-8 bootstrap directory")?;
-            let destination = self.profile.report_destination(self.root)?;
-            let slot = destination
-                .strip_prefix(self.root)
-                .map_err(|e| e.to_string())?
-                .to_str()
-                .ok_or("non UTF-8 bootstrap report slot")?;
+            let slot = self
+                .profile
+                .report_path
+                .as_deref()
+                .filter(|_| outcome.is_ok());
             let adopted = self.publication.is_some();
             let dependencies: Vec<String> = self
                 .report
@@ -582,16 +586,18 @@ impl<'a> Construction<'a> {
                 .collect();
             // Protect both generations and all explicitly reused originals before
             // releasing the producer or replacing the selected report bytes.
-            let _slot = if adopted && outcome.is_ok() {
-                retention::reference_report(self.root, slot, directory, &dependencies, None)?
-            } else {
-                None
+            let _slot = match (adopted, slot) {
+                (true, Some(slot)) => {
+                    retention::reference_report(self.root, slot, directory, &dependencies, None)?
+                }
+                (true, None) => {
+                    retention::Inventory::adopted(self.root)?
+                        .ok_or("bootstrap retention policy disappeared")?
+                        .dependencies_paths(directory, &dependencies)?;
+                    None
+                }
+                (false, _) => None,
             };
-            if adopted && outcome.is_err() {
-                retention::Inventory::adopted(self.root)?
-                    .ok_or("bootstrap retention policy disappeared")?
-                    .dependencies_paths(directory, &dependencies)?;
-            }
             if let Some(publication) = self.publication.take() {
                 let completion = publication
                     .complete(json!({"status":self.report.status,"error":self.report.error}));
@@ -610,12 +616,12 @@ impl<'a> Construction<'a> {
                     _ => (),
                 }
             }
-            if outcome.is_ok() {
+            if let Some(slot) = slot {
                 let mut selected = OpenOptions::new()
                     .create(true)
                     .truncate(true)
                     .write(true)
-                    .open(&destination)
+                    .open(self.profile.report_destination(self.root)?)
                     .map_err(|error| error.to_string())?;
                 selected
                     .write_all(&raw)
