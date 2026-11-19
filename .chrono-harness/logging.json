@@ -4,5 +4,6 @@
   "directory": ".chrono-harness/state/logs/",
   "max_bytes": 10485760,
   "max_files": 5,
+  "keep_seconds": 86400,
   "stderr": false
 }
