@@ -16,13 +16,14 @@ fn stage_recovery_requires_the_same_source_and_installed_bytes() {
     let exact = stage_owner::stage_reuse_matches("stage", "first", "stage", "first");
     let other_slot = stage_owner::stage_reuse_matches("earlier", "first", "stage", "first");
     let other_digest = stage_owner::stage_reuse_matches("stage", "later", "stage", "first");
-    let state = stage_profile::state_input_guard(b".chrono-harness/state/");
-    let config = stage_profile::state_input_guard(b".chrono-harness/ci/");
+    let state = stage_profile::ordinary_state_input(false, true);
+    let config = stage_profile::ordinary_state_input(false, false);
+    let named = stage_profile::ordinary_state_input(true, true);
     let copied = stage_lifecycle::qualified_copy_matches(true, true, 16, 16);
     let stale = stage_lifecycle::qualified_copy_matches(false, true, 16, 16);
     let replaced = stage_lifecycle::qualified_copy_matches(true, false, 16, 16);
     let truncated = stage_lifecycle::qualified_copy_matches(true, true, 15, 16);
-    assert(exact && !other_slot && !other_digest && state && !config);
+    assert(exact && !other_slot && !other_digest && state && !config && !named);
     assert(copied && !stale && !replaced && !truncated);
 }
 }

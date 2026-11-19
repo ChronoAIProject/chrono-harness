@@ -1,18 +1,14 @@
 //! 当前宿主启动配置与构建操作的预检；只读取显式输入，不选择或启动进程。
-#[cfg(verus_keep_ghost)]
-use super::identifiers as stage_identifiers;
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::verified_identifiers as stage_identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
 verus! {
-pub fn state_input_guard(prefix: &[u8]) -> (required: bool)
-    ensures required == (prefix@ == b".chrono-harness/state/"@),
+pub fn ordinary_state_input(named_owner: bool, state_input: bool) -> (required: bool)
+    ensures required == (!named_owner && state_input),
 {
-    stage_identifiers::equal_bytes(prefix, b".chrono-harness/state/")
+    !named_owner && state_input
 }
 }
 
@@ -116,13 +112,14 @@ pub(crate) fn read_original(
     report_slot: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     use chrono_harness::retained_artifacts::retention;
-    let _original = match report_slot {
-        Some(slot) => {
+    let _original =
+        if ordinary_state_input(report_slot.is_some(), prefix == b".chrono-harness/state/") {
+            retention::read_guard(root, declared)?
+        } else if let Some(slot) = report_slot {
             retention::consumer_read_guard(root, declared, &retention::current_report_role(slot))?
-        }
-        None if state_input_guard(prefix) => retention::read_guard(root, declared)?,
-        None => None,
-    };
+        } else {
+            None
+        };
     let file = path(root, declared, prefix)?;
     if !file.is_file() {
         return Err(format!("bootstrap input is not a regular file: {declared}"));
