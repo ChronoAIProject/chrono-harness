@@ -402,22 +402,24 @@ impl Client {
             snapshot::QUERY,
             vec![("number", number.to_string()), ("head", head.into())],
         )?;
-        let parsed = snapshot::parse(
-            &raw,
-            &self.config.repository,
-            &self.config.base,
-            number,
-            head,
-            &self.config.required_checks,
-        )?;
-        self.state
-            .observed_snapshot(chrono_harness::verified_release::open_pr(&parsed.state))?;
-        self.result["pr"] = json!(parsed.number);
-        self.result["url"] = json!(parsed.url);
-        self.result["observed_head"] = json!(parsed.head);
-        self.result["pr_state"] = json!(parsed.state);
-        self.result["merge_commit"] = json!(parsed.merge_commit);
-        self.result["draft"] = json!(parsed.draft);
+        let mut parsed =
+            snapshot::pull_request(&raw, &self.config.repository, &self.config.base, number)?;
+        let active = chrono_harness::verified_release::open_pr(&parsed.state);
+        let checks =
+            snapshot::evaluate_checks(&raw, &mut parsed, head, &self.config.required_checks);
+        if verified_snapshot::record_pr_observation(active, checks.is_ok()) {
+            // A verified terminal PR ends object custody even if this commit's
+            // checks cannot be interpreted. The check result still fails below.
+            self.state.observed_snapshot(active)?;
+            self.result["pr"] = json!(parsed.number);
+            self.result["url"] = json!(parsed.url);
+            self.result["observed_head"] = json!(parsed.head);
+            self.result["pr_state"] = json!(parsed.state);
+            self.result["merge_commit"] = json!(parsed.merge_commit);
+            self.result["draft"] = json!(parsed.draft);
+            self.result["checks"] = json!([]);
+        }
+        checks?;
         self.result["checks"] = json!(parsed.checks);
         self.result["outcome"] = json!(parsed.outcome);
         Ok(parsed)

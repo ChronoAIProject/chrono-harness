@@ -33,6 +33,14 @@ pub enum SnapshotOutcome {
     Passed,
 }
 
+/// An already validated terminal PR can settle its object even when the
+/// separate check rollup is ambiguous. An OPEN snapshot needs valid checks.
+pub fn record_pr_observation(active: bool, checks_valid: bool) -> (record: bool)
+    ensures record == (!active || checks_valid),
+{
+    !active || checks_valid
+}
+
 pub open spec fn check_class_spec(state: Seq<char>) -> CheckClass {
     if state == "SUCCESS"@ {
         CheckClass::Passed

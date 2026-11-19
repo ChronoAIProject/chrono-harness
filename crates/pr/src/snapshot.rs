@@ -68,13 +68,11 @@ pub(crate) struct Snapshot {
     pub outcome: &'static str,
 }
 
-pub(crate) fn parse(
+pub(crate) fn pull_request(
     value: &Value,
     repo: &str,
     base: &str,
     number: u64,
-    head: &str,
-    required: &[String],
 ) -> Result<Snapshot, String> {
     repository(value, repo)?;
     let pr = &value["data"]["repository"]["pullRequest"];
@@ -109,7 +107,7 @@ pub(crate) fn parse(
         }
         None
     };
-    let mut result = Snapshot {
+    Ok(Snapshot {
         number,
         url: url.into(),
         head: observed.into(),
@@ -119,14 +117,24 @@ pub(crate) fn parse(
         draft: pr["isDraft"].as_bool().ok_or("invalid draft state")?,
         checks: vec![],
         outcome: "pending",
-    };
+    })
+}
+
+pub(crate) fn evaluate_checks(
+    value: &Value,
+    result: &mut Snapshot,
+    head: &str,
+    required: &[String],
+) -> Result<(), String> {
+    let observed = result.head.as_str();
+    let state = result.state.as_str();
     if verified_snapshot::observed_head_is_stale(observed, head) {
         result.outcome = "stale";
-        return Ok(result);
+        return Ok(());
     }
     if verified_snapshot::pull_request_closed(state) {
         result.outcome = "closed";
-        return Ok(result);
+        return Ok(());
     }
     let commit = &value["data"]["repository"]["object"];
     if field(commit, "/oid")? != head {
@@ -253,7 +261,7 @@ pub(crate) fn parse(
             failed,
             waiting,
         ));
-    Ok(result)
+    Ok(())
 }
 
 fn complete(value: &Value) -> Result<(), String> {

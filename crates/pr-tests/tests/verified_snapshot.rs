@@ -49,6 +49,10 @@ fn snapshot_input_boundaries_are_proved() {
     expect_snapshot_true(policy::valid_pr_state("OPEN"));
     expect_snapshot_true(policy::valid_pr_state("CLOSED"));
     expect_snapshot_true(policy::valid_pr_state("MERGED"));
+    expect_snapshot_true(policy::record_pr_observation(false, false));
+    expect_snapshot_true(policy::record_pr_observation(false, true));
+    expect_snapshot_true(policy::record_pr_observation(true, true));
+    expect_snapshot_true(!policy::record_pr_observation(true, false));
 }
 
 fn expect_snapshot_true(actual: bool)
