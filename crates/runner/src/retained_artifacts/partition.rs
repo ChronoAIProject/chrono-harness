@@ -966,7 +966,11 @@ impl Inventory {
     // Only the owner can publish into this namespace. The name carries both
     // physical identities, including across interruption after unlinking the
     // marker. No replacement directory at the original address is touched.
-    fn finish_path_retirement(&self, pending: &Path, nodes: &mut usize) -> Result<bool, String> {
+    fn finish_metadata_retirement(
+        &self,
+        pending: &Path,
+        nodes: &mut usize,
+    ) -> Result<bool, String> {
         let relative = pending
             .strip_prefix(&self.directory)
             .map_err(|e| e.to_string())?
@@ -1002,35 +1006,58 @@ impl Inventory {
         {
             return Err("retiring path identity changed".into());
         }
-        let marker = pending.join("address.json");
+        let parent = pending.parent().ok_or("retiring metadata parent")?;
+        let marker_name = if parent == self.directory.join("roles") {
+            "record.json"
+        } else if parent == self.directory.join("paths") {
+            "address.json"
+        } else {
+            return Err("unknown metadata retirement namespace".into());
+        };
+        let marker = pending.join(marker_name);
+        let mut has_marker = false;
         for entry in fs::read_dir(pending).map_err(|e| e.to_string())? {
             let entry = entry.map_err(|e| e.to_string())?;
-            if entry.file_name() != "address.json" || identity(&marker)? != marker_id {
-                return Err("retiring path contains an unknown or replaced member".into());
+            if entry.file_name() != marker_name || identity(&marker)? != marker_id {
+                return Err("retiring metadata contains an unknown or replaced member".into());
             }
+            has_marker = true;
         }
-        if let Some(address) = self.read_metadata::<Address>(&marker)? {
-            if address.output.is_some() || sha256(address.path.as_bytes()) != path_digest {
-                return Err("retiring path mapping differs".into());
+        if has_marker {
+            let matches = if marker_name == "record.json" {
+                self.read_metadata::<Role>(&marker)?.is_some_and(|role| {
+                    role.schema == "chrono-retained-role/v2"
+                        && role.directory_identity == dir_id
+                        && role.ids.is_empty()
+                        && role.attached.is_empty()
+                        && sha256(role.role.as_bytes()) == path_digest
+                })
+            } else {
+                self.read_metadata::<Address>(&marker)?
+                    .is_some_and(|address| {
+                        address.output.is_none() && sha256(address.path.as_bytes()) == path_digest
+                    })
+            };
+            if !matches {
+                return Err("retiring metadata mapping differs".into());
             }
-            if !self.path_step_available(*nodes) {
+            if !self.metadata_step_available(*nodes) {
                 return Ok(false);
             }
-            crate::artifact_disposal::dispose_entry(pending, "address.json", marker_id, || {
+            crate::artifact_disposal::dispose_entry(pending, marker_name, marker_id, || {
                 self.stable(&gate)
             })?;
             *nodes += 1;
         }
-        if !self.path_step_available(*nodes) {
+        if !self.metadata_step_available(*nodes) {
             return Ok(false);
         }
-        let parent = pending.parent().ok_or("retiring path parent")?;
         crate::artifact_disposal::dispose_entry(parent, name, dir_id, || self.stable(&gate))?;
         *nodes += 1;
         Ok(true)
     }
 
-    fn path_step_available(&self, nodes: usize) -> bool {
+    fn metadata_step_available(&self, nodes: usize) -> bool {
         nodes < self.policy.max_nodes_per_round
             && self.metadata_room()
             && self.round_began.get().unwrap().elapsed().as_millis()
@@ -1043,7 +1070,7 @@ impl Inventory {
         observed: u64,
         nodes: &mut usize,
     ) -> Result<bool, String> {
-        if !self.path_step_available(*nodes) {
+        if !self.metadata_step_available(*nodes) {
             return Ok(false);
         }
         let dir_id = identity(directory)?;
@@ -1101,7 +1128,7 @@ impl Inventory {
         gate: &DirectoryLease,
         nodes: &mut usize,
     ) -> Result<Option<PathBuf>, String> {
-        if self.path_metadata_occupied(directory, path)? || !self.path_step_available(*nodes) {
+        if self.path_metadata_occupied(directory, path)? || !self.metadata_step_available(*nodes) {
             return Ok(None);
         }
         let dir_id = identity(directory)?;
@@ -1120,7 +1147,7 @@ impl Inventory {
             .to_str()
             .ok_or("path address UTF8")?;
         no_symlink_parents(&self.directory, relative)?;
-        if !self.path_step_available(*nodes) {
+        if !self.metadata_step_available(*nodes) {
             return Ok(None);
         }
         self.stable(gate)?;
@@ -1260,7 +1287,7 @@ impl Inventory {
                     record(
                         "retiring-paths",
                         &path,
-                        self.metadata_round(|nodes| self.finish_path_retirement(&path, nodes)),
+                        self.metadata_round(|nodes| self.finish_metadata_retirement(&path, nodes)),
                     )?;
                 }
                 Err(error) => record("retiring-paths", &root, Err(error.to_string()))?,
@@ -1378,7 +1405,7 @@ impl Inventory {
                     drop(path_gate);
                     // The pending name now owns any work left by this pass or
                     // an interruption, even after the object cursor is retired.
-                    self.finish_path_retirement(&pending, nodes)?;
+                    self.finish_metadata_retirement(&pending, nodes)?;
                     record.prune_path = next;
                 }
             }
@@ -1404,14 +1431,33 @@ impl Inventory {
         observed: u64,
         nodes: &mut usize,
     ) -> Result<bool, String> {
-        if *nodes + 4 > self.policy.max_nodes_per_round
-            || !self.metadata_room()
-            || self.round_began.get().unwrap().elapsed().as_millis()
-                >= self.policy.max_millis_per_round as u128
-        {
+        if !self.metadata_step_available(*nodes) {
             return Ok(false);
         }
-        *nodes += 1;
+        // A protected observation still consumes a visit. When a mutation fits,
+        // charge the actual step instead so a one-node round can make progress.
+        let before = *nodes;
+        let result = if directory
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("retiring-"))
+        {
+            self.finish_metadata_retirement(directory, nodes)
+        } else {
+            self.prune_registered_role(directory, observed, nodes)
+        };
+        if *nodes == before {
+            *nodes += 1;
+        }
+        result
+    }
+
+    fn prune_registered_role(
+        &self,
+        directory: &Path,
+        observed: u64,
+        nodes: &mut usize,
+    ) -> Result<bool, String> {
         let Some(gate) = DirectoryLease::acquire_local(directory, true, None)? else {
             return Ok(false);
         };
@@ -1436,7 +1482,7 @@ impl Inventory {
                         "consumer pending record is not an empty birth; preserve metadata".into(),
                     );
                 }
-                if *nodes + 4 > self.policy.max_nodes_per_round || !self.metadata_room() {
+                if !self.metadata_step_available(*nodes) {
                     return Ok(false);
                 }
                 self.stable(&gate)?;
@@ -1444,6 +1490,9 @@ impl Inventory {
                 // original exclusion remains held through publication/pruning.
                 fs::rename(&pending_path, &record_path).map_err(|error| error.to_string())?;
                 *nodes += 1;
+                if !self.metadata_step_available(*nodes) {
+                    return Ok(false);
+                }
                 pending
             }
         };
@@ -1462,21 +1511,52 @@ impl Inventory {
                 *nodes += 1;
             }
         }
-        if role.metadata_expires <= observed {
-            self.remove_metadata_directory(directory, &gate, &["record.json", "record.pending"])?;
-            *nodes += 3;
-            return Ok(true);
+        if role.metadata_expires > observed || !self.metadata_step_available(*nodes) {
+            return Ok(false);
         }
-        Ok(false)
+        // A published record is authoritative over an interrupted replacement.
+        // Check every name before removing even that unused partial file.
+        let mut pending_id = None;
+        for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            if !entry.file_type().map_err(|e| e.to_string())?.is_file() {
+                return Err("unknown metadata member; preserve directory".into());
+            }
+            if entry.file_name() == "record.pending" {
+                pending_id = Some(identity(&entry.path())?);
+            } else if entry.file_name() != "record.json" {
+                return Err("unknown metadata member; preserve directory".into());
+            }
+        }
+        if let Some(id) = pending_id {
+            crate::artifact_disposal::dispose_entry(directory, "record.pending", &id, || {
+                self.stable(&gate)
+            })?;
+            *nodes += 1;
+        }
+        if !self.metadata_step_available(*nodes) {
+            return Ok(false);
+        }
+        let marker_id = identity(&record_path)?;
+        let pending = directory.with_file_name(format!(
+            "retiring-{}_{}_{}",
+            sha256(role.role.as_bytes()),
+            role.directory_identity,
+            marker_id
+        ));
+        self.stable(&gate)?;
+        crate::artifact_disposal::publish_entry(directory, &pending)?;
+        *nodes += 1;
+        drop(gate);
+        if !self.metadata_step_available(*nodes) {
+            return Ok(false);
+        }
+        self.finish_metadata_retirement(&pending, nodes)
     }
     fn prune_roles(&self, observed: u64, nodes: &mut usize) -> Result<Vec<Value>, String> {
         let mut errors = Vec::new();
         for entry in fs::read_dir(self.directory.join("roles")).map_err(|e| e.to_string())? {
-            if *nodes + 4 > self.policy.max_nodes_per_round
-                || !self.metadata_room()
-                || self.round_began.get().unwrap().elapsed().as_millis()
-                    >= self.policy.max_millis_per_round as u128
-            {
+            if !self.metadata_step_available(*nodes) {
                 break;
             }
             let directory = entry.map_err(|e| e.to_string())?.path();
