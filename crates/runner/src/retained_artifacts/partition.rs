@@ -1386,13 +1386,37 @@ impl Inventory {
                 pending
             }
         };
-        if self.role_directory(&initial.role)? != directory {
-            return Err("consumer record address changed".into());
+        self.validate_role(&initial.role, directory, &initial)?;
+        if !initial.ids.is_empty() || !initial.attached.is_empty() {
+            return Ok(false);
         }
-        let role = self
-            .read_role(&initial.role)?
-            .ok_or("consumer record disappeared")?;
-        if role.ids.is_empty() && role.attached.is_empty() && role.metadata_expires <= observed {
+        let mut role = initial;
+        if role.metadata_expires > observed {
+            let Some(window) = self.policy.max_lifetime_seconds else {
+                return Ok(false);
+            };
+            // Older writers renewed this deadline on membership changes.
+            // The validated physical directory identifies the role generation.
+            let metadata = fs::symlink_metadata(directory).map_err(|e| e.to_string())?;
+            let birth = match metadata.created() {
+                Ok(time) => time.duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?,
+                Err(error) if error.kind() == std::io::ErrorKind::Unsupported => return Ok(false),
+                Err(error) => return Err(error.to_string()),
+            };
+            let deadline = super::bounded_expiry(
+                role.metadata_expires,
+                birth.as_secs().saturating_add(window),
+            );
+            if deadline < role.metadata_expires {
+                role.metadata_expires = deadline;
+                if deadline > observed {
+                    self.stable(&gate)?;
+                    self.write_metadata(&record_path, &role)?;
+                    *nodes += 1;
+                }
+            }
+        }
+        if role.metadata_expires <= observed {
             self.remove_metadata_directory(directory, &gate, &["record.json", "record.pending"])?;
             *nodes += 3;
             return Ok(true);
