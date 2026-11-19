@@ -1,10 +1,33 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub enum CopyMember { Directory, File, Skip }
+
+pub fn short_copy_member(directory: bool, file: bool) -> (member: CopyMember)
+    ensures
+        matches!(member, CopyMember::Directory) == directory,
+        matches!(member, CopyMember::File) == (!directory && file),
+        matches!(member, CopyMember::Skip) == (!directory && !file),
+{
+    if directory { CopyMember::Directory } else if file { CopyMember::File } else { CopyMember::Skip }
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
 #[path = "gating.rs"]
+#[cfg(not(verus_keep_ghost))]
 pub(super) mod gating;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -135,16 +158,21 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
         .is_err()
     );
 }
-use chrono_harness::{prepared, sha256};
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{prepared, retained_artifacts::retention, sha256};
+#[cfg(not(verus_keep_ghost))]
 use std::path::PathBuf;
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct ShortHost {
     _dir: crate::tools::FixtureDirectory,
+    failure_destination: FailureDestination,
     root: PathBuf,
     pub(super) remote: PathBuf,
     pub(super) base: String,
     pub(super) candidate: String,
 }
+#[cfg(not(verus_keep_ghost))]
 impl ShortHost {
     pub(super) fn new() -> Self {
         let (old, _, _) = consumer_source();
@@ -259,6 +287,7 @@ impl ShortHost {
         let candidate = git(&root, &["rev-parse", "HEAD"]);
         Self {
             _dir: dir,
+            failure_destination: FailureDestination::configured(),
             root,
             remote,
             base,
@@ -322,6 +351,7 @@ impl ShortHost {
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn real_short_check_tracks_explicit_remote_and_head_and_preserves_entry() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -374,6 +404,7 @@ fn real_short_check_tracks_explicit_remote_and_head_and_preserves_entry() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn real_short_check_with_inherited_ownership_executes_selected_operations() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -431,8 +462,101 @@ fn real_short_check_with_inherited_ownership_executes_selected_operations() {
         binding["environment"]["effective"]
     );
 }
+#[cfg(not(verus_keep_ghost))]
+const FAILURE_FAMILY: &str = ".chrono-harness/state/ci-test-failures";
+
+#[cfg(not(verus_keep_ghost))]
+enum FailureDestination {
+    Checkout(PathBuf),
+    Caller(PathBuf),
+}
+
+#[cfg(not(verus_keep_ghost))]
+impl FailureDestination {
+    fn configured() -> Self {
+        match std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY") {
+            Some(directory) => Self::Caller(directory.into()),
+            None => Self::Checkout(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")),
+        }
+    }
+
+    fn preserve(&self, fixture: &Path) -> Result<PathBuf, String> {
+        let source = fixture.join(".chrono-harness/state");
+        let label = sha256(fixture.as_os_str().as_encoded_bytes());
+        let host = match self {
+            Self::Caller(directory) => {
+                let target = directory.join(label);
+                copy_short_state(&source, &target, None)?;
+                return Ok(target);
+            }
+            Self::Checkout(host) => fs::canonicalize(host).map_err(|e| e.to_string())?,
+        };
+        let owner =
+            retention::Inventory::adopted(&host)?.ok_or("missing CI fixture retention policy")?;
+        let family = chrono_harness::no_symlink_parents(&host, FAILURE_FAMILY)?;
+        fs::create_dir_all(&family).map_err(|e| e.to_string())?;
+        let address = retention::unique_path(&family, "short-", "")?;
+        let relative = format!(
+            "{FAILURE_FAMILY}/{}",
+            address
+                .file_name()
+                .and_then(|s| s.to_str())
+                .ok_or("invalid failure copy address")?
+        );
+        let target = host.join(&relative);
+        let publication = owner.plan(
+            "ci-fixture",
+            &relative,
+            true,
+            json!({"kind":"short-fixture","source":label}),
+        )?;
+        publication.materialize()?;
+        let copying = copy_short_state(&source, &target, Some(&publication));
+        // Keep the directory alive between sealing and setting its diagnostic expiry.
+        let reader_owner =
+            retention::Inventory::adopted(&host)?.ok_or("missing CI fixture retention policy")?;
+        let _reader = reader_owner.consume(publication.id())?;
+        let seal = publication
+            .complete_sealed(
+                json!({"kind":"short-fixture","source":label,"copy_error":copying.as_ref().err()}),
+            )
+            .and_then(|()| reader_owner.retain_diagnostic_path(&relative));
+        if let Err(error) = copying {
+            return Err(match seal {
+                Ok(()) => format!("{}: {error}", target.display()),
+                Err(seal_error) => {
+                    format!("{}: {error}; publication: {seal_error}", target.display())
+                }
+            });
+        }
+        seal?;
+        Ok(target)
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn copy_short_state(
+    source: &Path,
+    target: &Path,
+    publication: Option<&retention::Publication>,
+) -> Result<(), String> {
+    retention::directory_adopted(publication, target)?;
+    for entry in fs::read_dir(source).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let target = target.join(entry.file_name());
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        match short_copy_member(kind.is_dir(), kind.is_file()) {
+            CopyMember::Directory => copy_short_state(&entry.path(), &target, publication)?,
+            CopyMember::File => retention::copy_adopted(publication, &entry.path(), &target)?,
+            CopyMember::Skip => {}
+        }
+    }
+    Ok(())
+}
+
 // Keep original fixture reports before TempDir teardown on an unexpected owner
 // failure. This changes diagnostics only; commands, assertions and bounds stay fixed.
+#[cfg(not(verus_keep_ghost))]
 impl Drop for ShortHost {
     fn drop(&mut self) {
         if !std::thread::panicking() {
@@ -441,34 +565,15 @@ impl Drop for ShortHost {
         if let Err(error) = self._dir.retain_diagnostic() {
             eprintln!("Failed fixture diagnostic reference unavailable: {error}");
         }
-        let directory = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../.chrono-harness/state/ci-test-failures")
-            });
-        fn copy(source: &Path, destination: &Path) -> std::io::Result<()> {
-            fs::create_dir_all(destination)?;
-            for entry in fs::read_dir(source)? {
-                let entry = entry?;
-                let target = destination.join(entry.file_name());
-                if entry.file_type()?.is_dir() {
-                    copy(&entry.path(), &target)?;
-                } else if entry.file_type()?.is_file() {
-                    fs::copy(entry.path(), target)?;
-                }
-            }
-            Ok(())
-        }
-        let target = directory.join(sha256(self.root.as_os_str().as_encoded_bytes()));
-        match copy(&self.root.join(".chrono-harness/state"), &target) {
-            Ok(()) => eprintln!("Original failed fixture reports: {}", target.display()),
+        match self.failure_destination.preserve(&self.root) {
+            Ok(target) => eprintln!("Original failed fixture reports: {}", target.display()),
             Err(error) => eprintln!("Failed fixture report retention failed: {error}"),
         }
     }
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_short_fixture_retains_original_state_before_removing_host() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -480,7 +585,23 @@ fn failed_short_fixture_retains_original_state_before_removing_host() {
         let report = ".chrono-harness/state/preparation/acquisition.json";
         fs::create_dir_all(root.join(".chrono-harness/state/preparation")).unwrap();
         fs::write(root.join(report), original).unwrap();
+        let archive = tempfile::tempdir().unwrap();
+        let archive_root = fs::canonicalize(archive.path()).unwrap();
+        git(&archive_root, &["init", "-q"]);
+        fs::create_dir_all(archive_root.join(".chrono-harness")).unwrap();
+        let policy = json!({
+            "schema":"chrono-output-retention/v2","producers":{"ci-fixture":[format!("{FAILURE_FAMILY}/")]},
+            "keep_seconds":0,"diagnostic_keep_seconds":86400,"max_lifetime_seconds":86400,
+            "metadata_keep_seconds":0,"max_related_outputs":512,"max_summaries":128,
+            "max_nodes_per_round":256,"max_bytes_per_round":67108864,"max_millis_per_round":25
+        });
+        fs::write(
+            archive_root.join(".chrono-harness/retention.json"),
+            policy.to_string(),
+        )
+        .unwrap();
         let mut host = ShortHost {
+            failure_destination: FailureDestination::Checkout(archive_root.clone()),
             _dir: crate::tools::FixtureDirectory::Ephemeral(directory),
             root: root.clone(),
             remote: root.join("remote"),
@@ -497,14 +618,16 @@ fn failed_short_fixture_retains_original_state_before_removing_host() {
             host.root = consumer;
         }
         let active_root = host.root.clone();
-        let evidence = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../.chrono-harness/state/ci-test-failures")
-            })
-            .join(sha256(active_root.as_os_str().as_encoded_bytes()));
-        assert!(!evidence.exists());
+        let independent = tempfile::tempdir().unwrap();
+        let persistent = FailureDestination::Caller(independent.path().to_owned())
+            .preserve(&active_root)
+            .unwrap();
+        assert_eq!(
+            persistent,
+            independent
+                .path()
+                .join(sha256(active_root.as_os_str().as_encoded_bytes()))
+        );
         let failed = std::panic::catch_unwind(move || {
             let _host = host;
             panic!("fixture consumer failed before reading its original report");
@@ -514,15 +637,55 @@ fn failed_short_fixture_retains_original_state_before_removing_host() {
             !active_root.exists(),
             "fixture teardown must still remove the host"
         );
+        let copies = fs::read_dir(archive_root.join(FAILURE_FAMILY))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let [copy] = copies.as_slice() else {
+            panic!("expected one failed fixture copy")
+        };
+        let evidence = copy.path();
         assert_eq!(
             fs::read(evidence.join("preparation/acquisition.json")).unwrap(),
             original
         );
-        fs::remove_dir_all(evidence).unwrap();
+        let name = evidence
+            .strip_prefix(&archive_root)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let owner = retention::Inventory::adopted(&archive_root)
+            .unwrap()
+            .unwrap();
+        let status = owner.producer_status("ci-fixture", Some(name)).unwrap();
+        let record = &status["records"][0];
+        assert_eq!(record["sealed"], true);
+        assert_eq!(record["outcome"]["kind"], "short-fixture");
+        assert!(record["outcome"]["copy_error"].is_null());
+        let born = record["lifetime"]["created_at"].as_u64().unwrap();
+        let deadline = record["lifetime"]["deadline"].as_u64().unwrap();
+        assert_eq!(deadline - born, 86400);
+        assert_eq!(record["expires"], deadline);
+        let id = [record["id"].as_str().unwrap().to_owned()];
+        owner.maintain_originals_at(&id, deadline - 1).unwrap();
+        assert!(evidence.is_dir());
+        for _ in 0..32 {
+            let round = owner.maintain_originals_at(&id, deadline).unwrap();
+            assert_eq!(round["accounting_errors"], json!([]));
+            if !evidence.exists() {
+                break;
+            }
+        }
+        assert!(!evidence.exists());
+        assert_eq!(
+            fs::read(persistent.join("preparation/acquisition.json")).unwrap(),
+            original
+        );
     }
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_units_are_independent_and_value_less_collection_runs_zero_business() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -555,6 +718,7 @@ fn short_units_are_independent_and_value_less_collection_runs_zero_business() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn stream_report(root: &Path, path: &str, out: &std::process::Output) -> Value {
     let published = fs::read(root.join(path)).unwrap();
     let reference: Value = serde_json::from_slice(&published).unwrap();
@@ -589,6 +753,7 @@ fn stream_report(root: &Path, path: &str, out: &std::process::Output) -> Value {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn scoped_stream_reports_reject_missing_or_modified_streams_without_business_reruns() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -660,6 +825,7 @@ fn scoped_stream_reports_reject_missing_or_modified_streams_without_business_rer
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn scoped_stream_reports_keep_business_failure_and_transport_failure_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -738,6 +904,7 @@ fn scoped_stream_reports_keep_business_failure_and_transport_failure_originals()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn scoped_stream_reports_enforce_the_combined_original_read_budget() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -810,6 +977,7 @@ fn scoped_stream_reports_enforce_the_combined_original_read_budget() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn scoped_report_references_retain_originals_and_reject_missing_or_changed_evidence() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -898,6 +1066,7 @@ fn scoped_report_references_retain_originals_and_reject_missing_or_changed_evide
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn report_references_preserve_business_failure_and_original_read_limits() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -953,6 +1122,7 @@ fn report_references_preserve_business_failure_and_original_read_limits() {
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_preserves_actual_business_and_producer_failures() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -981,6 +1151,7 @@ fn short_preserves_actual_business_and_producer_failures() {
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_rejects_dirty_missing_unknown_binding_selector_and_long_spelling() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1026,6 +1197,7 @@ fn short_rejects_dirty_missing_unknown_binding_selector_and_long_spelling() {
     h.run(&["check"], 2);
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn generated_native_check_step_executes_same_short_command_and_event_rules() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1122,6 +1294,7 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn local_collection_rejects_stale_failed_and_wrong_pin_reports_without_execution() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1147,6 +1320,7 @@ fn local_collection_rejects_stale_failed_and_wrong_pin_reports_without_execution
     h.run(&["check", "--collect"], 1);
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_schema_and_native_selector_fail_closed_on_missing_ambiguous_and_drifted_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1188,6 +1362,7 @@ fn short_schema_and_native_selector_fail_closed_on_missing_ambiguous_and_drifted
     h.run(&["check"], 2);
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn configured_selector_resolves_v4_without_legacy_git_and_has_no_platform_fallback() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1221,6 +1396,7 @@ fn configured_selector_resolves_v4_without_legacy_git_and_has_no_platform_fallba
     assert!(!o.status.success());
     assert!(String::from_utf8_lossy(&o.stderr).contains("no registered platform"));
 }
+#[cfg(not(verus_keep_ghost))]
 fn adjudicate(h: &ShortHost, req: &Value) -> Value {
     use std::io::Write;
     let mut child = Command::new(h.root.join(".chrono-harness/bin/chrono-judge-ci"))
@@ -1241,6 +1417,7 @@ fn adjudicate(h: &ShortHost, req: &Value) -> Value {
     serde_json::from_slice(&o.stdout).unwrap()
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn actual_consumer_rejects_fabricated_expanded_entry_and_source_disagreement() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1283,6 +1460,7 @@ fn actual_consumer_rejects_fabricated_expanded_entry_and_source_disagreement() {
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn native_short_initial_requires_explicit_parentless_event_and_canonical_entry() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1317,6 +1495,7 @@ fn native_short_initial_requires_explicit_parentless_event_and_canonical_entry()
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn collection_rejects_duplicate_registered_report_paths() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1338,6 +1517,7 @@ fn collection_rejects_duplicate_registered_report_paths() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_scoped_binding_never_falls_into_legacy_unbound_git() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1352,6 +1532,7 @@ fn short_scoped_binding_never_falls_into_legacy_unbound_git() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn preparation_retains_environment_identities_without_credential_values() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1405,6 +1586,7 @@ fn preparation_retains_environment_identities_without_credential_values() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn generated_native_collect_gathers_inside_short_check_and_repeats_without_business() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1454,6 +1636,7 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn local_collection_only_requires_delta_units_and_ignores_unrelated_absent_or_stale_reports() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1492,6 +1675,7 @@ fn local_collection_only_requires_delta_units_and_ignores_unrelated_absent_or_st
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn local_collection_empty_delta_needs_no_reports_or_business() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1507,6 +1691,7 @@ fn local_collection_empty_delta_needs_no_reports_or_business() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn local_collection_shared_obligations_require_each_assigned_unit() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1544,6 +1729,7 @@ fn local_collection_shared_obligations_require_each_assigned_unit() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn copy_artifacts(source: &Path, target: &Path) {
     fs::create_dir_all(target).unwrap();
     for item in fs::read_dir(source).unwrap() {
@@ -1557,6 +1743,7 @@ pub(super) fn copy_artifacts(source: &Path, target: &Path) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1671,6 +1858,7 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1932,6 +2120,7 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
 
 // Read the existing canonical path, then verify its immutable original. Console
 // text is a human projection, not a second report protocol.
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn published_report(
     root: &Path,
     unit: Option<&str>,
@@ -1960,6 +2149,7 @@ pub(super) fn published_report(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_console_large_original_success_has_constant_output_and_no_extra_operations() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2023,6 +2213,7 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_transport_preserves_process_failure_before_decoding_partial_output() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2052,6 +2243,7 @@ fn short_transport_preserves_process_failure_before_decoding_partial_output() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn native_fixture(root: &Path, path: &str) {
     use std::os::unix::fs::PermissionsExt;
 
@@ -2067,6 +2259,7 @@ fn native_fixture(root: &Path, path: &str) {
     fs::set_permissions(destination, fs::Permissions::from_mode(0o755)).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn native_transport_ready(root: &Path) -> &'static str {
     let program = env!("CARGO_BIN_EXE_chrono-ci-test-transport");
     let output = Command::new(program)
@@ -2080,6 +2273,7 @@ fn native_transport_ready(root: &Path) -> &'static str {
     program
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn retained_receipt(root: &Path, prefix: &str) -> (String, Vec<u8>, Value) {
     let dir = root.join(".chrono-harness/state/preparation");
     let entry = fs::read_dir(dir)
@@ -2101,6 +2295,7 @@ fn retained_receipt(root: &Path, prefix: &str) -> (String, Vec<u8>, Value) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_producer_failure_version_decode_and_validation_keep_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2171,6 +2366,7 @@ fn short_producer_failure_version_decode_and_validation_keep_originals() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2246,6 +2442,7 @@ fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_prelaunch_failures_retain_actual_errors_without_business_launches() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2406,6 +2603,7 @@ fn short_prelaunch_failures_retain_actual_errors_without_business_launches() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_console_failed_blocked_and_transport_diagnostics_are_bounded_and_visible() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2454,6 +2652,7 @@ fn short_console_failed_blocked_and_transport_diagnostics_are_bounded_and_visibl
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_console_zero_delta_preserves_large_report_and_executes_zero_business() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2484,6 +2683,7 @@ fn short_console_zero_delta_preserves_large_report_and_executes_zero_business() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn native_short_version_failure_retains_probe_in_selected_unit_upload_directory() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2527,6 +2727,7 @@ fn native_short_version_failure_retains_probe_in_selected_unit_upload_directory(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn short_console_does_not_revalidate_deep_accepted_evidence_or_change_verdict() {
     if !chrono_git_boundary::isolated_git() {
         return;
