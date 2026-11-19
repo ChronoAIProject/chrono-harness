@@ -997,6 +997,9 @@ fn terminal_original_fixture(fault: &str) -> EnrollmentOriginalsFixture {
     e["cleanup"] = value!({"stage":"pending","detail":"terminal handoff recorded",
         "report_path":path});
     fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
+    if fault == "before-retention" {
+        return h;
+    }
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
     let publication = inventory
         .begin("lifecycle-original", path, value!(null))
@@ -1135,6 +1138,92 @@ fn invalid_terminal_original_handoff_preserves_ledger_and_existing_consumer() {
         );
         assert_eq!(fs::read(&role_path).unwrap(), role_bytes, "{fault}");
         assert_eq!(fs::read(h.root.join(path)).ok(), raw, "{fault}");
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn terminal_facts_from_a_sealed_artifacts_only_cleanup() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    for fault in [
+        "",
+        "another-terminal",
+        "removed",
+        "unsealed",
+        "pending-terminal",
+    ] {
+        let h = terminal_original_fixture(if fault == "pending-terminal" {
+            "unsealed"
+        } else {
+            "before-retention"
+        });
+        let ledger_path = h.record.join("ledger.json");
+        let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+        let e = &mut ledger["entries"][0];
+        e["status"] = value!("disposed");
+        e.as_object_mut().unwrap().remove("cleanup");
+        let terminal = &e["terminal"]["receipt"];
+        let raw = fs::read(h.root.join(terminal["path"].as_str().unwrap())).unwrap();
+        let path = ".chrono-harness/state/worktrees/cleanup-history.json";
+        let mut result = value!({
+            "schema":"chrono-worktree-report/v1","operation":"cleanup","status":"cleaned",
+            "source_root":h.root,"config_path":POLICY,"report_path":path,
+            "head":e["terminal"]["head"],"destination":h.target,"automatic_cleanup":true,
+            "lock_reason":"cleanup-history","worktree_removal":"preserved","terminal_receipt":terminal,
+            "terminal_input":{"schema":"chrono-worktree-retained-input/v1","source_root":h.root,
+                "path":terminal["path"],"sha256":terminal["sha256"],"byte_length":raw.len(),"format":"receipt"}
+        });
+        match fault {
+            "another-terminal" => result["terminal_receipt"]["sha256"] = value!("0".repeat(64)),
+            "removed" => result["worktree_removal"] = value!("removed"),
+            _ => (),
+        }
+        let raw = serde_json::to_vec(&result).unwrap();
+        fs::create_dir_all(h.root.join(".chrono-harness/state/worktrees")).unwrap();
+        fs::write(h.root.join(path), &raw).unwrap();
+        let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+        let publication = inventory
+            .begin("lifecycle-original", path, value!(null))
+            .unwrap();
+        if fault != "unsealed" {
+            publication.complete(value!({"status":"cleaned"})).unwrap();
+        }
+        let role = format!(
+            "worktree-enrollment:{}",
+            sha256(h.target.to_str().unwrap().as_bytes())
+        );
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .reference_paths(
+                &role,
+                &[terminal["path"].as_str().unwrap().into(), path.into()],
+            )
+            .unwrap();
+        e["attempts"] = value!([{"path":path,"token":"cleanup-history","receipt":{"path":path,"sha256":sha256(&raw)}}]);
+        let before = serde_json::to_vec(&ledger).unwrap();
+        fs::write(&ledger_path, &before).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        let after = fs::read(&ledger_path).unwrap();
+        if fault.is_empty() {
+            assert_eq!(code, 0, "{report}");
+            let mut transferred = json(&after).unwrap();
+            assert!(
+                transferred["entries"][0]["terminal"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("established")
+                    .unwrap()
+                    .is_string()
+            );
+            assert_eq!(transferred, ledger);
+        } else {
+            assert_ne!(code, 0, "{fault}: {report}");
+            assert_eq!(after, before, "{fault}");
+        }
     }
 }
 

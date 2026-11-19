@@ -2523,6 +2523,62 @@ impl Manager {
         Ok(())
     }
 
+    /// Older terminals can predate the retention store. An already published
+    /// cleanup which read those exact bytes can identify the terminal facts
+    /// for completed artifacts-only history. It cannot establish tree removal.
+    fn cleanup_consumed_terminal(
+        &self,
+        entry: &Entry,
+        terminal: &Terminal,
+        terminal_bytes: &[u8],
+        inventory: &chrono_harness::retained_artifacts::retention::Inventory,
+        role: &str,
+    ) -> Result<bool, String> {
+        if entry.status != "disposed" || !terminal.artifacts_only || terminal.dispose_evidence {
+            return Ok(false);
+        }
+        let Some(attempt) = entry.attempts.last() else {
+            return Ok(false);
+        };
+        let Some(receipt) = &attempt.receipt else {
+            return Ok(false);
+        };
+        let config: crate::Config = decode(&self.inputs.anchor_config_bytes)?;
+        if receipt.path != attempt.path
+            || attempt.path != format!("{}{}.json", config.report_directory, attempt.token)
+        {
+            return Ok(false);
+        }
+        let root = &self.inputs.policy.coordinator_root;
+        let _cleanup = chrono_harness::retained_artifacts::retention::consumer_read_guard(
+            root,
+            &receipt.path,
+            role,
+        )?;
+        let bytes = self.receipt(receipt)?;
+        if !inventory.published_original(&receipt.path, &receipt.sha256, bytes.len() as u64)? {
+            return Ok(false);
+        }
+        let source = inventory.producer_status("lifecycle-original", Some(&receipt.path))?;
+        let result = json(&bytes)?;
+        Ok(source["records"].as_array().is_some_and(|records|
+            matches!(records.as_slice(), [r] if r["phase"] == "released" && r["sealed"] == true))
+            && result["schema"] == "chrono-worktree-report/v1"
+            && result["operation"] == "cleanup"
+            && result["automatic_cleanup"] == true
+            && result["config_path"] == self.inputs.config_path
+            && result["source_root"] == value!(root)
+            && result["destination"] == value!(entry.path)
+            && result["head"] == terminal.head
+            && result["report_path"] == attempt.path
+            && result["lock_reason"] == attempt.token
+            && result["status"] == "cleaned"
+            && result["worktree_removal"] == "preserved"
+            && result["terminal_receipt"] == value!(terminal.receipt)
+            && result["terminal_input"]
+                == self.retained_input(&terminal.receipt.path, terminal_bytes, "receipt"))
+    }
+
     fn reconcile_terminal_handoffs(&mut self) -> Result<(), String> {
         let role = self.original_role()?;
         let root = &self.inputs.policy.coordinator_root;
@@ -2534,11 +2590,12 @@ impl Manager {
             let Some(terminal) = &e.terminal else {
                 continue;
             };
-            let _input = chrono_harness::retained_artifacts::retention::consumer_read_guard(
-                root,
-                &terminal.receipt.path,
-                &role,
-            )?;
+            let terminal_input =
+                chrono_harness::retained_artifacts::retention::consumer_read_guard(
+                    root,
+                    &terminal.receipt.path,
+                    &role,
+                )?;
             let bytes = self.receipt(&terminal.receipt)?;
             let original = json(&bytes)?;
             if original["schema"] == "chrono-worktree-absent-adoption-receipt/v1" {
@@ -2579,7 +2636,9 @@ impl Manager {
                     &terminal.receipt.path,
                     &terminal.receipt.sha256,
                     bytes.len() as u64,
-                )? {
+                )? && (terminal_input.is_some()
+                    || !self.cleanup_consumed_terminal(e, terminal, &bytes, &inventory, &role)?)
+                {
                     return Err("terminal original publication is not established".into());
                 }
             }
