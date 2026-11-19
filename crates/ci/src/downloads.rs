@@ -1,8 +1,30 @@
 //! 编译 planner 之前恢复下载资料；执行和传输仍由原生 cache action 负责。
+#[cfg(verus_keep_ghost)]
+use super::identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn saves_download(producer: &str, job: &str) -> (save: bool)
+    ensures save == (producer@ == job@),
+{
+    identifiers::equal_text(producer, job)
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{cache, scalar, verified_literals as policy};
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{decode, no_symlink_parents, relative_path};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -11,15 +33,19 @@ use std::{
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Config {
     pub schema: String,
     pub namespace: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_registry: Option<String>,
     pub environment: BTreeMap<String, String>,
     pub entries: BTreeMap<String, Entry>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Entry {
     pub owner: String,
     pub need: String,
@@ -33,6 +59,7 @@ pub struct Entry {
     pub restore_from: Option<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn path(value: &str) -> Result<(), String> {
     relative_path(value.trim_end_matches('/'))?;
     if !policy::valid_download_path(value.as_bytes()) {
@@ -41,12 +68,14 @@ fn path(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn unique(values: &[String]) -> bool {
     values.iter().collect::<BTreeSet<_>>().len() == values.len()
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String> {
-    if !policy::valid_download_config(&c.schema, c.entries.len(), c.environment.len()) {
+    if !policy::valid_download_config(&c.schema, c.entries.len()) {
         return Err("download caches require nonempty chrono-github-downloads/v1".into());
     }
     path(&c.namespace)?;
@@ -95,10 +124,12 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
     Ok(())
 }
 
-pub(crate) fn validate_registry(root: &Path, c: &Config, registry: &Value) -> Result<(), String> {
-    let registry_path = registry["artifact_registry"]
-        .as_str()
-        .ok_or("download cache needs artifact registry")?;
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn validate_registry(
+    root: &Path,
+    c: &Config,
+    registry_path: &str,
+) -> Result<(), String> {
     let artifacts: Value =
         decode(&fs::read(no_symlink_parents(root, registry_path)?).map_err(|e| e.to_string())?)?;
     let artifacts = artifacts["artifacts"]
@@ -136,6 +167,7 @@ pub(crate) fn validate_registry(root: &Path, c: &Config, registry: &Value) -> Re
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn hash(files: &[String]) -> String {
     format!(
         "${{{{ hashFiles({}) }}}}",
@@ -147,6 +179,7 @@ fn hash(files: &[String]) -> String {
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn prefix(c: &Config, id: &str, entry: &Entry) -> String {
     format!(
         "chrono-download-v1-{}-{id}-${{{{ runner.os }}}}-${{{{ runner.arch }}}}-{}-",
@@ -155,7 +188,13 @@ fn prefix(c: &Config, id: &str, entry: &Entry) -> String {
     )
 }
 
-pub(crate) fn project(parent: &cache::Config, job: &str, body: String) -> Result<String, String> {
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn project(
+    parent: &cache::Config,
+    job: &str,
+    body: String,
+    checkout_end: &str,
+) -> Result<String, String> {
     let Some(c) = &parent.downloads else {
         return Ok(body);
     };
@@ -167,14 +206,16 @@ pub(crate) fn project(parent: &cache::Config, job: &str, body: String) -> Result
     if selected.is_empty() {
         return Ok(body);
     }
-    let checkout = "          persist-credentials: true\n";
     let steps = "    steps:\n";
-    if !policy::single_download_binding(body.matches(checkout).count())
+    if !policy::single_download_binding(body.matches(checkout_end).count())
         || !policy::single_download_binding(body.matches(steps).count())
     {
         return Err("download cache projection requires one checkout and one steps section".into());
     }
-    let mut environment = "    env:\n".to_owned();
+    let mut environment = String::new();
+    if !c.environment.is_empty() {
+        environment.push_str("    env:\n");
+    }
     for (key, path) in &c.environment {
         environment.push_str(&format!(
             "      {key}: {}\n",
@@ -198,13 +239,13 @@ pub(crate) fn project(parent: &cache::Config, job: &str, body: String) -> Result
             .map(|id| format!("            {}\n", prefix(c, id, &c.entries[id])))
             .unwrap_or_default();
         restore.push_str(&format!("      - name: Restore download cache {id}\n        id: chrono_download_{index}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}          restore-keys: |\n            {stem}\n{fallback}          fail-on-cache-miss: false\n", parent.restore_action, scalar(&key)));
-        if &entry.save_job == job {
+        if saves_download(&entry.save_job, job) {
             save.push_str(&format!("      - name: Save download cache {id}\n        if: ${{{{ {event_guard}always() && !cancelled() && steps.chrono_download_{index}.outcome == 'success' && steps.chrono_download_{index}.outputs.cache-hit != 'true' }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}", parent.save_action, scalar(&key)));
         }
     }
     let mut body = body
         .replacen(steps, &format!("{environment}{steps}"), 1)
-        .replacen(checkout, &format!("{checkout}{restore}"), 1);
+        .replacen(checkout_end, &format!("{checkout_end}{restore}"), 1);
     body.push_str(&save);
     Ok(body)
 }

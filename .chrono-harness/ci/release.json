@@ -2605,6 +2605,39 @@
   "download_artifact_action": "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
   "include_hidden_files": true,
   "persistent_cache": {
+    "downloads": {
+      "schema": "chrono-github-downloads/v1",
+      "namespace": "chrono-harness",
+      "environment": {
+        "CARGO_HOME": ".chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      },
+      "entries": {
+        "cargo.release-build": {
+          "owner": "repository",
+          "need": "两个发布前端在首次编译前复用与普通 CI 相同兼容域的 Cargo 依赖。",
+          "output_use": "Cargo 按前端的锁文件校验、补齐所需包并编译。",
+          "paths": [
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/",
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/",
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/",
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/",
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/"
+          ],
+          "compatibility_files": [
+            ".chrono-harness/ci/bootstrap-toolchains.json"
+          ],
+          "source_files": [
+            "crates/host-bootstrap/Cargo.lock",
+            "crates/host-release/Cargo.lock"
+          ],
+          "consumers": [
+            "linux_release_frontend",
+            "macos_release_frontend"
+          ],
+          "save_job": "linux_release_frontend"
+        }
+      }
+    },
     "schema": "chrono-github-cache/v1",
     "program": ".chrono-harness/bin/chrono-cache",
     "config": ".chrono-harness/cache.json",

@@ -127,6 +127,9 @@ pub struct Detector {
 
 #[cfg(not(verus_keep_ghost))]
 pub(crate) fn validate(c: &units::Config, g: &Config) -> Result<(), String> {
+    if c.collection.persistent_cache.is_some() {
+        return Err("unit workflows register persistent_cache on the parent provider".into());
+    }
     if g.schema != SCHEMA || c.collection.schema != "chrono-github-ci/v4" {
         return Err(
             "job gating requires chrono-job-gating/v1 and the fixed short v4 command".into(),
@@ -278,6 +281,7 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         c.persistent_cache.as_ref(),
         &unit.map(job_id).unwrap_or("aggregate".into()),
         body,
+        "          persist-credentials: true\n",
         "Bootstrap registered tools",
         "Canonical harness check",
         None,
@@ -381,6 +385,7 @@ pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, S
         c.persistent_cache.as_ref(),
         "detect",
         text,
+        "          persist-credentials: true\n",
         "Bootstrap registered detector tools",
         "Detect required units from fixed Git endpoints",
         Some("detect"),
