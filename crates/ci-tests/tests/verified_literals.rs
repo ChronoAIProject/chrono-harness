@@ -156,6 +156,18 @@ fn push_only_cache_saving_has_an_exact_native_event_guard() {
     assert(every_event@ == ""@);
 }
 
+#[cfg(verus_keep_ghost)]
+fn download_layout_requires_one_lock_and_preserves_whole_file_domains() {
+    use policy::download_projection::{download_domain, DownloadDomain};
+    let ordinary = download_domain(false, 2);
+    let pinned = download_domain(true, 1);
+    let missing = download_domain(true, 0);
+    let ambiguous = download_domain(true, 2);
+    assert(ordinary is Files);
+    assert(pinned is InstallLayout);
+    assert(missing is Invalid && ambiguous is Invalid);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn download_contracts_reject_each_missing_obligation() {
     let good = policy::valid_download_entry(1, 1, 1, 1, true, true, true, true);
