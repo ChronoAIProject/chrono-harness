@@ -549,8 +549,11 @@ fn render_unit<'a>(
     if selection_root {
         condition.push_str(" && needs.select_preview.result == 'success' && needs.select_preview.outputs.selected == 'true'");
     } else if landing_selection && job.always {
-        // Diagnostic collectors still run after a real producer failure.
-        condition.push_str(" && (github.event_name != 'workflow_run' || contains(needs.*.result, 'success') || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))");
+        // A successful transitive selector must not start an empty collector.
+        // Failed and cancelled direct producers still need their diagnostics.
+        let producers = job.needs.iter().map(|id| format!("needs.{id}.result != 'skipped'"))
+            .collect::<Vec<_>>().join(" || ");
+        condition.push_str(&format!(" && (github.event_name != 'workflow_run' || {producers})"));
     }
     output.push_str(&format!("  {}:\n    if: ${{{{ {condition} }}}}\n", job.id));
     if super::verified_literals::delivery_publisher(

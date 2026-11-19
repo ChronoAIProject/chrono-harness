@@ -418,6 +418,21 @@ fn automatic_preview_gates_roots_and_preserves_registered_artifact_dependencies(
         .unwrap();
     assert_eq!(step["env"]["CHRONO_RELEASE_DEPENDENCIES"], "{}");
 
+    let mut collector = c["jobs"][1].clone();
+    collector["id"] = json!("package");
+    collector["artifact_name"] = json!("package-output");
+    collector["artifact_directory"] = json!("package-out/");
+    collector["needs"] = json!(["native", "consumer"]);
+    collector["always"] = json!(true);
+    c["jobs"].as_array_mut().unwrap().push(collector);
+    let rendered = release::render(&serde_json::from_value(c.clone()).unwrap()).unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&rendered).unwrap();
+    let package = &yaml["jobs"]["package"];
+    assert_eq!(package["needs"], json!(["native", "consumer"]));
+    assert!(package["if"].as_str().unwrap().ends_with(
+        "(github.event_name != 'workflow_run' || needs.native.result != 'skipped' || needs.consumer.result != 'skipped') }}"
+    ));
+
     c["delivery"]["landing_selection"]["context_path"] = json!("../context.json");
     assert!(release::render(&serde_json::from_value(c).unwrap()).is_err());
 }
