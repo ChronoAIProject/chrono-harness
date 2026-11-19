@@ -102,6 +102,38 @@ pub proof fn retirement_stays_complete(
     finished
 }
 
+/// Elapsed seconds start at the deadline of a fixed batch. A service bound
+/// requires a real decrease in remaining work within each interval while
+/// work remains. A scheduled wake alone does not establish this premise.
+pub proof fn retirement_within_service_bound(
+    remaining: spec_fn(nat) -> nat, deadline: nat, interval: nat,
+)
+    requires
+        interval > 0,
+        forall|a: nat, b: nat| deadline <= a <= b ==>
+            #[trigger] remaining(b) <= #[trigger] remaining(a),
+        forall|at: nat| deadline <= at && #[trigger] remaining(at) > 0 ==>
+            remaining(at + interval) < remaining(at),
+    ensures
+        forall|later: nat| deadline + remaining(deadline) * interval <= later ==>
+            #[trigger] remaining(later) == 0,
+    decreases remaining(deadline),
+{
+    if remaining(deadline) > 0 {
+        let next = deadline + interval;
+        let after = remaining(next);
+        assert(after < remaining(deadline));
+        retirement_within_service_bound(remaining, next, interval);
+        vstd::arithmetic::mul::lemma_mul_inequality(
+            after as int + 1, remaining(deadline) as int, interval as int,
+        );
+        vstd::arithmetic::mul::lemma_mul_is_distributive_add_other_way(
+            interval as int, after as int, 1,
+        );
+        assert(next + after * interval <= deadline + remaining(deadline) * interval);
+    }
+}
+
 /// Fixed output generations are numbered with each retaining consumer before
 /// its inputs. Debt includes both the original and its retirement metadata.
 pub open spec fn parents_retired(edge: spec_fn(nat, nat) -> bool,
