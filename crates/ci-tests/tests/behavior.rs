@@ -843,17 +843,35 @@ fn retain_command_result(
     context: &Value,
     output: &std::process::Output,
 ) {
-    // Existing callers retain an unreleased diagnostic reference. They do not
-    // acquire disposal eligibility from another caller's expected-exit contract.
-    if std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_none() && output.status.success() {
+    let export = std::env::var_os("CHRONO_CI_TEST_RECEIPTS").map(std::path::PathBuf::from);
+    if export.is_none() && output.status.success() {
         return;
     }
-    // Both diagnostic consumers use the fixture's actual receipt owner. The
-    // optional destination receives references, as in judge-ci diagnostics;
-    // it is not a request to qualify the exposed source checkout through a mock.
     let mut owner = retained_receipts::Owner::new();
-    owner.preserve_diagnostic();
-    let _ = retain_expected_command_result(&owner.root, root, argv, context, output, None);
+    let receipt = retain_command_result_exported(
+        &owner.root,
+        root,
+        argv,
+        context,
+        output,
+        None,
+        None,
+        None,
+        export.as_deref(),
+    );
+    if export.is_none() {
+        let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        if let Err(error) = owner.handoff_failure(&checkout) {
+            drop(owner); // The failed handoff keeps its original directory.
+            panic!("CI diagnostic handoff failed: {error}");
+        }
+    }
+    receipt
+        .release(
+            "command-assertion",
+            "command evidence transferred to its diagnostic reader",
+        )
+        .unwrap();
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -977,7 +995,7 @@ fn retain_command_result_exported(
         })
         .collect();
     let reason = if expected_exit.is_none() {
-        "unknown-expected-exit; original diagnostic reference has not been released"
+        "unknown-expected-exit; diagnostic handoff required"
     } else if output.status.code() == expected_exit {
         "expected-command-exit; assertion consumer still active"
     } else {
@@ -1043,15 +1061,33 @@ fn retain_command_result_exported(
         .unwrap();
     receipt.seal().unwrap();
     if let Some(export) = export {
+        let export = fs::canonicalize(export).unwrap();
+        assert!(
+            !export.starts_with(fs::canonicalize(producer_root).unwrap())
+                && !export.starts_with(fs::canonicalize(root).unwrap()),
+            "diagnostic export must survive both fixtures"
+        );
         receipt
             .acquire(
                 "diagnostic",
-                "finite caller debugging/acceptance; caller owns release",
+                "copy command evidence to the caller's directory",
             )
             .unwrap();
+        let artifact = tempfile::Builder::new()
+            .prefix("ci-command-files-")
+            .tempdir_in(&export)
+            .unwrap();
+        copy_context_tree(&destination, artifact.path(), |source, target| {
+            let identity = chrono_harness::copy_hashed(
+                fs::File::open(source).unwrap(),
+                fs::File::create_new(target).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(chrono_harness::file_identity(target).unwrap(), identity);
+        });
         let mut originals = serde_json::Map::new();
         for name in ["stdout.bin", "stderr.bin", "binding.json"] {
-            let path = destination.join(name);
+            let path = artifact.path().join(name);
             let (sha256, size) = chrono_harness::file_identity(&path).unwrap();
             originals.insert(
                 name.into(),
@@ -1059,20 +1095,33 @@ fn retain_command_result_exported(
             );
         }
         let identity = chrono_harness::sha256(destination.as_os_str().as_encoded_bytes());
-        let mut reference =
-            fs::File::create_new(export.join(format!("ci-command-{identity}.json"))).unwrap();
-        serde_json::to_writer(&mut reference, &json!({
+        let mut descriptor = tempfile::NamedTempFile::new_in(&export).unwrap();
+        serde_json::to_writer(descriptor.as_file_mut(), &json!({
             "consumer":"finite engineering acceptance",
-            "retention":"until caller debugging/acceptance obligations finish; caller owns release",
-            "producer":"ci-command-result","producer_root":producer_root,
-            "directory":directory,"artifact":destination,"originals":originals,
-            "release_consumers":["command-assertion","diagnostic"]
+            "retention":"caller owns the exported files through debugging and acceptance",
+            "producer":"ci-command-result","directory":export,"artifact":artifact.path(),"originals":originals
         })).unwrap();
+        descriptor
+            .persist_noclobber(export.join(format!("ci-command-{identity}.json")))
+            .unwrap();
+        artifact.keep();
+        receipt
+            .release(
+                "diagnostic",
+                "caller can read the verified independent files",
+            )
+            .unwrap();
     }
     receipt
 }
 #[cfg(not(verus_keep_ghost))]
 fn retain_context_state(root: &Path, destination: &Path) {
+    copy_context_tree(root, destination, |source, target| {
+        fs::copy(source, target).unwrap();
+    });
+}
+#[cfg(not(verus_keep_ghost))]
+fn copy_context_tree(root: &Path, destination: &Path, copy: fn(&Path, &Path)) {
     assert!(
         !destination.starts_with(root),
         "retained source/destination overlap; preserve original partial receipt"
@@ -1085,9 +1134,9 @@ fn retain_context_state(root: &Path, destination: &Path) {
         let row = row.unwrap();
         let kind = row.file_type().unwrap();
         if kind.is_dir() {
-            retain_context_state(&row.path(), &destination.join(row.file_name()));
+            copy_context_tree(&row.path(), &destination.join(row.file_name()), copy);
         } else if kind.is_file() {
-            fs::copy(row.path(), destination.join(row.file_name())).unwrap();
+            copy(&row.path(), &destination.join(row.file_name()));
         }
     }
 }
