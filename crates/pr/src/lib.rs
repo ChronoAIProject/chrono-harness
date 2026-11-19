@@ -1,13 +1,22 @@
-mod snapshot;
+#![allow(unexpected_cfgs)]
+
+#[path = "snapshot.rs"]
+pub(crate) mod snapshot;
+#[cfg(not(verus_keep_ghost))]
 mod state;
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_snapshot;
 
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{
     CliOutput, CommandSpec, ProcessEvidence, file_identity, resolve_program,
     run_process_observed_retained_for,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     ffi::OsString,
@@ -17,8 +26,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(not(verus_keep_ghost))]
 const HELP: &str = "chrono-pr pr-open --head BRANCH --head-sha SHA --title TITLE --body-file FILE [--draft]\nchrono-pr pr-status --pr NUMBER --head-sha SHA [--continue-operation PATH]\nchrono-pr pr-watch --pr NUMBER --head-sha SHA\nAll commands: [--host-root ROOT] [--config .chrono-harness/pr.json]\nResults: JSON; exits 0 complete, 1 failed/closed, 2 unknown/error, 3 pending, 4 stale.\n";
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Config {
@@ -35,6 +46,7 @@ struct Config {
     state_producer: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Config {
     fn validate(&self) -> Result<(), String> {
         let parts = self.repository.split('/').collect::<Vec<_>>();
@@ -84,11 +96,13 @@ impl Config {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Args {
     command: String,
     values: BTreeMap<String, String>,
     draft: bool,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Args {
     fn parse(raw: &[OsString]) -> Result<Self, String> {
         let raw = raw
@@ -173,6 +187,7 @@ impl Args {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn branch(value: &str) -> bool {
     !value.is_empty()
         && value != "@"
@@ -190,6 +205,7 @@ fn branch(value: &str) -> bool {
             .all(|p| !p.starts_with('.') && !p.ends_with('.') && !p.ends_with(".lock"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
     let mut data = Vec::new();
     fs::File::open(path)
@@ -203,6 +219,7 @@ fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
     Ok(data)
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Client {
     root: PathBuf,
     config: Config,
@@ -216,6 +233,7 @@ struct Client {
     state: state::State,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Client {
     fn new(args: &Args, result: Value) -> Result<Self, String> {
         let root = fs::canonicalize(
@@ -402,22 +420,24 @@ impl Client {
             snapshot::QUERY,
             vec![("number", number.to_string()), ("head", head.into())],
         )?;
-        let parsed = snapshot::parse(
-            &raw,
-            &self.config.repository,
-            &self.config.base,
-            number,
-            head,
-            &self.config.required_checks,
-        )?;
-        self.state
-            .observed_snapshot(chrono_harness::verified_release::open_pr(&parsed.state))?;
-        self.result["pr"] = json!(parsed.number);
-        self.result["url"] = json!(parsed.url);
-        self.result["observed_head"] = json!(parsed.head);
-        self.result["pr_state"] = json!(parsed.state);
-        self.result["merge_commit"] = json!(parsed.merge_commit);
-        self.result["draft"] = json!(parsed.draft);
+        let mut parsed =
+            snapshot::pull_request(&raw, &self.config.repository, &self.config.base, number)?;
+        let active = chrono_harness::verified_release::open_pr(&parsed.state);
+        let checks =
+            snapshot::evaluate_checks(&raw, &mut parsed, head, &self.config.required_checks);
+        if record_pr_observation(active, checks.is_ok()) {
+            // A verified terminal PR ends object custody even if this commit's
+            // checks cannot be interpreted. The check result still fails below.
+            self.state.observed_snapshot(active)?;
+            self.result["pr"] = json!(parsed.number);
+            self.result["url"] = json!(parsed.url);
+            self.result["observed_head"] = json!(parsed.head);
+            self.result["pr_state"] = json!(parsed.state);
+            self.result["merge_commit"] = json!(parsed.merge_commit);
+            self.result["draft"] = json!(parsed.draft);
+            self.result["checks"] = json!([]);
+        }
+        checks?;
         self.result["checks"] = json!(parsed.checks);
         self.result["outcome"] = json!(parsed.outcome);
         Ok(parsed)
@@ -566,6 +586,7 @@ impl Client {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn run(raw: &[OsString]) -> CliOutput {
     if raw.len() == 1 && (raw[0] == "--help" || raw[0] == "-h") {
         return CliOutput {
@@ -621,6 +642,7 @@ pub fn run(raw: &[OsString]) -> CliOutput {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn exit_code(result: &Value) -> u8 {
     match result["outcome"].as_str().unwrap_or("unknown") {
         "opened" | "existing" | "passed" => 0,
@@ -629,4 +651,19 @@ fn exit_code(result: &Value) -> u8 {
         "stale" => 4,
         _ => 2,
     }
+}
+
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// An already validated terminal PR can settle its object even when the
+/// separate check rollup is ambiguous. An OPEN snapshot needs valid checks.
+pub fn record_pr_observation(active: bool, checks_valid: bool) -> (record: bool)
+    ensures record == (!active || checks_valid),
+{
+    !active || checks_valid
+}
 }

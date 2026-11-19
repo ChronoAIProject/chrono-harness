@@ -950,6 +950,41 @@ fn final_publication_failure_keeps_original_process_but_cannot_pass() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn merged_pr_releases_its_open_record_when_checks_are_ambiguous() {
+    if !isolated_capability_test("merged_pr_releases_its_open_record_when_checks_are_ambiguous") {
+        return;
+    }
+    let mut merged = snapshot();
+    let repository = &mut merged["data"]["repository"];
+    repository["pullRequest"]["state"] = json!("MERGED");
+    repository["pullRequest"]["mergeCommit"] = json!({"oid":OTHER});
+    let checks = repository["object"]["statusCheckRollup"]["contexts"]["nodes"]
+        .as_array_mut()
+        .unwrap();
+    checks.push(
+        json!({"__typename":"StatusContext","context":"chrono / collection",
+        "state":"SUCCESS","commit":{"oid":HEAD}}),
+    );
+    let h = Host::new(vec![api(snapshot()), api(merged)]);
+    let (code, first) = h.status();
+    assert_eq!(code, 0, "{first}");
+    let original = h.root.path().join(first["operation"].as_str().unwrap());
+    maintain_after_diagnostics(&h);
+    assert!(original.is_dir());
+    let (code, last) = h.status();
+    assert_eq!(code, 2, "{last}");
+    assert_eq!(last["error"], "empty or ambiguous check name");
+    assert_eq!(last["outcome"], "unknown");
+    assert_eq!(last["pr_state"], "MERGED");
+    assert_eq!(last["merge_commit"], OTHER);
+    assert_eq!(last["observed_head"], HEAD);
+    assert_eq!(last["checks"], json!([]));
+    maintain_after_diagnostics(&h);
+    assert!(!original.exists());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn merged_state_requires_and_retains_the_actual_merge_identity() {
     let mut merged = snapshot();
     merged["data"]["repository"]["pullRequest"]["state"] = json!("MERGED");

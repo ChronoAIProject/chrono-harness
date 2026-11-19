@@ -14,6 +14,14 @@ mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
 
+#[cfg(verus_keep_ghost)]
+#[path = "lib.rs"]
+mod client;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::{record_pr_observation, snapshot::pull_request_merged};
+#[cfg(verus_keep_ghost)]
+pub use client::{record_pr_observation, snapshot::pull_request_merged};
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), derive(Clone, Copy, Debug, PartialEq, Eq))]
@@ -173,10 +181,6 @@ pub fn pull_request_closed(state: &str) -> (closed: bool)
 pub fn pull_request_open(state: &str) -> (open: bool)
     ensures open == (state@ == "OPEN"@),
 { identifiers::equal_text(state, "OPEN") }
-
-pub fn pull_request_merged(state: &str) -> (merged: bool)
-    ensures merged == (state@ == "MERGED"@),
-{ identifiers::equal_text(state, "MERGED") }
 
 pub fn snapshot_outcome(stale: bool, closed: bool, failed: bool, pending: bool)
     -> (outcome: SnapshotOutcome)
