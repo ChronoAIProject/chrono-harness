@@ -40,6 +40,14 @@ fn expect_recipe(actual: bool)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn release_fixture_cleanup_preserves_the_original_failure() {
+    expect_recipe(execution_fixture::failure_case::propagate_cleanup_error(false, true));
+    expect_recipe(!execution_fixture::failure_case::propagate_cleanup_error(true, true));
+    expect_recipe(!execution_fixture::failure_case::propagate_cleanup_error(false, false));
+    expect_recipe(!execution_fixture::failure_case::propagate_cleanup_error(true, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn direct_compiler_binding_requires_the_path_and_both_identities() {
     let valid = policy::receipt::direct_compiler_binding(true, true, true);
     let wrong_path = policy::receipt::direct_compiler_binding(false, true, true);
