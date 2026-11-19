@@ -726,11 +726,11 @@ Rust `RetainedArtifact` 接纳精确保留对象并发布 intent。采用 wrappe
 
 发布通过 `RetainedArtifact::registered_store` 解析生产者，与清理共用已提交 worktree 配置、cleanup 政策、登记和物理 Git main 协调者检查。声明查找只读政策，不取得维护准入、不初始化账本，因此活维护租约不阻止查找。最终 HEAD／配置／政策稳定检查仍适用，实际发布／处置各有原登记和所有权保护。
 
-命令 fixture 使用自己的已提交 receipt owner 政策，生产检出与被测命令根分开传；linked 生产者仍在自己的 main 协调者声明目录发布。`CHRONO_CI_TEST_RECEIPTS` 与 judge-ci 诊断共用调用方证据目录语义：向该目录写原件引用及路径、摘要和长度，不通过私有 Git mock 对源码检出作生产者准入，也不复制原件到第二存储。引用写明实际 producer、store、artifact 和释放责任；独立 diagnostic 引用及其原 owner 保留到调用方完成调试／验收。底层物理 store 仍须精确匹配已提交声明，未声明、重叠、不匹配、符号链接位置继续拒绝。解析或导出不释放消费者，也不授权删 main／分支。旧 linked 存储没有已采用转发路径，继续作未知证据保护。
+命令 fixture 使用自己的已提交 receipt owner 政策。CI 命令返回失败时，普通调用把诊断现场交给 `ci-fixture` 的 24 小时批次，原临时目录随调用结束清理。交接失败时输出错误和保全位置。主检出和 linked 检出的失败现场共用该批次。
 
-本宿主只接纳两个复制的独立 Cargo 输出 `original-state/cargo/producer/target/`、`original-state/cargo/tests/target/`，生产者还要求精确源码产物声明。所选 expected-exit 断言消费原结果后发布 release；意外退出、发布不完整、活诊断引用都保留副本。
+设置 `CHRONO_CI_TEST_RECEIPTS` 的 CI 命令调用把整份现场转存到调用方给定目录。生产者读回每个复制文件核验 SHA-256 和长度，最后原子发布 `ci-command-*.json`。调用方通过其中的 `artifact`、`originals` 直接读取转存件，并负责转存件的保留期限。诊断引用在交接完成时释放。judge-ci 诊断保留自身的发布协议。
 
-全部引用明确释放后，所有者可回收生成副本；stdout、stderr、binding、配置、源码、恢复原件、其他 state 仍是证据。无 expected-exit 合同的旧调用方保留未释放引用。未知旧回执及未登记对象全部保护，整个 state 不因此可删。
+本宿主登记两个复制的 Cargo 输出 `original-state/cargo/producer/target/`、`original-state/cargo/tests/target/`。底层 retained producer 的断言读者验证原始退出状态后显式释放引用，全部释放后可回收已登记的生成目录。封存数据、未知旧对象和仍在使用的原件按各自负责方处理。
 
 兼容已提交政策／工具部署、真实宿主迁移、原生 CI 缓存保存参与、完整 SPEC 采用仍不在本实现验证内。
 
