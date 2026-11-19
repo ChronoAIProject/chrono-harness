@@ -4628,20 +4628,23 @@ pub(crate) fn reference_report_held(
     };
     inventory.dependencies_paths(original, originals)?;
     // Both old and new originals stay rooted until the fixed pointer was written.
-    inventory.extend_reference_path(
-        &format!("current-report:{}", sha256(slot.as_bytes())),
-        original,
-    )?;
+    inventory.extend_reference_path(&current_report_role(slot), original)?;
     if let Some(identity) = pending_native {
         inventory.reference_paths(&format!("native-delivery:{identity}"), &[original.into()])?;
     }
     Ok(())
 }
+/// Name of the existing owner of the originals published to a fixed report slot.
+#[cfg(not(verus_keep_ghost))]
+pub fn current_report_role(slot: &str) -> String {
+    format!("current-report:{}", sha256(slot.as_bytes()))
+}
+
 /// Release the previous fixed-slot reference only after its replacement is durably published.
 #[cfg(not(verus_keep_ghost))]
 pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), String> {
     if let Some(inventory) = Inventory::adopted(root)? {
-        let role = format!("current-report:{}", sha256(slot.as_bytes()));
+        let role = current_report_role(slot);
         inventory.reference_paths(&role, &[original.into()])?;
         let gate = inventory.addressed_gate(&[], &[original.into()], &[], None, false, true)?;
         let ledger = inventory.load(&gate)?;

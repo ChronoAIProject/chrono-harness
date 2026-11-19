@@ -1,4 +1,19 @@
 //! 本宿主的 bootstrap 编排；原所有者继续负责租约、部署、报告保留和清理。
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn qualified_copy_matches(original_digest: bool, executable_digest: bool, length: u64, expected: u64)
+    -> (matches: bool)
+    ensures matches == (original_digest && executable_digest && length == expected),
+{
+    original_digest && executable_digest && length == expected
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{self, Environment, NativePlatform},
     construction::BuildFailure,
@@ -6,15 +21,20 @@ use crate::{
     profile::{self, Profile},
     source,
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{
     ProcessResult, decode, file_identity, json,
     retained_artifacts::retention::{self, Consumer, Inventory, Publication},
     sha256,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
+#[cfg(not(verus_keep_ghost))]
 use std::{ffi::OsStr, fs, io::Write, os::unix::fs::PermissionsExt, path::Path};
 
+#[cfg(not(verus_keep_ghost))]
 fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::OpenOptions::new()
         .write(true)
@@ -24,6 +44,7 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn write_attempt(
     publication: Option<&Publication>,
     path: &Path,
@@ -35,6 +56,7 @@ fn write_attempt(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn retained_process(value: &Value) -> Result<ProcessResult, String> {
     if !matches!(
         value["encoding"].as_str(),
@@ -46,6 +68,7 @@ fn retained_process(value: &Value) -> Result<ProcessResult, String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn forward(process: &ProcessResult) -> Result<(), String> {
     std::io::stdout()
         .write_all(&process.stdout_bytes)
@@ -55,6 +78,7 @@ fn forward(process: &ProcessResult) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn process_outcome(process: &ProcessResult) -> Result<(), BuildFailure> {
     if process.failure.is_some() || process.exit_code != 0 {
         return Err(BuildFailure {
@@ -65,6 +89,7 @@ fn process_outcome(process: &ProcessResult) -> Result<(), BuildFailure> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn run_owner(
     root: &Path,
     environment: &Environment,
@@ -156,12 +181,14 @@ pub fn run_owner(
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Upgrade {
     schema: String,
     selected_original: String,
     stage_config: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn upgrade(
     root: &Path,
     config: &str,
@@ -210,6 +237,7 @@ pub fn upgrade(
                 native,
                 &current,
                 &profile.participation.program,
+                &declaration.selected_original,
             )?;
             return Ok(());
         }
@@ -237,16 +265,22 @@ pub fn upgrade(
         &declaration.selected_original,
         &profile.participation.program,
     )?;
-    let original = profile::read(root, &qualification.path, b".chrono-harness/state/")?;
+    let original = profile::read_original(
+        root,
+        &qualification.path,
+        b".chrono-harness/state/",
+        qualification.report_slot.as_deref(),
+    )?;
     let bytes = fs::read(&selected).map_err(|error| error.to_string())?;
-    if sha256(&original) != qualification.sha256
-        || sha256(&bytes) != qualification.selected.sha256
-        || bytes.len() as u64 != qualification.selected.size
-        || !crate::verified_bindings::owner_publication::binding_equal(
-            &owner::file_binding(&selected)?,
-            &qualification.selected,
-        )
-    {
+    if !qualified_copy_matches(
+        sha256(&original) == qualification.sha256,
+        sha256(&bytes) == qualification.selected.sha256,
+        bytes.len() as u64,
+        qualification.selected.size,
+    ) || !crate::verified_bindings::owner_publication::binding_equal(
+        &owner::file_binding(&selected)?,
+        &qualification.selected,
+    ) {
         return Err("qualified selected owner changed before construction".into());
     }
     let parent = profile::path(
@@ -357,6 +391,7 @@ pub fn upgrade(
             &descriptor.path,
             Some(&descriptor.sha256),
             None,
+            None,
         )?;
         let staged = profile::path(root, &qualified.stage.staged.path, owner::STAGES.as_bytes())?;
         run_owner(
@@ -419,6 +454,7 @@ pub fn upgrade(
 }
 
 /// 返回 true 表示实际生命周期子进程已经完成本次 bootstrap。
+#[cfg(not(verus_keep_ghost))]
 pub fn participate(
     root: &Path,
     config: &str,

@@ -15,6 +15,16 @@ use identifiers::equal_text;
 #[path = "../../worktree/src/verified_owner_publication.rs"]
 pub mod owner_publication;
 
+#[cfg(verus_keep_ghost)]
+#[path = "lifecycle.rs"]
+pub mod lifecycle;
+#[cfg(verus_keep_ghost)]
+#[path = "owner.rs"]
+pub mod owner;
+#[cfg(verus_keep_ghost)]
+#[path = "profile.rs"]
+pub mod profile;
+
 verus! {
 
 pub fn archive_matches(actual: &[u8], expected: &[u8]) -> (valid: bool)
