@@ -354,6 +354,7 @@ pub fn render(c: &Config) -> Result<String, String> {
                 c.persistent_cache.as_ref(),
                 &job.id,
                 body,
+                "          fetch-depth: 0\n",
                 "Run registered release command",
                 "Run registered release command",
                 None,

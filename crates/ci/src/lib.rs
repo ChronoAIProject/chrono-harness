@@ -1,29 +1,66 @@
 //! Owned GitHub Actions projection and event input preparation; no judgment or test discovery.
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn single_check_cache(build_consumers: usize) -> (supported: bool)
+    ensures supported == (build_consumers == 0),
+{
+    build_consumers == 0
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{decode, no_symlink_parents, relative_path};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Deserializer, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::fs;
+#[cfg(not(verus_keep_ghost))]
 use std::path::{Path, PathBuf};
+#[cfg(not(verus_keep_ghost))]
 pub mod cache;
+#[cfg(not(verus_keep_ghost))]
 mod check_inputs;
+#[cfg(not(verus_keep_ghost))]
 pub mod downloads;
+#[cfg(not(verus_keep_ghost))]
 mod event_git;
+#[cfg(not(verus_keep_ghost))]
 pub mod full;
+#[cfg(not(verus_keep_ghost))]
 mod gather;
+#[cfg(not(verus_keep_ghost))]
 pub mod gating;
+#[cfg(not(verus_keep_ghost))]
 pub mod inventory;
+#[cfg(not(verus_keep_ghost))]
 pub mod migrate;
+#[cfg(not(verus_keep_ghost))]
 pub mod release;
+#[cfg(not(verus_keep_ghost))]
 pub mod startup;
+#[cfg(not(verus_keep_ghost))]
 pub mod units;
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_download;
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_inventory;
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_literals;
 
+#[cfg(not(verus_keep_ghost))]
 const MARKER: &str = "# chrono-ci: owned github-actions/v1\n";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Config {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub persistent_cache: Option<cache::Config>,
     pub schema: String,
     pub workflow_path: String,
     pub name: String,
@@ -67,27 +104,33 @@ pub struct Config {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct InitialInventory {
     pub path: String,
     pub profile: chrono_harness::initial::Profile,
 }
+#[cfg(not(verus_keep_ghost))]
 fn inventory_present<'de, D: Deserializer<'de>>(
     d: D,
 ) -> Result<Option<InitialInventory>, D::Error> {
     InitialInventory::deserialize(d).map(Some)
 }
+#[cfg(not(verus_keep_ghost))]
 fn string_present<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
     String::deserialize(d).map(Some)
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct PushBaseline {
     pub ref_prefix: String,
     pub base_ref: String,
 }
+#[cfg(not(verus_keep_ghost))]
 fn scalar(s: &str) -> String {
     serde_json::to_string(s).expect("string serialization")
 }
+#[cfg(not(verus_keep_ghost))]
 fn artifact_hidden_files(enabled: bool) -> &'static str {
     if enabled {
         "          include-hidden-files: true\n"
@@ -95,12 +138,15 @@ fn artifact_hidden_files(enabled: bool) -> &'static str {
         ""
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn shell(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\"'\"'"))
 }
+#[cfg(not(verus_keep_ghost))]
 fn full_oid(s: &str) -> bool {
     chrono_harness::verified_identifiers::valid_oid(s.as_bytes())
 }
+#[cfg(not(verus_keep_ghost))]
 fn action(s: &str, repo: &str) -> Result<(), String> {
     let prefix = format!("{repo}@");
     if !s
@@ -111,24 +157,29 @@ fn action(s: &str, repo: &str) -> Result<(), String> {
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 fn overlap(a: &str, b: &str) -> bool {
     a == b || a.starts_with(&format!("{b}/")) || b.starts_with(&format!("{a}/"))
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn load(path: &Path) -> Result<Config, String> {
     let c: Config = decode(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)?;
     validate(&c)?;
     Ok(c)
 }
+#[cfg(not(verus_keep_ghost))]
 enum Projection {
     Units(units::Config),
     Check(Config),
     Full(full::Config),
     Release(release::Config),
 }
+#[cfg(not(verus_keep_ghost))]
 fn load_projection(path: &Path) -> Result<Projection, String> {
     let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     decode_projection(&bytes)
 }
+#[cfg(not(verus_keep_ghost))]
 fn decode_projection(bytes: &[u8]) -> Result<Projection, String> {
     let value: Value = decode(bytes)?;
     if matches!(
@@ -153,9 +204,11 @@ fn decode_projection(bytes: &[u8]) -> Result<Projection, String> {
         Ok(Projection::Check(c))
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn validate(c: &Config) -> Result<(), String> {
     validate_policy(c, false)
 }
+#[cfg(not(verus_keep_ghost))]
 fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
     if c.schema != "chrono-github-ci/v4" || c.facts_config.is_none() {
         return Err("unsupported CI provider/schema".into());
@@ -269,12 +322,23 @@ fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
     action(&c.upload_artifact_action, "actions/upload-artifact")?;
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
     let job = render_job(c, config_path, None, "chrono-check", false)?;
+    let job = if let Some(cache) = &c.persistent_cache {
+        if !single_check_cache(cache.jobs.len()) {
+            return Err("single check supports download-only caches".into());
+        }
+        cache::validate(cache, &["check".to_owned()].into_iter().collect())?;
+        downloads::project(cache, "check", job, "          persist-credentials: true\n")?
+    } else {
+        job
+    };
     let header = render_header(c, None, false, MARKER);
     Ok(format!("{header}jobs:\n  check:\n{job}"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn render_header(
     c: &Config,
     scope: Option<&chrono_harness::units::Scope>,
@@ -322,6 +386,7 @@ on:
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn render_job(
     c: &Config,
     config_path: &str,
@@ -428,6 +493,7 @@ fn render_job(
     };
     Ok(rendered)
 }
+#[cfg(not(verus_keep_ghost))]
 fn output_preflight(root: &Path, path: &str, expected: &str, marker: &str) -> Result<bool, String> {
     if path.starts_with(".github/workflows/") && expected.len() > 500_000 {
         return Err(format!(
@@ -448,6 +514,7 @@ fn output_preflight(root: &Path, path: &str, expected: &str, marker: &str) -> Re
         Err(e) => Err(e.to_string()),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn write_file(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
     let target = no_symlink_parents(root, path)?;
     let parent = target.parent().ok_or("no output parent")?;
@@ -470,6 +537,7 @@ fn write_file(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
     }
     result
 }
+#[cfg(not(verus_keep_ghost))]
 fn inventory_output(c: &Config) -> Result<Option<(&str, Vec<u8>)>, String> {
     c.initial_inventory
         .as_ref()
@@ -480,6 +548,7 @@ fn inventory_output(c: &Config) -> Result<Option<(&str, Vec<u8>)>, String> {
         })
         .transpose()
 }
+#[cfg(not(verus_keep_ghost))]
 fn inventory_preflight(
     root: &Path,
     path: &str,
@@ -496,6 +565,7 @@ fn inventory_preflight(
         Err(e) => Err(e.to_string()),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, String> {
     relative_path(config_path)?;
     let c = match load_projection(&no_symlink_parents(root, config_path)?)? {
@@ -510,6 +580,7 @@ pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, St
         }
     };
     let rendered = render(&c, config_path)?;
+    cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let same = output_preflight(root, &c.workflow_path, &rendered, MARKER)?;
     let initial = inventory_output(&c)?;
     let initial_same = match &initial {
@@ -534,6 +605,7 @@ pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, St
     }
     Ok(!same || !initial_same)
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
     let incoming = match load_projection(input)? {
         Projection::Check(c) => c,
@@ -546,6 +618,7 @@ pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
     let existing = dest.exists();
     let c = if existing { load(&dest)? } else { incoming };
     let rendered = render(&c, path)?;
+    cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let same = output_preflight(root, &c.workflow_path, &rendered, MARKER)?;
     let initial = inventory_output(&c)?;
     let initial_same = match &initial {
@@ -568,6 +641,7 @@ pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
     }
     Ok(!existing || !same || !initial_same)
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn prepare(
     root: &Path,
     c: &Config,
@@ -577,6 +651,7 @@ pub fn prepare(
 ) -> Result<Value, String> {
     prepare_policy(root, c, event, payload, workflow_revision, false)
 }
+#[cfg(not(verus_keep_ghost))]
 fn prepare_policy(
     root: &Path,
     c: &Config,
@@ -596,6 +671,7 @@ fn prepare_policy(
     )
 }
 #[allow(clippy::too_many_arguments)]
+#[cfg(not(verus_keep_ghost))]
 fn prepare_policy_fixed(
     root: &Path,
     c: &Config,
@@ -747,6 +823,7 @@ fn prepare_policy_fixed(
         Err(error) => Err(facts.error(error)),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn dispatch(args: &[String]) -> Result<String, String> {
     if args.first().map(String::as_str) == Some("production") {
         return gating::production(args);
