@@ -1285,7 +1285,7 @@ fn maintenance_preserves_an_adopted_absence_without_a_finish_handoff() {
 }
 
 #[cfg(not(verus_keep_ghost))]
-fn cleanup_result_handoff_fixture(fault: &str) -> EnrollmentOriginalsFixture {
+fn cleanup_result_handoff_fixture(fault: &str) -> (EnrollmentOriginalsFixture, PathBuf) {
     use chrono_harness::retained_artifacts::retention::Inventory;
     let h = terminal_original_fixture("");
     let path = ".chrono-harness/state/worktrees/cleanup-published.json";
@@ -1341,6 +1341,7 @@ fn cleanup_result_handoff_fixture(fault: &str) -> EnrollmentOriginalsFixture {
         .unwrap()
         .begin("lifecycle-original", path, value!(null))
         .unwrap();
+    let record_path = retention_state::object_path(&h.root, publication.id());
     if fault != "unsealed" {
         publication
             .complete(value!({"status":report["status"]}))
@@ -1373,7 +1374,7 @@ fn cleanup_result_handoff_fixture(fault: &str) -> EnrollmentOriginalsFixture {
         }
         _ => (),
     }
-    h
+    (h, record_path)
 }
 
 #[test]
@@ -1384,18 +1385,14 @@ fn sealed_cleanup_result_recovers_expired_pending_receipt_without_promoting_stat
     }
     use chrono_harness::retained_artifacts::retention::read_guard;
     for outcome in ["", "cleaned", "current"] {
-        let h = cleanup_result_handoff_fixture(outcome);
+        let (h, record_path) = cleanup_result_handoff_fixture(outcome);
         let path = ".chrono-harness/state/worktrees/cleanup-published.json";
         let raw = fs::read(h.root.join(path)).unwrap();
         let ledger_path = h.record.join("ledger.json");
         let before = json(&fs::read(&ledger_path).unwrap()).unwrap();
-        let mut output = retention_state::snapshot(&h.root)["outputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|output| output["path"] == path)
-            .unwrap()
-            .clone();
+        let record = json(&fs::read(&record_path).unwrap()).unwrap();
+        let mut output = record["output"].clone();
+        assert_eq!(output["path"], path);
         output["lifetime"] = value!({"created_at":1,"deadline":2});
         output["expires"] = value!(2);
         retention_state::replace_output(&h.root, &output);
@@ -1421,13 +1418,9 @@ fn sealed_cleanup_result_recovers_expired_pending_receipt_without_promoting_stat
             "receipt recovery must not manufacture a cleanup outcome"
         );
         assert_eq!(fs::read(h.root.join(path)).unwrap(), raw);
-        let snapshot = retention_state::snapshot(&h.root);
-        let observed = snapshot["outputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|o| o["id"] == output["id"])
-            .unwrap();
+        let record = json(&fs::read(&record_path).unwrap()).unwrap();
+        let observed = &record["output"];
+        assert_eq!(observed["id"], output["id"]);
         assert_eq!(observed["lifetime"], output["lifetime"]);
         assert_eq!(observed["expires"], output["expires"]);
         let (code, report) = h.invoke("maintain", false);
@@ -1460,7 +1453,7 @@ fn invalid_cleanup_result_preserves_pending_receipt_and_original_consumer() {
         "missing",
         "symlink",
     ] {
-        let h = cleanup_result_handoff_fixture(fault);
+        let (h, _) = cleanup_result_handoff_fixture(fault);
         let ledger_path = h.record.join("ledger.json");
         // Settle the independent terminal transfer before measuring this handoff.
         // Its valid facts are unrelated to the invalid cleanup original.
@@ -1518,7 +1511,7 @@ fn superseded_cleanup_original_retires_only_after_its_independent_reader_release
     }
     use chrono_harness::retained_artifacts::retention::{Inventory, read_guard};
     for pending in [false, true] {
-        let h = cleanup_result_handoff_fixture("");
+        let (h, _) = cleanup_result_handoff_fixture("");
         let path = ".chrono-harness/state/worktrees/cleanup-superseded.json";
         let raw = b"original cleanup failure retained for its actual reader\n";
         fs::write(h.root.join(path), raw).unwrap();
