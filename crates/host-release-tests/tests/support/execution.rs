@@ -70,7 +70,7 @@ impl Fixture {
             .unwrap();
         let nested = tempfile::Builder::new()
             .prefix("chrono-native-publication-failure-")
-            .tempdir()
+            .tempdir_in(case.path())
             .unwrap();
         for (name, raw) in [
             ("stdout", b"nested stdout".as_slice()),
@@ -191,7 +191,10 @@ impl Fixture {
         collect: bool,
     ) -> Output {
         let mut command = context::command(env!("CARGO_BIN_EXE_chrono-test-release-cli"));
-        command.arg(self.root()).arg(output);
+        command
+            .arg(self.root())
+            .arg(output)
+            .env("TMPDIR", self._case.path());
         if collect {
             command.arg("--collect");
         } else {
@@ -233,6 +236,7 @@ impl Fixture {
     pub fn local(&self, output: &Path) -> Output {
         capture(
             context::command(env!("CARGO_BIN_EXE_chrono-test-release-cli"))
+                .env("TMPDIR", self._case.path())
                 .arg(self.root())
                 .arg(output),
         )

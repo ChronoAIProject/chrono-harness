@@ -20,6 +20,7 @@ pub struct Fixture {
     pub output: tempfile::TempDir,
     pub report: Value,
     calls: Cell<usize>,
+    tools: tempfile::TempDir,
     case: failure_case::FailureCase,
 }
 
@@ -32,16 +33,18 @@ impl Fixture {
             .prefix("source-")
             .tempdir_in(case.path())
             .unwrap();
-        let tools = case.path().join("tools");
-        fs::create_dir(&tools).unwrap();
-        let git_tool = tools.join("git");
+        let tools = tempfile::Builder::new()
+            .prefix("tools-")
+            .tempdir_in(case.path())
+            .unwrap();
+        let git_tool = tools.path().join("git");
         fs::hard_link(
             env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
             &git_tool,
         )
         .unwrap();
         host.config["tools"]["git"] = json!(git_tool);
-        let probe = tools.join("probe");
+        let probe = tools.path().join("probe");
         fs::hard_link(
             env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
             &probe,
@@ -125,6 +128,7 @@ impl Fixture {
             case,
             report,
             calls: Cell::new(0),
+            tools,
         };
         fixture.save();
         fixture
@@ -162,7 +166,7 @@ impl Fixture {
     }
 
     pub fn capture_result(&self, command: &mut Command) -> std::io::Result<std::process::Output> {
-        command.env("PATH", self.case.path().join("tools"));
+        command.env("PATH", self.tools.path());
         chrono_harness::process_fds::forward_command(command, &[]).unwrap();
         let index = self.calls.get();
         self.calls.set(index + 1);
@@ -303,6 +307,7 @@ impl Drop for Fixture {
         if std::thread::panicking() {
             self.host.temp.disable_cleanup(true);
             self.output.disable_cleanup(true);
+            self.tools.disable_cleanup(true);
             eprintln!(
                 "original release frontend fixture retained: {}",
                 self.case.path().display()

@@ -147,9 +147,27 @@ impl Manifest {
         Ok(())
     }
     pub fn validate(entry: &Entry, root: &Path) -> Result<(), String> {
+        Self::validate_for_disposal(entry, root, false)
+    }
+
+    pub fn validate_for_disposal(
+        entry: &Entry,
+        root: &Path,
+        batch_directory: bool,
+    ) -> Result<(), String> {
         let current = observe(root, &entry.path)?;
-        if current.identity != entry.identity || (!entry.directory && current.stamp != entry.stamp)
-        {
+        // Unlinking a sibling name changes ctime on the same inode. In a
+        // disposable batch the producer owns the name, including on interruption.
+        // Keep length and mtime checks, and always check the sealed inode and type.
+        let same_stamp = entry.stamp == current.stamp
+            || (batch_directory
+                && entry.identity.ends_with(":file")
+                && entry
+                    .stamp
+                    .rsplitn(3, ':')
+                    .nth(2)
+                    .is_some_and(|stamp| current.stamp.rsplitn(3, ':').nth(2) == Some(stamp)));
+        if current.identity != entry.identity || (!entry.directory && !same_stamp) {
             return Err("sealed descendant identity/content changed; preserve replacement".into());
         }
         Ok(())

@@ -29,8 +29,6 @@ use std::{
 #[cfg(not(verus_keep_ghost))]
 pub struct FailureCase {
     path: PathBuf,
-    relative: String,
-    owner: Inventory,
     publication: Option<Publication>,
 }
 
@@ -56,23 +54,13 @@ impl FailureCase {
             .to_owned();
         let owner =
             Inventory::adopted(root)?.ok_or("missing release verification retention policy")?;
-        if !owner.accepts("check-original", &relative) {
-            return Err("release verification directory is outside check-original".into());
-        }
-        let publication = retention::create_adopted(
-            root,
+        let publication = owner.create_batch(
             "check-original",
-            &path,
-            true,
+            &relative,
             json!({"operation":"test.host-release-native-tests","fixture":"started"}),
-        )?
-        .ok_or("release verification directory was not enrolled")?;
-        // Also protect a failed construction or an interrupted test process.
-        owner.retain_diagnostic_path(&relative)?;
+        )?;
         Ok(Self {
             path,
-            relative,
-            owner,
             publication: Some(publication),
         })
     }
@@ -86,19 +74,12 @@ impl FailureCase {
             .publication
             .take()
             .expect("release fixture is closed once");
-        // Keep the original available between publication and the failure
-        // collector's diagnostic window. Success uses the ordinary expiry.
-        let _reader = if failed {
-            Some(self.owner.consume(publication.id())?)
-        } else {
-            None
-        };
-        publication
-            .complete(json!({"operation":"test.host-release-native-tests","panicked":failed}))?;
+        let outcome = json!({"operation":"test.host-release-native-tests","panicked":failed});
         if failed {
-            self.owner.retain_diagnostic_path(&self.relative)?;
+            publication.complete_diagnostic(outcome)
+        } else {
+            publication.complete(outcome)
         }
-        Ok(())
     }
 }
 

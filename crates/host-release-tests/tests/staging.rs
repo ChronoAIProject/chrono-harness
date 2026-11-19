@@ -43,11 +43,23 @@ fn release_case_retains_a_failed_batch_until_its_creation_deadline() {
     )
     .unwrap();
     let owner = Inventory::adopted(&root).unwrap().unwrap();
+    let compiled = root.join("compiled-input");
+    fs::write(&compiled, b"shared executable input").unwrap();
+    let interrupted = ".chrono-harness/state/release-test-failures/interrupted";
+    fs::create_dir_all(root.join(interrupted).parent().unwrap()).unwrap();
+    let publication = Inventory::adopted(&root)
+        .unwrap()
+        .unwrap()
+        .create_batch("check-original", interrupted, json!({"fixture":"started"}))
+        .unwrap();
+    fs::hard_link(&compiled, root.join(interrupted).join("probe")).unwrap();
+    drop(publication);
     let mut failed_path = None;
     let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let case = failure_case::FailureCase::allocate(&root, "failed-").unwrap();
         let path = case.path().to_owned();
         fs::write(path.join("stderr"), b"original failure").unwrap();
+        fs::hard_link(&compiled, path.join("git")).unwrap();
         failed_path = Some(path);
         panic!("release verification failed");
     }));
@@ -65,6 +77,11 @@ fn release_case_retains_a_failed_batch_until_its_creation_deadline() {
     let case = failure_case::FailureCase::allocate(&root, "passed-").unwrap();
     let success = case.path().to_owned();
     fs::write(success.join("stdout"), b"passed").unwrap();
+    fs::hard_link(&compiled, success.join("git")).unwrap();
+    assert_eq!(
+        fs::read(root.join(interrupted).join("probe")).unwrap(),
+        b"shared executable input"
+    );
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -88,6 +105,8 @@ fn release_case_retains_a_failed_batch_until_its_creation_deadline() {
     }
     assert!(!success.exists());
     assert!(!failed_path.exists());
+    assert!(!root.join(interrupted).exists());
+    assert_eq!(fs::read(compiled).unwrap(), b"shared executable input");
 }
 
 #[cfg(not(verus_keep_ghost))]
