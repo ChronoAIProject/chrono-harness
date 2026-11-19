@@ -653,15 +653,42 @@ fn leaf_entry_retires_wide_parent(hops: usize, sealed: bool) {
     assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
     let mut rounds = Vec::new();
     let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let first = inventory(h.path())
-            .maintain_originals(&[leaf.clone()])
-            .unwrap();
-        rounds.push(first);
-        let first = rounds.last().unwrap();
-        assert!(
-            first["accounting_errors"].as_array().unwrap().is_empty(),
-            "{first}"
-        );
+        let max_work_rounds = children.len() + 4;
+        let round_millis = policy["max_millis_per_round"].as_u64().unwrap();
+        let mut remaining_time =
+            std::time::Duration::from_millis(round_millis * (1 + max_work_rounds as u64));
+        let mut run_work_round = |entry: &str| loop {
+            let started = std::time::Instant::now();
+            let round = inventory(h.path())
+                .maintain_originals(&[entry.to_owned()])
+                .unwrap();
+            let elapsed = started.elapsed();
+            rounds.push(round.clone());
+            assert!(
+                round["accounting_errors"].as_array().unwrap().is_empty(),
+                "{round}"
+            );
+            assert!(round["nodes"].as_u64().unwrap() <= 2, "{round}");
+            remaining_time = remaining_time
+                .checked_sub(elapsed)
+                .expect("maintenance exhausted the fixture's total round time");
+            if round["nodes"] != 0 {
+                break round;
+            }
+            // A round can exhaust its wall clock before touching the parent.
+            // Only the owner's explicit deadline observation permits re-entry.
+            let protected = round["protected"].as_array().unwrap();
+            assert_eq!(protected.len(), 1, "{round}");
+            let budget = &protected[0]["budget"];
+            assert_eq!(protected[0]["id"], parent_id, "{round}");
+            assert_eq!(budget["nodes_used"], 0, "{round}");
+            assert_eq!(budget["time_limit_millis"], round_millis, "{round}");
+            assert!(
+                budget["elapsed_micros"].as_u64().unwrap() >= round_millis * 1000,
+                "{round}"
+            );
+        };
+        let first = run_work_round(&leaf);
         assert_eq!(first["nodes"], 2, "{first}");
         assert_eq!(first["removed_logical_bytes"], 14, "{first}");
         assert_eq!(first["scope"]["complete"], false, "{first}");
@@ -679,7 +706,7 @@ fn leaf_entry_retires_wide_parent(hops: usize, sealed: bool) {
         }
         // Each call reopens the owner. Continue through the leaf while the
         // parent still references it, then resume by the parent's exact ID.
-        for _ in 0..137 + 4 {
+        for _ in 0..max_work_rounds {
             let before = record();
             if before["output"].is_null() {
                 break;
@@ -693,13 +720,7 @@ fn leaf_entry_retires_wide_parent(hops: usize, sealed: bool) {
             } else {
                 parent_id.clone()
             };
-            let round = inventory(h.path()).maintain_originals(&[entry]).unwrap();
-            assert!(
-                round["accounting_errors"].as_array().unwrap().is_empty(),
-                "{round}"
-            );
-            assert!(round["nodes"].as_u64().unwrap() <= 2, "{round}");
-            rounds.push(round);
+            run_work_round(&entry);
             for (_, path) in &children {
                 assert_eq!(fs::read(h.path().join(path)).unwrap(), b"required original");
             }
