@@ -140,6 +140,9 @@ pub proof fn finite_dependency_batch_retires(
                 assert(parent < id);
             }
             assert(parents_retired(edge, debt, id, at));
+            assert(exists|later: nat| at < later && #[trigger] debt(id, later) < debt(id, at));
+            let later = choose|later: nat| at < later && #[trigger] debt(id, later) < debt(id, at);
+            assert(at < later && local(later) < local(at));
         }
         let finished = retirement_stays_complete(local, ready);
         assert forall|member: nat, later: nat| member < count && finished <= later implies
