@@ -118,6 +118,40 @@ fn push_only_saving_limits_downloads_and_targets_but_preserves_pr_restores() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn install_layout_controls_compatible_restores_and_binds_the_full_lock_to_exact_hits() {
+    let mut value = download_adoption();
+    let entries = &mut value["persistent_cache"]["downloads"]["entries"];
+    for id in ["seed", "unit"] {
+        entries[id]["release_install_layout"] = json!(true);
+        entries[id]["compatibility_files"] = json!([".chrono-harness/distribution.json"]);
+    }
+    let render = |input: Value| {
+        let config = serde_json::from_value(input).map_err(|e| format!("{e}"))?;
+        chrono_ci::units::render(&config, ".chrono-harness/ci/units.json")
+    };
+    let output = render(value.clone()).unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&output[".github/workflows/chrono-ci.yml"]).unwrap();
+    let steps = yaml["jobs"]["unit_example"]["steps"].as_array().unwrap();
+    let scope = &steps[1];
+    assert_eq!(scope["id"], "chrono_layout_0");
+    let restore = &steps[2];
+    assert_eq!(restore["if"], "${{ steps.chrono_layout_0.outcome == 'success' }}");
+    let key = restore["with"]["key"].as_str().unwrap();
+    assert!(key.contains("layout-v1-${{ steps.chrono_layout_0.outputs.digest }}-"));
+    assert!(key.contains("hashFiles('.chrono-harness/distribution.json')"));
+    let fallback = restore["with"]["restore-keys"].as_str().unwrap();
+    assert!(!fallback.contains("hashFiles("));
+    assert!(fallback.lines().all(|line| line.ends_with("layout-v1-${{ steps.chrono_layout_0.outputs.digest }}-")));
+    assert_eq!(steps.last().unwrap()["with"]["key"], key);
+    let mut mixed = value.clone();
+    mixed["persistent_cache"]["downloads"]["entries"]["seed"]["release_install_layout"] = json!(false);
+    assert!(render(mixed).is_err());
+    value["persistent_cache"]["downloads"]["entries"]["unit"]["compatibility_files"] = json!(["first", "second"]);
+    assert!(render(value).is_err());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn downloads_restore_before_compiling_the_planner_and_keep_the_original_check() {
     let value = download_adoption();
     let config = serde_json::from_value(value).unwrap();

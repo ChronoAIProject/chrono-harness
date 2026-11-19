@@ -9,6 +9,23 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 
 verus! {
+pub enum DownloadDomain {
+    Files,
+    InstallLayout,
+    Invalid,
+}
+
+pub fn download_domain(use_layout: bool, files: usize) -> (domain: DownloadDomain)
+    ensures
+        (domain is Files) == !use_layout,
+        (domain is InstallLayout) == (use_layout && files == 1),
+        (domain is Invalid) == (use_layout && files != 1),
+{
+    if !use_layout { DownloadDomain::Files }
+    else if files == 1 { DownloadDomain::InstallLayout }
+    else { DownloadDomain::Invalid }
+}
+
 pub fn saves_download(producer: &str, job: &str) -> (save: bool)
     ensures save == (producer@ == job@),
 {
@@ -17,7 +34,7 @@ pub fn saves_download(producer: &str, job: &str) -> (save: bool)
 }
 
 #[cfg(not(verus_keep_ghost))]
-use crate::{cache, scalar, verified_literals as policy};
+use crate::{cache, scalar, shell, verified_literals as policy};
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::{decode, no_symlink_parents, relative_path};
 #[cfg(not(verus_keep_ghost))]
@@ -52,6 +69,8 @@ pub struct Entry {
     pub output_use: String,
     pub paths: Vec<String>,
     pub compatibility_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub release_install_layout: bool,
     pub source_files: Vec<String>,
     pub consumers: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -94,7 +113,8 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
             entry.compatibility_files.len(),
             entry.source_files.len(),
             entry.consumers.len(),
-            unique(&entry.paths)
+            !matches!(download_domain(entry.release_install_layout, entry.compatibility_files.len()), DownloadDomain::Invalid)
+                && unique(&entry.paths)
                 && unique(&entry.compatibility_files)
                 && unique(&entry.source_files)
                 && unique(&entry.consumers),
@@ -108,6 +128,7 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
                     entry.restore_from.as_ref() != Some(id)
                         && other.paths == entry.paths
                         && other.compatibility_files == entry.compatibility_files
+                        && other.release_install_layout == entry.release_install_layout
                 }),
             !entry.owner.trim().is_empty()
                 && !entry.need.trim().is_empty()
@@ -184,11 +205,11 @@ fn hash(files: &[String]) -> String {
 }
 
 #[cfg(not(verus_keep_ghost))]
-fn prefix(c: &Config, id: &str, entry: &Entry) -> String {
+fn prefix(c: &Config, id: &str, domain: &str) -> String {
     format!(
         "chrono-download-v1-{}-{id}-${{{{ runner.os }}}}-${{{{ runner.arch }}}}-{}-",
         c.namespace,
-        hash(&entry.compatibility_files)
+        domain
     )
 }
 
@@ -230,8 +251,28 @@ pub(crate) fn project(
     let mut save = String::new();
     let event_guard = policy::cache_save_event_guard(parent.save_on_push_only);
     for (index, (id, entry)) in selected.iter().enumerate() {
-        let stem = prefix(c, id, entry);
-        let key = format!("{stem}{}", hash(&entry.source_files));
+        let compatibility = hash(&entry.compatibility_files);
+        let (domain, restore_guard, pin) = match download_domain(
+            entry.release_install_layout,
+            entry.compatibility_files.len(),
+        ) {
+            DownloadDomain::InstallLayout => {
+            let lock = shell(&entry.compatibility_files[0]);
+            let step = format!("chrono_layout_{index}");
+            restore.push_str(&format!(
+                "      - name: Read release install layout {id}\n        id: {step}\n        continue-on-error: true\n        shell: bash\n        run: |\n          set -eo pipefail\n          digest=$(jq -cSe '[.schema, .install]' < {lock} | shasum -a 256)\n          printf 'digest=%s\\n' \"${{digest%% *}}\" >> \"$GITHUB_OUTPUT\"\n"
+            ));
+            (
+                format!("layout-v1-${{{{ steps.{step}.outputs.digest }}}}"),
+                format!("        if: ${{{{ steps.{step}.outcome == 'success' }}}}\n"),
+                format!("{compatibility}-"),
+            )
+            }
+            DownloadDomain::Files => (compatibility, String::new(), String::new()),
+            DownloadDomain::Invalid => return Err(format!("release install layout requires one lock file: {id}")),
+        };
+        let stem = prefix(c, id, &domain);
+        let key = format!("{stem}{pin}{}", hash(&entry.source_files));
         let paths = entry
             .paths
             .iter()
@@ -240,9 +281,9 @@ pub(crate) fn project(
         let fallback = entry
             .restore_from
             .as_ref()
-            .map(|id| format!("            {}\n", prefix(c, id, &c.entries[id])))
+            .map(|id| format!("            {}\n", prefix(c, id, &domain)))
             .unwrap_or_default();
-        restore.push_str(&format!("      - name: Restore download cache {id}\n        id: chrono_download_{index}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}          restore-keys: |\n            {stem}\n{fallback}          fail-on-cache-miss: false\n", parent.restore_action, scalar(&key)));
+        restore.push_str(&format!("      - name: Restore download cache {id}\n        id: chrono_download_{index}\n{restore_guard}        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}          restore-keys: |\n            {stem}\n{fallback}          fail-on-cache-miss: false\n", parent.restore_action, scalar(&key)));
         if entry
             .save_job
             .as_deref()
