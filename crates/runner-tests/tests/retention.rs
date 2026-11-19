@@ -426,6 +426,9 @@ fn historical_object_metadata_uses_its_validated_directory_birth_after_body_reti
     publication.complete_sealed(json!({"exit_code":0})).unwrap();
     let record = retention_state::object_path(h.path(), &id);
     let directory = record.parent().unwrap();
+    let published: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    let body_expiry = published["output"]["expires"].as_u64().unwrap();
+    assert!(body_expiry < published["metadata_expires"].as_u64().unwrap());
     let birth = fs::metadata(directory)
         .unwrap()
         .created()
@@ -435,7 +438,7 @@ fn historical_object_metadata_uses_its_validated_directory_birth_after_body_reti
         .as_secs();
     for _ in 0..8 {
         owner
-            .maintain_originals_at(std::slice::from_ref(&id), birth + 59)
+            .maintain_originals_at(std::slice::from_ref(&id), body_expiry)
             .unwrap();
         if !h.path().join(path).exists() {
             break;
