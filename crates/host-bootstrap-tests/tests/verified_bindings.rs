@@ -15,6 +15,10 @@ use vstd::prelude::*;
 #[path = "owner.rs"]
 mod stage_tests;
 
+#[cfg(verus_keep_ghost)]
+#[path = "original.rs"]
+mod original_tests;
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]

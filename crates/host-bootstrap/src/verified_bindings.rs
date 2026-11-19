@@ -25,6 +25,17 @@ pub mod owner;
 #[path = "profile.rs"]
 pub mod profile;
 
+#[cfg(verus_keep_ghost)]
+#[path = "execution.rs"]
+pub mod execution;
+#[cfg(verus_keep_ghost)]
+#[path = "original.rs"]
+pub mod original;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::original::operation_record_matches;
+#[cfg(verus_keep_ghost)]
+pub use original::operation_record_matches;
+
 verus! {
 
 pub fn archive_matches(actual: &[u8], expected: &[u8]) -> (valid: bool)
@@ -94,16 +105,6 @@ pub fn original_header(schema: &str, passed: bool, config: &str, expected: &str,
 {
     equal_text(schema, "chrono-bootstrap-result/v1") && passed && equal_text(config, expected)
         && absolute_host && !imported && !errored
-}
-
-pub fn operation_record_matches(tool: &str, expected_tool: &str,
-    argv: &Vec<String>, expected_argv: &Vec<String>, cwd: &str, expected_cwd: &str,
-    pid: u32, exit_code: i32) -> (valid: bool)
-    ensures valid <==> (tool@ == expected_tool@ && same_name_list(argv@, expected_argv@)
-        && cwd@ == expected_cwd@ && pid > 0 && exit_code == 0),
-{
-    equal_text(tool, expected_tool) && text_list_equal(argv, expected_argv)
-        && equal_text(cwd, expected_cwd) && pid > 0 && exit_code == 0
 }
 
 pub fn stream_matches(digest: &str, expected_digest: &str, size: u64, expected_size: u64) -> (valid: bool)
