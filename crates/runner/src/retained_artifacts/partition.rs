@@ -229,6 +229,16 @@ impl SweepReport {
                 .as_u64()
                 .ok_or("sweep removed logical bytes")?,
         )?;
+        if let Some(retired) = round["retired_object_metadata"].as_array() {
+            for id in retired {
+                self.observation(
+                    namespace,
+                    Some(address),
+                    "disposed",
+                    json!({"kind":"object-metadata","id":id,"original":"verified-absent"}),
+                )?;
+            }
+        }
         for kind in ["disposed", "protected", "accounting_errors"] {
             for observation in round[kind].as_array().ok_or("sweep round observations")? {
                 self.observation(namespace, Some(address), kind, observation.clone())?;
@@ -1286,7 +1296,13 @@ impl Inventory {
         ))
     }
 
-    fn prune_object(&self, id: &str, observed: u64, nodes: &mut usize) -> Result<(), String> {
+    fn prune_object(
+        &self,
+        id: &str,
+        observed: u64,
+        nodes: &mut usize,
+        retired: &mut Vec<String>,
+    ) -> Result<(), String> {
         let directory = self.object_directory(id)?;
         let Some(gate) = DirectoryLease::acquire_local(&directory, true, None)? else {
             return Ok(());
@@ -1370,6 +1386,7 @@ impl Inventory {
         if record.prune_path.is_none() && *nodes + 3 <= self.policy.max_nodes_per_round {
             self.remove_metadata_directory(&directory, &gate, &["record.json", "record.pending"])?;
             *nodes += 3;
+            retired.push(id.to_owned());
         } else if record.prune_path != initial_prune_path
             || record.metadata_expires != previous_deadline
         {
@@ -1916,6 +1933,7 @@ impl Inventory {
         let mut processed = BTreeSet::new();
         let mut unvisited_relations = BTreeSet::new();
         let mut measurements = BTreeMap::new();
+        let mut retired_object_metadata = Vec::new();
         let addresses: Box<dyn Iterator<Item = Result<String, String>> + '_> = match originals {
             Some(originals) => Box::new(originals.iter().cloned().map(Ok)),
             None => Box::new(
@@ -2019,7 +2037,12 @@ impl Inventory {
                         );
                     }
                     for id in owned {
-                        if let Err(error) = self.prune_object(&id, observed, &mut nodes) {
+                        if let Err(error) = self.prune_object(
+                            &id,
+                            observed,
+                            &mut nodes,
+                            &mut retired_object_metadata,
+                        ) {
                             result["accounting_errors"]
                                 .as_array_mut()
                                 .unwrap()
@@ -2060,6 +2083,9 @@ impl Inventory {
             for (key, value) in RETAINED_MEASUREMENT_FIELDS.iter().zip(values) {
                 result[*key] = json!(result[*key].as_u64().unwrap() + value);
             }
+        }
+        if !retired_object_metadata.is_empty() {
+            result["retired_object_metadata"] = json!(retired_object_metadata);
         }
         complete &= unvisited_relations.iter().all(|id| seen.contains(id));
         result["nodes"] = json!(nodes);
