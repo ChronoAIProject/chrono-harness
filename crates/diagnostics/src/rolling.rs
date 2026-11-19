@@ -42,6 +42,9 @@ use serde::{Deserialize, Serialize};
 pub use crate::verified_rolling::MAX_FILES;
 
 #[cfg(not(verus_keep_ghost))]
+pub(crate) const MAX_RUNTIME_LOG_BYTES: u64 = 64 * 1024 * 1024;
+
+#[cfg(not(verus_keep_ghost))]
 const GENERATION_SCHEMA: &str = "chrono-runtime-log-generation/v1";
 #[cfg(not(verus_keep_ghost))]
 const GENERATION_PREFIX: &[u8] = b"{\"schema\":\"chrono-runtime-log-generation/v1\"";
@@ -298,7 +301,11 @@ impl RollingFile {
         Ok(bytes.len())
     }
 
-    pub(crate) fn expire(directory: &Path, observed: u64) -> io::Result<ExpiredLogs> {
+    pub(crate) fn expire(
+        directory: &Path,
+        observed: u64,
+        keep_seconds: u64,
+    ) -> io::Result<ExpiredLogs> {
         let mut result = ExpiredLogs::default();
         if !Self::check_directory(directory, false)? {
             return Ok(result);
@@ -321,26 +328,87 @@ impl RollingFile {
         }
         for index in 0..MAX_FILES {
             let path = Self::member(directory, index);
-            if let Err(error) = Self::expire_member(&path, observed, &mut result) {
+            if let Err(error) = Self::expire_member(&path, observed, keep_seconds, &mut result) {
                 result.errors.push(format!("{}: {error}", path.display()));
             }
         }
         Ok(result)
     }
 
-    fn expire_member(path: &Path, observed: u64, result: &mut ExpiredLogs) -> io::Result<()> {
+    fn expire_member(
+        path: &Path,
+        observed: u64,
+        keep_seconds: u64,
+        result: &mut ExpiredLogs,
+    ) -> io::Result<()> {
         if !regular(path)? {
             return Ok(());
         }
-        match Self::generation(&File::open(path)?)? {
-            Some(generation) if generation_expired(generation.deadline, observed) => {
-                fs::remove_file(path)?;
-                result.removed += 1;
+        let file = File::open(path)?;
+        let metadata = file.metadata()?;
+        let expired = match Self::generation(&file)? {
+            Some(generation) => generation_expired(generation.deadline, observed),
+            None => {
+                let born = metadata
+                    .created()?
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(io::Error::other)?
+                    .as_secs();
+                let deadline = generation_deadline(born, keep_seconds)
+                    .ok_or_else(|| invalid("legacy log deadline exceeds supported time range"))?;
+                if !generation_expired(deadline, observed)
+                    || !Self::complete_legacy_log(&file, metadata.len())?
+                {
+                    result.legacy += 1;
+                    return Ok(());
+                }
+                true
             }
-            Some(_) => (),
-            None => result.legacy += 1,
+        };
+        if expired {
+            // All adopted writers and maintenance hold the family lock. Recheck
+            // the opened generation before removing its directory entry.
+            let current = fs::symlink_metadata(path)?;
+            if !current.is_file()
+                || current.len() != metadata.len()
+                || current.modified()? != metadata.modified()?
+                || current.created().ok() != metadata.created().ok()
+            {
+                return Err(invalid("log member changed during expiration"));
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                if current.dev() != metadata.dev() || current.ino() != metadata.ino() {
+                    return Err(invalid("log member was replaced during expiration"));
+                }
+            }
+            fs::remove_file(path)?;
+            result.removed += 1;
         }
         Ok(())
+    }
+
+    fn complete_legacy_log(mut file: &File, length: u64) -> io::Result<bool> {
+        use std::io::Seek;
+
+        if length == 0 || length > MAX_RUNTIME_LOG_BYTES {
+            return Ok(false);
+        }
+        // Reading the header advanced the same open file description. Bound the
+        // entire validation to the observed extent of this locked generation.
+        file.rewind()?;
+        let mut reader = BufReader::new(file.take(length));
+        let mut row = Vec::new();
+        while reader.read_until(b'\n', &mut row)? != 0 {
+            if !row.ends_with(b"\n")
+                || serde_json::from_slice::<crate::logging::LogRecord>(&row).is_err()
+            {
+                return Ok(false);
+            }
+            row.clear();
+        }
+        Ok(reader.into_inner().limit() == 0)
     }
 }
 
