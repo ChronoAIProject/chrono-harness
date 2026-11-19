@@ -80,6 +80,7 @@ pub struct Profile {
     pub entrypoint: Entrypoint,
     pub require_tool_bindings: bool,
     pub tool_bindings_registry: String,
+    #[serde(default = "default_report_path")]
     pub report_path: Option<String>,
     pub rust_incremental: Option<bool>,
     pub host_environment: Option<BTreeMap<String, String>>,
@@ -89,6 +90,11 @@ pub struct Profile {
     pub owner_stage: Option<OwnerStage>,
     #[serde(default)]
     pub reuse_owner_operations: Vec<String>,
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn default_report_path() -> Option<String> {
+    Some(".chrono-harness/state/bootstrap.json".into())
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -162,7 +168,12 @@ impl Profile {
             b".chrono-harness/ci/",
         )?;
         path(root, &profile.entrypoint.script, b".chrono-harness/ci/")?;
-        profile.report_destination(root)?;
+        if profile.report_path.is_some()
+            || profile.owner_upgrade.is_some()
+            || profile.owner_stage.is_some()
+        {
+            profile.report_destination(root)?;
+        }
         let participation = &profile.participation;
         if !policy::participation_mode(
             &participation.coordinator_root,
@@ -199,7 +210,7 @@ impl Profile {
             root,
             self.report_path
                 .as_deref()
-                .unwrap_or(".chrono-harness/state/bootstrap.json"),
+                .ok_or("bootstrap consumer requires a current report path")?,
             b".chrono-harness/state/",
         )
     }

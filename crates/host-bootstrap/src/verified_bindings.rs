@@ -16,6 +16,9 @@ use identifiers::equal_text;
 pub mod owner_publication;
 
 #[cfg(verus_keep_ghost)]
+#[path = "construction.rs"]
+pub mod construction;
+#[cfg(verus_keep_ghost)]
 #[path = "lifecycle.rs"]
 pub mod lifecycle;
 #[cfg(verus_keep_ghost)]

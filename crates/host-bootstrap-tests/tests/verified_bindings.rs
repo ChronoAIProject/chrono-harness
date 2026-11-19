@@ -12,6 +12,9 @@ use policy::Executable;
 use vstd::prelude::*;
 
 #[cfg(verus_keep_ghost)]
+#[path = "construction.rs"]
+mod construction_tests;
+#[cfg(verus_keep_ghost)]
 #[path = "owner.rs"]
 mod stage_tests;
 

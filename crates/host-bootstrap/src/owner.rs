@@ -180,7 +180,7 @@ pub fn reuse_construction(
         profile
             .report_path
             .as_deref()
-            .unwrap_or(".chrono-harness/state/bootstrap.json"),
+            .ok_or("owner construction requires a current report path")?,
     )?;
     let qualified = stage_report(
         root,
@@ -767,11 +767,7 @@ pub fn qualified_selected_original(
             .ok_or("selected owner tree is missing")?,
     )?;
     let config = Profile::parse(&fixed.read(&report.config)?)?;
-    if config
-        .report_path
-        .as_deref()
-        .unwrap_or(".chrono-harness/state/bootstrap.json")
-        != reference
+    if config.report_path.as_deref() != Some(reference)
         || !policy::unique_method(
             config
                 .install
