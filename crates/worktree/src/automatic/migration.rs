@@ -360,7 +360,9 @@ impl Manager {
         // Explicit adoption executes the caller's policy. Its target supplies
         // only the fixed artifact declarations and registered policy paths.
         let (target_config, target_filemap) =
-            Registrations::read_custody_inputs(&host_config, |path| r.blob(&target, &head, path))?;
+            chrono_judge_registration::read_custody_inputs(&host_config, |path| {
+                r.blob(&target, &head, path)
+            })?;
         artifact_disposal::registered(
             &self
                 .inputs
