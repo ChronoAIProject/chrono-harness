@@ -2297,10 +2297,11 @@ impl Inventory {
             "completion":"not-established"});
         // Use the same lock order as the publisher. Keep the fixed generation
         // excluded through directory synchronization and the durable role update.
+        let run_report = format!("{}/report.json", original.path);
         let slot_guard = if let Some(slot) = archived_slot {
             crate::units::artifact_path(&slot.path)?;
             if roles != [current_report_role(&slot.path)]
-                || survivor_path != original.path
+                || (survivor_path != original.path && survivor_path != run_report)
                 || survivor_root.starts_with(&self.root)
                 || self.root.starts_with(survivor_root)
             {
@@ -2332,10 +2333,8 @@ impl Inventory {
             .iter()
             .find(|o| o.id == original.id)
             .ok_or("preserved original is unavailable")?;
-        if output.tree {
-            return Err(
-                "preserved release requires an explicitly retained regular original".into(),
-            );
+        if output.tree && archived_slot.is_none() {
+            return Err("preserved report directory requires its archived slot".into());
         }
         let actual: Vec<_> = ledger
             .roots
@@ -2358,10 +2357,16 @@ impl Inventory {
                     .is_some_and(|life| life.deadline <= observed)
                 || output.path != original.path
                 || output.identity != original.identity
-                || output.sha256.as_deref() != Some(digest)
-                || output.length != Some(length)
+                || !crate::verified_release::archived_report_binding(
+                    output.tree,
+                    survivor_path == run_report,
+                    output.references.is_empty(),
+                    survivor_path == original.path
+                        && output.sha256.as_deref() == Some(digest)
+                        && output.length == Some(length),
+                )
             {
-                return Err("archived check requires one exact expired report generation".into());
+                return Err("archived slot requires one exact expired report generation".into());
             }
             ledger
                 .outputs
@@ -2383,15 +2388,35 @@ impl Inventory {
             vec![original.clone()]
         };
         let leases = self.original_leases(&ledger, &originals, true)?;
-        let source = no_symlink_parents(&self.root, &original.path)?;
-        if verify(&source)? != original.identity || verify(&survivor)? != survivor_identity {
+        let source_path = if output.tree {
+            &run_report
+        } else {
+            &original.path
+        };
+        let source = no_symlink_parents(&self.root, source_path)?;
+        let source_identity = verify(&source)?;
+        if (!output.tree && source_identity != original.identity)
+            || !crate::verified_release::independent_original(&source_identity, &survivor_identity)
+            || verify(&survivor)? != survivor_identity
+        {
             return Err("preserved release original identity changed".into());
         }
         if let (Some(slot), Some(guard)) = (archived_slot, &slot_guard) {
             let path = no_symlink_parents(&self.root, &slot.path)?;
             let slot_owner = self.removal_gate(std::slice::from_ref(&slot.path))?;
-            let pointer_digest =
-                self.verify_check_archive(&ledger, output, slot, survivor_root, digest)?;
+            let pointer_digest = if output.tree {
+                let archived_slot = no_symlink_parents(survivor_root, &slot.path)?;
+                if verify(&archived_slot)? == slot.identity
+                    || !self
+                        .verified_archive_members(&ledger, slot, survivor_root)?
+                        .contains(run_report.as_str())
+                {
+                    return Err("archived report must include the sealed run and an independent copy of its slot".into());
+                }
+                (digest.to_owned(), length)
+            } else {
+                self.verify_check_archive(&ledger, output, slot, survivor_root, digest)?
+            };
             match fs::symlink_metadata(&path) {
                 Ok(meta) => {
                     if !meta.is_file()
@@ -2480,7 +2505,26 @@ impl Inventory {
                     .into(),
             );
         }
+        let members = self.verified_archive_members(ledger, slot, archive)?;
+        if originals
+            .iter()
+            .any(|path| !members.contains(path.as_str()))
+        {
+            return Err("archived check does not cover its published inputs".into());
+        }
+        Ok((sha256(&pointer_raw), pointer_raw.len() as u64))
+    }
+
+    fn verified_archive_members<'a>(
+        &self,
+        ledger: &'a Ledger,
+        slot: &ArchivedSlot,
+        archive: &Path,
+    ) -> Result<BTreeSet<&'a str>, String> {
         let mut members = BTreeSet::new();
+        let mut source_ids = BTreeSet::from([slot.identity.clone()]);
+        let mut archived_ids =
+            BTreeSet::from([identity(&no_symlink_parents(archive, &slot.path)?)?]);
         for member in &ledger.outputs {
             if member.phase != "released"
                 || !member.manifest.sealed
@@ -2500,7 +2544,7 @@ impl Inventory {
                             || !copy.identity.ends_with(":file")))
                     || source.bytes != copy.bytes
                     || entry.path == slot.path
-                    || !members.insert(&entry.path)
+                    || !members.insert(entry.path.as_str())
                 {
                     return Err(format!(
                         "archived entry identity/type differs: {}",
@@ -2516,13 +2560,15 @@ impl Inventory {
                     {
                         return Err(format!("archived file content changed: {}", entry.path));
                     }
+                    source_ids.insert(source.identity);
+                    archived_ids.insert(copy.identity);
                 }
             }
         }
-        if originals.iter().any(|path| !members.contains(path)) {
-            return Err("archived check does not cover its published inputs".into());
+        if !source_ids.is_disjoint(&archived_ids) {
+            return Err("archive contains a hard link to an original report member".into());
         }
-        Ok((sha256(&pointer_raw), pointer_raw.len() as u64))
+        Ok(members)
     }
     /// Edges are not roots. Released historical cycles can be reclaimed.
     pub fn dependencies(&self, id: &str, references: &[String]) -> Result<(), String> {

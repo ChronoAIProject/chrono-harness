@@ -26,6 +26,15 @@ use policy::identifiers;
 mod retention_frontier;
 
 verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn archived_tree_must_contain_the_report_and_own_all_its_inputs() {
+    let tree = policy::archived_report_binding(true, true, true, false);
+    let external = policy::archived_report_binding(true, true, false, true);
+    let missing = policy::archived_report_binding(true, false, true, true);
+    let file = policy::archived_report_binding(false, false, false, true);
+    let unbound = policy::archived_report_binding(false, true, true, false);
+    assert(tree && file && !external && !missing && !unbound);
+}
 
 proof fn two_creation_ticks_can_fill_the_storage_bound() {
     let live = seq![3nat, 3nat, 0nat];

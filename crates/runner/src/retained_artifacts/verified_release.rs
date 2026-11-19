@@ -300,6 +300,12 @@ pub proof fn path_generation_retires(trace: spec_fn(nat) -> PathCustody, start: 
     }
 }
 
+pub fn archived_report_binding(tree: bool, run_member: bool, self_contained: bool, sealed_file: bool) -> (valid: bool)
+    ensures valid == ((tree && run_member && self_contained) || (!tree && sealed_file)),
+{
+    if tree { run_member && self_contained } else { sealed_file }
+}
+
 /// 不同地址及相同字节不能证明独立保管；硬链接仍有同一物理身份。
 pub fn independent_original(source: &str, survivor: &str) -> (independent: bool)
     ensures independent == (source@ != survivor@),
