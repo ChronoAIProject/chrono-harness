@@ -353,7 +353,10 @@ fn longer_policy_keeps_the_short_object_metadata_deadline_at_retirement() {
             .unwrap();
     }
     assert!(!physical.exists());
-    assert!(!metadata.parent().unwrap().exists(), "metadata window was extended");
+    assert!(
+        !metadata.parent().unwrap().exists(),
+        "metadata window was extended"
+    );
 }
 
 #[test]

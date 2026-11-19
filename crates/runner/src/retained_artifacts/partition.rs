@@ -373,7 +373,7 @@ impl Gate {
 }
 #[cfg(not(verus_keep_ghost))]
 impl Inventory {
-    fn role_creation_expiry(&self) -> Result<u64, String> {
+    fn metadata_creation_expiry(&self) -> Result<u64, String> {
         let created = now()?;
         let requested = created.saturating_add(self.policy.metadata_keep_seconds);
         Ok(match self.policy.max_lifetime_seconds {
@@ -607,7 +607,7 @@ impl Inventory {
             role: consumer.into(),
             ids: vec![],
             attached: BTreeSet::new(),
-            metadata_expires: self.role_creation_expiry()?,
+            metadata_expires: self.metadata_creation_expiry()?,
             summaries: vec![],
         });
         // Empty and failed admissions still leave a typed, finitely retained
@@ -2645,7 +2645,7 @@ impl Inventory {
                 role: role.clone(),
                 ids: vec![],
                 attached: BTreeSet::new(),
-                metadata_expires: self.role_creation_expiry()?,
+                metadata_expires: self.metadata_creation_expiry()?,
                 summaries: vec![],
             });
             if fresh {
@@ -2690,7 +2690,7 @@ impl Inventory {
                     summaries: vec![],
                     retired_leases: vec![],
                     cursor: 0,
-                    metadata_expires: now()?.saturating_add(self.policy.metadata_keep_seconds),
+                    metadata_expires: self.metadata_creation_expiry()?,
                     prune_path: Some(path.clone()),
                 }
             } else {
@@ -3016,7 +3016,12 @@ impl Inventory {
                     .map_or(self.policy.metadata_keep_seconds, |limits| {
                         limits.metadata_keep_seconds
                     });
-                record.metadata_expires = output.bound_expiry(now()?.saturating_add(keep));
+                let requested = now()?.saturating_add(keep);
+                record.metadata_expires = if output.lifetime.is_some() {
+                    super::bounded_expiry(output.bound_expiry(requested), record.metadata_expires)
+                } else {
+                    requested
+                };
                 record.prune_path = Some(record.path.clone());
             }
             record.output = ledger.outputs.iter().find(|o| o.id == *id).cloned();
