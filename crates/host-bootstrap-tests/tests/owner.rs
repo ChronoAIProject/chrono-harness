@@ -1,31 +1,76 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::policy::{lifecycle as stage_lifecycle, owner as stage_owner, profile as stage_profile};
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::{
+    lifecycle as stage_lifecycle, owner as stage_owner, profile as stage_profile,
+};
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn stage_recovery_requires_the_same_source_and_installed_bytes() {
+    proof {
+        reveal_strlit("stage"); reveal_strlit("earlier");
+        reveal_strlit("first"); reveal_strlit("later");
+        assert("stage"@.len() != "earlier"@.len());
+        assert("first"@[0] != "later"@[0]);
+    }
+    let exact = stage_owner::stage_reuse_matches("stage", "first", "stage", "first");
+    let other_slot = stage_owner::stage_reuse_matches("earlier", "first", "stage", "first");
+    let other_digest = stage_owner::stage_reuse_matches("stage", "later", "stage", "first");
+    let state = stage_profile::ordinary_state_input(false, true);
+    let config = stage_profile::ordinary_state_input(false, false);
+    let named = stage_profile::ordinary_state_input(true, true);
+    let copied = stage_lifecycle::qualified_copy_matches(true, true, 16, 16);
+    let stale = stage_lifecycle::qualified_copy_matches(false, true, 16, 16);
+    let replaced = stage_lifecycle::qualified_copy_matches(true, false, 16, 16);
+    let truncated = stage_lifecycle::qualified_copy_matches(true, true, 15, 16);
+    assert(exact && !other_slot && !other_digest && state && !config && !named);
+    assert(copied && !stale && !replaced && !truncated);
+}
+}
+
 #[path = "support/construction.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod support;
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::{
     bindings::native_platform, owner, verified_bindings::owner_publication as publication,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     os::fd::AsFd,
     path::PathBuf,
     process::{Command, Output},
 };
+#[cfg(not(verus_keep_ghost))]
 use support::Fixture;
 
+#[cfg(not(verus_keep_ghost))]
 fn read_json(path: &std::path::Path) -> Value {
     serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
 }
+#[cfg(not(verus_keep_ghost))]
 fn write_json(path: &std::path::Path, value: &Value) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, serde_json::to_vec(value).unwrap()).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Staged {
     fixture: Fixture,
     reference: String,
     digest: String,
     report: Value,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Staged {
     fn setup() -> Fixture {
         let mut fixture = Fixture::new();
@@ -162,6 +207,7 @@ impl Staged {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn stage_directory_follows_its_actual_report_then_expires_as_a_whole() {
     use chrono_harness::retained_artifacts::retention::{self, Inventory};
     #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
@@ -231,6 +277,7 @@ fn stage_directory_follows_its_actual_report_then_expires_as_a_whole() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn native_owner_stage_retains_actual_execution_and_selected_inode() {
     let staged = Staged::new();
     let root = &staged.fixture.root;
@@ -240,6 +287,7 @@ fn native_owner_stage_retains_actual_execution_and_selected_inode() {
         &native_platform().unwrap(),
         &staged.reference,
         Some(&staged.digest),
+        None,
         None,
     )
     .unwrap();
@@ -252,6 +300,7 @@ fn native_owner_stage_retains_actual_execution_and_selected_inode() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn owner_stage_rejects_an_original_from_another_physical_host() {
     let staged = Staged::new();
     let foreign = tempfile::tempdir().unwrap();
@@ -270,6 +319,7 @@ fn owner_stage_rejects_an_original_from_another_physical_host() {
         &staged.reference,
         Some(&chrono_harness::sha256(&raw)),
         None,
+        None,
     );
     assert!(
         result.is_err(),
@@ -278,6 +328,7 @@ fn owner_stage_rejects_an_original_from_another_physical_host() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn owner_stage_refuses_marker_without_descriptors() {
     let fixture = Staged::setup();
     for (marker, capabilities) in [(true, false), (false, true)] {
@@ -303,6 +354,7 @@ fn owner_stage_refuses_marker_without_descriptors() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn selected_owner_qualifies_its_real_ordinary_producer_and_rejects_changed_installation() {
     let fixture = Fixture::new();
     let mut construction = fixture.committed();
@@ -356,6 +408,7 @@ fn selected_owner_qualifies_its_real_ordinary_producer_and_rejects_changed_insta
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn published_owner_qualifies_fixed_producer_after_candidate_changes_and_retains_actual_origins() {
     let staged = Staged::new();
     let adoption = staged.publish_external_inputs();
@@ -379,6 +432,47 @@ fn published_owner_qualifies_fixed_producer_after_candidate_changes_and_retains_
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
+fn overwritten_stage_slot_resolves_the_installed_report_streams_to_the_exact_original() {
+    let staged = Staged::new();
+    let root = &staged.fixture.root;
+    let slot = ".chrono-harness/state/bootstrap-owner-stage.json";
+    let installation = ".chrono-harness/state/bootstrap.json";
+    let mut adoption = staged.publish_external_inputs();
+    let receipt = adoption.as_object_mut().unwrap().remove("receipt").unwrap();
+    adoption["stage_result"] = json!(slot);
+    let receipt_path = receipt["path"].as_str().unwrap();
+    write_json(&root.join(receipt_path), &adoption);
+    adoption["receipt"] = json!({"path":receipt_path,"sha256":chrono_harness::sha256(&fs::read(root.join(receipt_path)).unwrap())});
+    write_json(&root.join(owner::CURRENT), &adoption);
+    let mut installed = staged.report.clone();
+    for operation in installed["operations"].as_array_mut().unwrap() {
+        operation["reused_from"] = json!({"path":slot,"sha256":staged.digest});
+    }
+    write_json(&root.join(installation), &installed);
+    fs::write(root.join(slot), b"later stage report").unwrap();
+    let native = native_platform().unwrap();
+    let qualify = || {
+        owner::qualified_selected_original(
+            root,
+            &staged.fixture.environment,
+            &native,
+            installation,
+            ".chrono-harness/bin/cargo",
+        )
+    };
+    let original = qualify().unwrap();
+    assert_eq!(original.path, staged.reference);
+    assert_eq!(original.sha256, staged.digest);
+    assert_eq!(fs::read(root.join(slot)).unwrap(), b"later stage report");
+    installed["operations"][0]["stderr"]["path"] =
+        json!(".chrono-harness/state/bootstrap-other/0.stderr");
+    write_json(&root.join(installation), &installed);
+    assert!(qualify().is_err());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn published_owner_rejects_corrupted_missing_or_misbound_originals() {
     let staged = Staged::new();
     let adoption = staged.publish_external_inputs();
@@ -407,7 +501,8 @@ fn published_owner_rejects_corrupted_missing_or_misbound_originals() {
                 &staged.fixture.environment,
                 &native_platform().unwrap(),
                 &adoption,
-                ".chrono-harness/bin/cargo"
+                ".chrono-harness/bin/cargo",
+                ".chrono-harness/state/bootstrap.json",
             )
             .is_err(),
             "accepted {}",
@@ -421,7 +516,8 @@ fn published_owner_rejects_corrupted_missing_or_misbound_originals() {
                 &staged.fixture.environment,
                 &native_platform().unwrap(),
                 &adoption,
-                ".chrono-harness/bin/cargo"
+                ".chrono-harness/bin/cargo",
+                ".chrono-harness/state/bootstrap.json",
             )
             .is_err(),
             "accepted missing {}",
@@ -437,7 +533,8 @@ fn published_owner_rejects_corrupted_missing_or_misbound_originals() {
             &staged.fixture.environment,
             &native_platform().unwrap(),
             &changed,
-            ".chrono-harness/bin/cargo"
+            ".chrono-harness/bin/cargo",
+            ".chrono-harness/state/bootstrap.json",
         )
         .is_err()
     );
@@ -448,11 +545,13 @@ fn published_owner_rejects_corrupted_missing_or_misbound_originals() {
         &native,
         &adoption,
         ".chrono-harness/bin/cargo",
+        ".chrono-harness/state/bootstrap.json",
     )
     .unwrap();
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn public_bootstrap_keeps_mocked_main_source_and_the_original_failed_child_exit() {
     for failure in [None, Some(73)] {
         let mut fixture = Fixture::new();
@@ -522,6 +621,7 @@ fn public_bootstrap_keeps_mocked_main_source_and_the_original_failed_child_exit(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn participating_fixture() -> Fixture {
     let fixture = Fixture::new();
     let native = native_platform().unwrap();
@@ -537,6 +637,7 @@ fn participating_fixture() -> Fixture {
     fixture
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn mock_participation(fixture: &Fixture, stdout: &[u8], stderr: &[u8], exit: u8) {
     let args = json!([
         "bootstrap",
@@ -560,6 +661,7 @@ fn mock_participation(fixture: &Fixture, stdout: &[u8], stderr: &[u8], exit: u8)
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn original_child(fixture: &Fixture, exit: u8) -> Value {
     let process = chrono_harness::run_process(
         &fixture.root,
@@ -583,6 +685,7 @@ fn original_child(fixture: &Fixture, exit: u8) -> Value {
     chrono_harness::full::compact_process(&serde_json::to_value(process).unwrap()).unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn assert_no_local_build(fixture: &Fixture) {
     for path in [
         "prepared",
@@ -604,6 +707,7 @@ fn assert_no_local_build(fixture: &Fixture) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn delegated_bootstrap_forwards_capabilities_and_original_binary_streams_without_local_build() {
     for (exit, linked) in [(0, false), (7, false), (0, true), (7, true)] {
         let fixture = participating_fixture();
@@ -651,6 +755,7 @@ fn delegated_bootstrap_forwards_capabilities_and_original_binary_streams_without
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn lifecycle_refusal_preserves_the_child_streams_and_the_original_report_reference() {
     let fixture = participating_fixture();
     let reminder = b"W_WORKTREE_ATTENTION: owner retained work\n";
@@ -686,6 +791,7 @@ fn lifecycle_refusal_preserves_the_child_streams_and_the_original_report_referen
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn refused_owner_before_a_managed_report_keeps_its_original_error_and_has_no_build_effect() {
     let fixture = participating_fixture();
     mock_participation(
@@ -708,6 +814,7 @@ fn refused_owner_before_a_managed_report_keeps_its_original_error_and_has_no_bui
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn ordinary_shared_install_requires_the_existing_owner_and_identical_bytes() {
     let mut fixture = Fixture::new();
     fixture.inventory(&fixture.root);
@@ -768,6 +875,7 @@ fn ordinary_shared_install_requires_the_existing_owner_and_identical_bytes() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn linked_shared_install_publishes_local_bytes_without_changing_the_coordinator() {
     let mut fixture = Fixture::new();
     let coordinator = tempfile::tempdir().unwrap();
@@ -806,6 +914,7 @@ fn linked_shared_install_publishes_local_bytes_without_changing_the_coordinator(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn linked_shared_install_refuses_hard_links_and_symbolic_aliases_of_the_coordinator() {
     let mut fixture = Fixture::new();
     let coordinator = tempfile::tempdir().unwrap();
@@ -844,6 +953,7 @@ fn linked_shared_install_refuses_hard_links_and_symbolic_aliases_of_the_coordina
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn owner_reuse_preserves_actual_original_operations_and_rejects_changed_selection_without_reexecution()
  {
     let staged = Staged::new();
