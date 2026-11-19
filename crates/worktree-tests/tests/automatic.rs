@@ -1148,7 +1148,13 @@ fn terminal_facts_from_a_sealed_artifacts_only_cleanup() {
         return;
     }
     use chrono_harness::retained_artifacts::retention::Inventory;
-    for fault in ["", "another-terminal", "removed", "unsealed", "pending-terminal"] {
+    for fault in [
+        "",
+        "another-terminal",
+        "removed",
+        "unsealed",
+        "pending-terminal",
+    ] {
         let h = terminal_original_fixture(if fault == "pending-terminal" {
             "unsealed"
         } else {
@@ -1179,12 +1185,24 @@ fn terminal_facts_from_a_sealed_artifacts_only_cleanup() {
         fs::create_dir_all(h.root.join(".chrono-harness/state/worktrees")).unwrap();
         fs::write(h.root.join(path), &raw).unwrap();
         let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
-        let publication = inventory.begin("lifecycle-original", path, value!(null)).unwrap();
+        let publication = inventory
+            .begin("lifecycle-original", path, value!(null))
+            .unwrap();
         if fault != "unsealed" {
             publication.complete(value!({"status":"cleaned"})).unwrap();
         }
-        let role = format!("worktree-enrollment:{}", sha256(h.target.to_str().unwrap().as_bytes()));
-        inventory.reference_paths(&role, &[terminal["path"].as_str().unwrap().into(), path.into()]).unwrap();
+        let role = format!(
+            "worktree-enrollment:{}",
+            sha256(h.target.to_str().unwrap().as_bytes())
+        );
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .reference_paths(
+                &role,
+                &[terminal["path"].as_str().unwrap().into(), path.into()],
+            )
+            .unwrap();
         e["attempts"] = value!([{"path":path,"token":"cleanup-history","receipt":{"path":path,"sha256":sha256(&raw)}}]);
         let before = serde_json::to_vec(&ledger).unwrap();
         fs::write(&ledger_path, &before).unwrap();
@@ -1193,7 +1211,14 @@ fn terminal_facts_from_a_sealed_artifacts_only_cleanup() {
         if fault.is_empty() {
             assert_eq!(code, 0, "{report}");
             let mut transferred = json(&after).unwrap();
-            assert!(transferred["entries"][0]["terminal"].as_object_mut().unwrap().remove("established").unwrap().is_string());
+            assert!(
+                transferred["entries"][0]["terminal"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("established")
+                    .unwrap()
+                    .is_string()
+            );
             assert_eq!(transferred, ledger);
         } else {
             assert_ne!(code, 0, "{fault}: {report}");
