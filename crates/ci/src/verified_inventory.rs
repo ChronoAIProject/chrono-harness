@@ -1,6 +1,10 @@
 //! libtest 清单判断的同源 Verus 定义。
 #![allow(unexpected_cfgs)]
 
+#[cfg(verus_keep_ghost)]
+#[path = "inventory.rs"]
+pub mod inventory_output;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(not(verus_keep_ghost))]
