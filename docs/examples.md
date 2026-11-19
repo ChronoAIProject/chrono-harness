@@ -19,6 +19,12 @@ Go、TS、混合语言使用 `chrono-ci-check/v3` 和 `chrono-github-units/v1`�
 
 ## 验证范围
 
+### 从产品提交查到下游业务结果
+
+以 Go 示例采用 v0.1.0 为例。产品端先核对固定源码 `e7d8e9fd` 的落地检查，再查同一源码生成的发布和平台安装结果。这两次运行分别回答“候选通过了哪些检查”和“哪个版本已可以安装”。[产品落地检查](https://github.com/ChronoAIProject/chrono-harness/actions/runs/43014938582) · [正式发布与安装](https://github.com/ChronoAIProject/chrono-harness/actions/runs/43022416702)
+
+下游端从采用 PR 找到已合入 Go 仓的提交 `2654f3f2`。打开该提交的 `chrono / rates` 作业，启动步骤的安装回执给出 v0.1.0 和源提交，随后同一作业运行登记的业务检查并通过。核对其他版本时沿用各自的提交和原运行。只有版本登记时可以确认选用版本，实际安装和业务结果仍待核实。[Go 采用 PR](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/32) · [原 rates 作业](https://github.com/ChronoAIProject/chrono-harness-examples-go/actions/runs/43027669146/job/130546433982)
+
 首轮 v0.1.0 中，四个宿主先完成同源码最终测试版的采用，再为正式版分别完成 feature → integration → dev 的真实合并；该轮本地 canonical、dev 落地检查、适用 CodeQL 与原安装回执均已核验通过。历史交付原件分别见 [Go PR #32](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/32)、[TS PR #29](https://github.com/ChronoAIProject/chrono-harness-examples-ts/pull/29)、[混合语言 PR #29](https://github.com/ChronoAIProject/chrono-harness-examples-mix/pull/29)、[首次接入 PR #22](https://github.com/ChronoAIProject/chrono-harness-examples-initial/pull/22)。该轮 Go／TS／混合语言的原生 CI 为 Ubuntu 24.04；首次接入为 macOS 26。Linux／macOS 安装由[该轮正式发布](https://github.com/ChronoAIProject/chrono-harness/actions/runs/43022416702)分别验收。这些历史结果不替代新版本的采用验收；每轮结果由对应 PR／Release 引用原件。
 
 Go 的原 Linux Git pin 漂移已按该候选 bootstrap 原日志显式更新，未放宽约束。首次接入旧 runner 的不可调度注释已定位并迁移。首轮 Python 安装器退役后，远端旧扫描仍固定 Python 并以提取 0 个模块失败，现有凭据访问扫描配置返回 403；原件保留在 PR #18。本轮首次接入的 Actions CodeQL 与汇总检查均成功，实际树仍无 Python；这不证明远端配置为何变化，不回填历史失败，也没有增加空源文件。
