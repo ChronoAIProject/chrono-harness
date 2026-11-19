@@ -210,7 +210,8 @@ fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment
         .find(|entry| entry["path"] == value!(target))
         .unwrap()
         .clone();
-    let cleanup = CapturedChild::spawn(&mut h.auto_command("maintain", &[]), &h.root);
+    // The sibling invokes maintenance and needs its own checkout for the concurrent use.
+    let cleanup = CapturedChild::spawn(&mut h.auto_command_at(&sibling, "maintain", &[]), &h.root);
     let mut ready = libc::pollfd {
         fd: listener.as_raw_fd(),
         events: libc::POLLIN,
@@ -263,6 +264,12 @@ fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment
     release.write_all(b"x").unwrap();
     let (code, report, error) = h.received(cleanup.wait_with_output().unwrap());
     assert_eq!(code, 0, "cleanup: {report} {error}");
+    assert_eq!(report["invoking_root"], value!(sibling));
+    assert!(report["drain"].as_array().unwrap().iter().any(|row| {
+        row["path"] == value!(sibling)
+            && row["status"] == "preserved"
+            && row["preserved_reason"] == "invoking source or destination"
+    }));
     assert!(!target.join("output λ").exists());
     let after = h.ledger();
     let entries = after["entries"].as_array().unwrap();
