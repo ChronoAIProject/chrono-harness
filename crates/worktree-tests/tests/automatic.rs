@@ -2480,7 +2480,7 @@ pub(super) fn output(target: &Path) {
 #[cfg(not(verus_keep_ghost))]
 fn capacity_fixture_with_diagnostics(
     host: &Host,
-    directory: &Path,
+    directory: &DiagnosticDestination,
     body: impl FnOnce(),
 ) -> std::thread::Result<()> {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(body));
@@ -2520,7 +2520,8 @@ fn caught_capacity_failure_exports_original_inventory_and_command_streams() {
     }
     let source_bytes = fs::read(host.root.join("payload")).unwrap();
     let index = fs::read(host.root.join(".git/index")).unwrap();
-    let result = capacity_fixture_with_diagnostics(&host, destination.path(), || {
+    let caller = DiagnosticDestination::Caller(destination.path().to_owned());
+    let result = capacity_fixture_with_diagnostics(&host, &caller, || {
         panic!("controlled original capacity fixture failure");
     });
     let failure = result.unwrap_err();
@@ -2532,6 +2533,63 @@ fn caught_capacity_failure_exports_original_inventory_and_command_streams() {
         "fixture-{}",
         sha256(host.root.as_os_str().as_encoded_bytes())
     ));
+    let checkout = tempfile::tempdir().unwrap();
+    git(checkout.path(), &["init", "-q"]);
+    let checkout_root = fs::canonicalize(checkout.path()).unwrap();
+    fs::create_dir_all(checkout_root.join(".chrono-harness")).unwrap();
+    let policy = value!({
+        "schema":"chrono-output-retention/v2","producers":{"worktree-fixture":[format!("{FAILURE_FAMILY}/")]},
+        "keep_seconds":0,"diagnostic_keep_seconds":86400,"max_lifetime_seconds":86400,
+        "metadata_keep_seconds":0,"max_related_outputs":512,"max_summaries":128,
+        "max_nodes_per_round":256,"max_bytes_per_round":67108864,"max_millis_per_round":25
+    });
+    fs::write(
+        checkout_root.join(retention::POLICY_PATH),
+        policy.to_string(),
+    )
+    .unwrap();
+    let managed = DiagnosticDestination::Checkout(checkout_root.clone());
+    host.retain_fixture_diagnostics(&managed);
+    let owner = retention::Inventory::adopted(&checkout_root)
+        .unwrap()
+        .unwrap();
+    let state = owner.producer_status("worktree-fixture", None).unwrap();
+    let [record] = state["records"].as_array().unwrap().as_slice() else {
+        panic!("{state}")
+    };
+    assert_eq!(record["sealed"], true);
+    assert!(record["outcome"]["copy_error"].is_null());
+    let relative = record["path"].as_str().unwrap();
+    let id = record["id"].as_str().unwrap().to_owned();
+    let deadline = record["lifetime"]["deadline"].as_u64().unwrap();
+    assert_eq!(
+        deadline - record["lifetime"]["created_at"].as_u64().unwrap(),
+        86400
+    );
+    assert_eq!(record["expires"], deadline);
+    let temporary = checkout_root.join(relative);
+    for (name, bytes) in &originals {
+        assert_eq!(
+            fs::read(temporary.join("coordinator-state").join(name)).unwrap(),
+            *bytes
+        );
+    }
+    let ids = [id];
+    let reader = retention::read_guard(&checkout_root, relative)
+        .unwrap()
+        .unwrap();
+    let held = owner.maintain_originals_at(&ids, deadline).unwrap();
+    assert_eq!(held["accounting_errors"], value!([]));
+    assert!(temporary.is_dir());
+    drop(reader);
+    for _ in 0..32 {
+        let result = owner.maintain_originals_at(&ids, deadline).unwrap();
+        assert_eq!(result["accounting_errors"], value!([]));
+        if !temporary.try_exists().unwrap() {
+            break;
+        }
+    }
+    assert!(!temporary.try_exists().unwrap());
     for (name, bytes) in originals {
         assert_eq!(
             fs::read(retained.join("coordinator-state").join(name)).unwrap(),
@@ -3044,7 +3102,7 @@ fn automatic_inventory_requires_current_attachment_but_accepts_advanced_head() {
             "metadata" => {
                 let original = metadata.with_extension("original");
                 fs::rename(&metadata, &original).unwrap();
-                retain_fixture_state(&original, &metadata).unwrap();
+                retain_fixture_state(&original, &metadata, None).unwrap();
             }
             _ => {
                 fs::write(target.join(".git"), "unreadable attachment").unwrap();
