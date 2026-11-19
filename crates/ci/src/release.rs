@@ -551,9 +551,15 @@ fn render_unit<'a>(
     } else if landing_selection && job.always {
         // A successful transitive selector must not start an empty collector.
         // Failed and cancelled direct producers still need their diagnostics.
-        let producers = job.needs.iter().map(|id| format!("needs.{id}.result != 'skipped'"))
-            .collect::<Vec<_>>().join(" || ");
-        condition.push_str(&format!(" && (github.event_name != 'workflow_run' || {producers})"));
+        let producers = job
+            .needs
+            .iter()
+            .map(|id| format!("needs.{id}.result != 'skipped'"))
+            .collect::<Vec<_>>()
+            .join(" || ");
+        condition.push_str(&format!(
+            " && (github.event_name != 'workflow_run' || {producers})"
+        ));
     }
     output.push_str(&format!("  {}:\n    if: ${{{{ {condition} }}}}\n", job.id));
     if super::verified_literals::delivery_publisher(
