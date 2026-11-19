@@ -135,11 +135,12 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
         .is_err()
     );
 }
-use chrono_harness::{prepared, sha256};
+use chrono_harness::{prepared, retained_artifacts::retention, sha256};
 use std::path::PathBuf;
 
 pub(crate) struct ShortHost {
     _dir: crate::tools::FixtureDirectory,
+    failure_destination: FailureDestination,
     root: PathBuf,
     pub(super) remote: PathBuf,
     pub(super) base: String,
@@ -259,6 +260,7 @@ impl ShortHost {
         let candidate = git(&root, &["rev-parse", "HEAD"]);
         Self {
             _dir: dir,
+            failure_destination: FailureDestination::configured(),
             root,
             remote,
             base,
@@ -431,6 +433,94 @@ fn real_short_check_with_inherited_ownership_executes_selected_operations() {
         binding["environment"]["effective"]
     );
 }
+const FAILURE_FAMILY: &str = ".chrono-harness/state/ci-test-failures";
+
+enum FailureDestination {
+    Checkout(PathBuf),
+    Caller(PathBuf),
+}
+
+impl FailureDestination {
+    fn configured() -> Self {
+        match std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY") {
+            Some(directory) => Self::Caller(directory.into()),
+            None => Self::Checkout(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")),
+        }
+    }
+
+    fn preserve(&self, fixture: &Path) -> Result<PathBuf, String> {
+        let source = fixture.join(".chrono-harness/state");
+        let label = sha256(fixture.as_os_str().as_encoded_bytes());
+        let host = match self {
+            Self::Caller(directory) => {
+                let target = directory.join(label);
+                copy_short_state(&source, &target, None)?;
+                return Ok(target);
+            }
+            Self::Checkout(host) => fs::canonicalize(host).map_err(|e| e.to_string())?,
+        };
+        let owner =
+            retention::Inventory::adopted(&host)?.ok_or("missing CI fixture retention policy")?;
+        let family = chrono_harness::no_symlink_parents(&host, FAILURE_FAMILY)?;
+        fs::create_dir_all(&family).map_err(|e| e.to_string())?;
+        let address = retention::unique_path(&family, "short-", "")?;
+        let relative = format!(
+            "{FAILURE_FAMILY}/{}",
+            address
+                .file_name()
+                .and_then(|s| s.to_str())
+                .ok_or("invalid failure copy address")?
+        );
+        let target = host.join(&relative);
+        let publication = owner.plan(
+            "ci-fixture",
+            &relative,
+            true,
+            json!({"kind":"short-fixture","source":label}),
+        )?;
+        publication.materialize()?;
+        let copying = copy_short_state(&source, &target, Some(&publication));
+        // Keep the directory alive between sealing and setting its diagnostic expiry.
+        let reader_owner =
+            retention::Inventory::adopted(&host)?.ok_or("missing CI fixture retention policy")?;
+        let _reader = reader_owner.consume(publication.id())?;
+        let seal = publication
+            .complete_sealed(
+                json!({"kind":"short-fixture","source":label,"copy_error":copying.as_ref().err()}),
+            )
+            .and_then(|()| reader_owner.retain_diagnostic_path(&relative));
+        if let Err(error) = copying {
+            return Err(match seal {
+                Ok(()) => format!("{}: {error}", target.display()),
+                Err(seal_error) => {
+                    format!("{}: {error}; publication: {seal_error}", target.display())
+                }
+            });
+        }
+        seal?;
+        Ok(target)
+    }
+}
+
+fn copy_short_state(
+    source: &Path,
+    target: &Path,
+    publication: Option<&retention::Publication>,
+) -> Result<(), String> {
+    retention::directory_adopted(publication, target)?;
+    for entry in fs::read_dir(source).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let target = target.join(entry.file_name());
+        let kind = entry.file_type().map_err(|e| e.to_string())?;
+        if kind.is_dir() {
+            copy_short_state(&entry.path(), &target, publication)?;
+        } else if kind.is_file() {
+            retention::copy_adopted(publication, &entry.path(), &target)?;
+        }
+    }
+    Ok(())
+}
+
 // Keep original fixture reports before TempDir teardown on an unexpected owner
 // failure. This changes diagnostics only; commands, assertions and bounds stay fixed.
 impl Drop for ShortHost {
@@ -441,28 +531,8 @@ impl Drop for ShortHost {
         if let Err(error) = self._dir.retain_diagnostic() {
             eprintln!("Failed fixture diagnostic reference unavailable: {error}");
         }
-        let directory = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../.chrono-harness/state/ci-test-failures")
-            });
-        fn copy(source: &Path, destination: &Path) -> std::io::Result<()> {
-            fs::create_dir_all(destination)?;
-            for entry in fs::read_dir(source)? {
-                let entry = entry?;
-                let target = destination.join(entry.file_name());
-                if entry.file_type()?.is_dir() {
-                    copy(&entry.path(), &target)?;
-                } else if entry.file_type()?.is_file() {
-                    fs::copy(entry.path(), target)?;
-                }
-            }
-            Ok(())
-        }
-        let target = directory.join(sha256(self.root.as_os_str().as_encoded_bytes()));
-        match copy(&self.root.join(".chrono-harness/state"), &target) {
-            Ok(()) => eprintln!("Original failed fixture reports: {}", target.display()),
+        match self.failure_destination.preserve(&self.root) {
+            Ok(target) => eprintln!("Original failed fixture reports: {}", target.display()),
             Err(error) => eprintln!("Failed fixture report retention failed: {error}"),
         }
     }
@@ -480,7 +550,23 @@ fn failed_short_fixture_retains_original_state_before_removing_host() {
         let report = ".chrono-harness/state/preparation/acquisition.json";
         fs::create_dir_all(root.join(".chrono-harness/state/preparation")).unwrap();
         fs::write(root.join(report), original).unwrap();
+        let archive = tempfile::tempdir().unwrap();
+        let archive_root = fs::canonicalize(archive.path()).unwrap();
+        git(&archive_root, &["init", "-q"]);
+        fs::create_dir_all(archive_root.join(".chrono-harness")).unwrap();
+        let policy = json!({
+            "schema":"chrono-output-retention/v2","producers":{"ci-fixture":[format!("{FAILURE_FAMILY}/")]},
+            "keep_seconds":0,"diagnostic_keep_seconds":86400,"max_lifetime_seconds":86400,
+            "metadata_keep_seconds":0,"max_related_outputs":512,"max_summaries":128,
+            "max_nodes_per_round":256,"max_bytes_per_round":67108864,"max_millis_per_round":25
+        });
+        fs::write(
+            archive_root.join(".chrono-harness/retention.json"),
+            policy.to_string(),
+        )
+        .unwrap();
         let mut host = ShortHost {
+            failure_destination: FailureDestination::Checkout(archive_root.clone()),
             _dir: crate::tools::FixtureDirectory::Ephemeral(directory),
             root: root.clone(),
             remote: root.join("remote"),
@@ -497,14 +583,16 @@ fn failed_short_fixture_retains_original_state_before_removing_host() {
             host.root = consumer;
         }
         let active_root = host.root.clone();
-        let evidence = std::env::var_os("CHRONO_TEST_FAILURE_DIRECTORY")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../.chrono-harness/state/ci-test-failures")
-            })
-            .join(sha256(active_root.as_os_str().as_encoded_bytes()));
-        assert!(!evidence.exists());
+        let independent = tempfile::tempdir().unwrap();
+        let persistent = FailureDestination::Caller(independent.path().to_owned())
+            .preserve(&active_root)
+            .unwrap();
+        assert_eq!(
+            persistent,
+            independent
+                .path()
+                .join(sha256(active_root.as_os_str().as_encoded_bytes()))
+        );
         let failed = std::panic::catch_unwind(move || {
             let _host = host;
             panic!("fixture consumer failed before reading its original report");
@@ -514,11 +602,50 @@ fn failed_short_fixture_retains_original_state_before_removing_host() {
             !active_root.exists(),
             "fixture teardown must still remove the host"
         );
+        let copies = fs::read_dir(archive_root.join(FAILURE_FAMILY))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let [copy] = copies.as_slice() else {
+            panic!("expected one failed fixture copy")
+        };
+        let evidence = copy.path();
         assert_eq!(
             fs::read(evidence.join("preparation/acquisition.json")).unwrap(),
             original
         );
-        fs::remove_dir_all(evidence).unwrap();
+        let name = evidence
+            .strip_prefix(&archive_root)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let owner = retention::Inventory::adopted(&archive_root)
+            .unwrap()
+            .unwrap();
+        let status = owner.producer_status("ci-fixture", Some(name)).unwrap();
+        let record = &status["records"][0];
+        assert_eq!(record["sealed"], true);
+        assert_eq!(record["outcome"]["kind"], "short-fixture");
+        assert!(record["outcome"]["copy_error"].is_null());
+        let born = record["lifetime"]["created_at"].as_u64().unwrap();
+        let deadline = record["lifetime"]["deadline"].as_u64().unwrap();
+        assert_eq!(deadline - born, 86400);
+        assert_eq!(record["expires"], deadline);
+        let id = [record["id"].as_str().unwrap().to_owned()];
+        owner.maintain_originals_at(&id, deadline - 1).unwrap();
+        assert!(evidence.is_dir());
+        for _ in 0..32 {
+            let round = owner.maintain_originals_at(&id, deadline).unwrap();
+            assert_eq!(round["accounting_errors"], json!([]));
+            if !evidence.exists() {
+                break;
+            }
+        }
+        assert!(!evidence.exists());
+        assert_eq!(
+            fs::read(persistent.join("preparation/acquisition.json")).unwrap(),
+            original
+        );
     }
 }
 
