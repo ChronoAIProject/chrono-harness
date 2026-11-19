@@ -62,7 +62,19 @@ pub struct Config {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg(not(verus_keep_ghost))]
+pub struct LandingSelection {
+    pub runs_on: String,
+    pub timeout_minutes: u32,
+    /// Path relative to the original aggregate artifact root.
+    pub context_path: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Delivery {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub landing_selection: Option<LandingSelection>,
     pub workflow: String,
     pub branch: String,
     pub publisher: String,
@@ -139,6 +151,19 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
             }
         }
         let ids = c.jobs.iter().map(|job| job.id.as_str()).collect::<Vec<_>>();
+        if let Some(selection) = &delivery.landing_selection {
+            literal(&selection.runs_on)?;
+            literal(&selection.context_path)?;
+            relative_path(&selection.context_path)?;
+            if selection.runs_on.is_empty()
+                || !(1..=360).contains(&selection.timeout_minutes)
+                || ids
+                    .iter()
+                    .any(|id| id.eq_ignore_ascii_case("select_preview"))
+            {
+                return Err("invalid landing selection runner, timeout or job collision".into());
+            }
+        }
         let index = super::verified_literals::publisher_index(&ids, &delivery.publisher)
             .ok_or("unregistered release publisher")?;
         let publisher = &c.jobs[index];
@@ -346,6 +371,13 @@ pub fn render(c: &Config) -> Result<String, String> {
     }
     output.push_str("permissions:\n  contents: read\n");
     output.push_str("jobs:\n");
+    if let Some(selection) = c
+        .delivery
+        .as_ref()
+        .and_then(|d| d.landing_selection.as_ref())
+    {
+        output.push_str(&render_landing_selection(c, selection));
+    }
     for job in &c.jobs {
         if c.schema == UNITS_SCHEMA {
             let mut body = String::new();
@@ -419,6 +451,62 @@ pub fn render(c: &Config) -> Result<String, String> {
 }
 
 #[cfg(not(verus_keep_ghost))]
+fn render_landing_selection(c: &Config, selection: &LandingSelection) -> String {
+    format!(
+        r#"  select_preview:
+    if: ${{{{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}}}
+    runs-on: {runner}
+    timeout-minutes: {timeout}
+    permissions:
+      actions: read
+    outputs:
+      selected: ${{{{ github.event_name == 'workflow_dispatch' && 'true' || steps.selection.outputs.selected }}}}
+    steps:
+      - name: Download original landing collection
+        if: ${{{{ github.event_name == 'workflow_run' }}}}
+        uses: {action}
+        with:
+          github-token: ${{{{ github.token }}}}
+          run-id: ${{{{ github.event.workflow_run.id }}}}
+          name: chrono-collection-${{{{ github.event.workflow_run.id }}}}-${{{{ github.event.workflow_run.run_attempt }}}}
+          path: landing
+      - name: Read selected units from the successful push
+        if: ${{{{ github.event_name == 'workflow_run' }}}}
+        id: selection
+        shell: bash
+        env:
+          LANDING_CONTEXT: {context}
+          LANDING_RUN: ${{{{ github.event.workflow_run.id }}}}
+          LANDING_ATTEMPT: ${{{{ github.event.workflow_run.run_attempt }}}}
+          LANDING_SHA: ${{{{ github.event.workflow_run.head_sha }}}}
+        run: |
+          selected=$(jq -er '
+            if .schema == "chrono-ci-inputs/v1" and .scope.kind == "collect" and .event == "push"
+              and .candidate == env.LANDING_SHA and .native_run.job == "aggregate"
+              and .native_run.repository == env.GITHUB_REPOSITORY
+              and .native_run.run_id == (env.LANDING_RUN | tonumber)
+              and .native_run.run_attempt == (env.LANDING_ATTEMPT | tonumber)
+              and .detection.schema == "chrono-ci-detection/v2" and .detection.event == .event
+              and .detection.repository == .native_run.repository and .detection.run_id == .native_run.run_id
+              and (.detection.run_attempt | type) == "number"
+              and .detection.run_attempt >= 1 and .detection.run_attempt <= .native_run.run_attempt
+              and .detection.candidate == .candidate and .detection.event_head == .candidate
+              and (.detection.initial | type) == "boolean" and .detection.initial == .initial
+              and (.detection.required_units | type) == "array"
+              and all(.detection.required_units[]; type == "string" and length > 0)
+            then (.initial or (.detection.required_units | length > 0)) | tostring
+            else error("invalid landing selection identity or units") end
+          ' "landing/$LANDING_CONTEXT")
+          printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
+"#,
+        runner = scalar(&selection.runs_on),
+        timeout = selection.timeout_minutes,
+        action = c.download_artifact_action.as_deref().unwrap(),
+        context = scalar(&selection.context_path),
+    )
+}
+
+#[cfg(not(verus_keep_ghost))]
 fn render_unit<'a>(
     output: &mut String,
     c: &Config,
@@ -452,6 +540,17 @@ fn render_unit<'a>(
             }
         }
     }
+    let landing_selection = c
+        .delivery
+        .as_ref()
+        .is_some_and(|d| d.landing_selection.is_some());
+    let selection_root = landing_selection && job.needs.is_empty();
+    if selection_root {
+        condition.push_str(" && needs.select_preview.result == 'success' && needs.select_preview.outputs.selected == 'true'");
+    } else if landing_selection && job.always {
+        // Diagnostic collectors still run after a real producer failure.
+        condition.push_str(" && (github.event_name != 'workflow_run' || contains(needs.*.result, 'success') || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))");
+    }
     output.push_str(&format!("  {}:\n    if: ${{{{ {condition} }}}}\n", job.id));
     if super::verified_literals::delivery_publisher(
         c.delivery.as_ref().map(|d| d.publisher.as_str()),
@@ -459,7 +558,9 @@ fn render_unit<'a>(
     ) {
         output.push_str("    permissions:\n      contents: write\n      actions: read\n");
     }
-    if !job.needs.is_empty() {
+    if selection_root {
+        output.push_str("    needs: select_preview\n");
+    } else if !job.needs.is_empty() {
         output.push_str(&format!(
             "    needs: {}\n",
             serde_json::to_string(&job.needs).map_err(|e| e.to_string())?
@@ -525,12 +626,17 @@ fn render_unit<'a>(
         if: ${{{{ always() }}}}
         shell: bash
         env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{{{ toJson(needs) }}}}
+          CHRONO_RELEASE_DEPENDENCIES: {dependency_input}
           CHRONO_RELEASE_RUN: ${{{{ github.run_id }}}}
           CHRONO_RELEASE_ATTEMPT: ${{{{ github.run_attempt }}}}
           CHRONO_RELEASE_JOB: {job}
 "#,
-        job = scalar(&job.id)
+        job = scalar(&job.id),
+        dependency_input = if selection_root {
+            "'{}'"
+        } else {
+            "${{ toJson(needs) }}"
+        },
     ));
     if c.delivery.is_some() {
         output.push_str("          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}\n          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}\n          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}\n          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}\n          CHRONO_RELEASE_VERSION: ${{ inputs.version }}\n");

@@ -34,6 +34,51 @@ on:
 permissions:
   contents: read
 jobs:
+  select_preview:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      selected: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.selection.outputs.selected }}
+    steps:
+      - name: Download original landing collection
+        if: ${{ github.event_name == 'workflow_run' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: chrono-collection-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+          path: landing
+      - name: Read selected units from the successful push
+        if: ${{ github.event_name == 'workflow_run' }}
+        id: selection
+        shell: bash
+        env:
+          LANDING_CONTEXT: "collection/context.json"
+          LANDING_RUN: ${{ github.event.workflow_run.id }}
+          LANDING_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          LANDING_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          selected=$(jq -er '
+            if .schema == "chrono-ci-inputs/v1" and .scope.kind == "collect" and .event == "push"
+              and .candidate == env.LANDING_SHA and .native_run.job == "aggregate"
+              and .native_run.repository == env.GITHUB_REPOSITORY
+              and .native_run.run_id == (env.LANDING_RUN | tonumber)
+              and .native_run.run_attempt == (env.LANDING_ATTEMPT | tonumber)
+              and .detection.schema == "chrono-ci-detection/v2" and .detection.event == .event
+              and .detection.repository == .native_run.repository and .detection.run_id == .native_run.run_id
+              and (.detection.run_attempt | type) == "number"
+              and .detection.run_attempt >= 1 and .detection.run_attempt <= .native_run.run_attempt
+              and .detection.candidate == .candidate and .detection.event_head == .candidate
+              and (.detection.initial | type) == "boolean" and .detection.initial == .initial
+              and (.detection.required_units | type) == "array"
+              and all(.detection.required_units[]; type == "string" and length > 0)
+            then (.initial or (.detection.required_units | length > 0)) | tostring
+            else error("invalid landing selection identity or units") end
+          ' "landing/$LANDING_CONTEXT")
+          printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
   linux_build_runner:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
@@ -2739,7 +2784,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_package:
-    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && (github.event_name != 'workflow_run' || contains(needs.*.result, 'success') || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_identifiers_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_diagnostics_tests","linux_build_cache","linux_verify_cache_tests","linux_verify_host_bootstrap_native_tests","linux_verify_host_bootstrap_launcher_tests","linux_verify_pr_tests","linux_verify_host_release_native_tests","linux_build_pr"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -5748,7 +5793,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_package:
-    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && (github.event_name != 'workflow_run' || contains(needs.*.result, 'success') || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_identifiers_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_diagnostics_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_host_bootstrap_native_tests","macos_verify_host_bootstrap_launcher_tests","macos_verify_pr_tests","macos_verify_host_release_native_tests","macos_build_pr"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -7021,7 +7066,8 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_release_frontend:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && needs.select_preview.result == 'success' && needs.select_preview.outputs.selected == 'true' }}
+    needs: select_preview
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -7047,7 +7093,7 @@ jobs:
         if: ${{ always() }}
         shell: bash
         env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_DEPENDENCIES: '{}'
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_release_frontend"
@@ -7118,7 +7164,8 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_release_frontend:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && needs.select_preview.result == 'success' && needs.select_preview.outputs.selected == 'true' }}
+    needs: select_preview
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -7144,7 +7191,7 @@ jobs:
         if: ${{ always() }}
         shell: bash
         env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_DEPENDENCIES: '{}'
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_release_frontend"

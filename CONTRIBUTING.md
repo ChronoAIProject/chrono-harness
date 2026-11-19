@@ -123,7 +123,7 @@ PR 的全部作业检查固定合并提交 M，第一父为基线 B，第二父�
 
 Git 标签与 GitHub Issue 标签是不同对象。版本、资产与发布行为以[发布计划](.chrono-harness/release/plan.json)、[发布 CI](docs/release-ci.md)和[安装说明](docs/distribution.md)为准。版本采用 `vMAJOR.MINOR.PATCH`，预发布附 `-beta.N` 等 SemVer 标识；创建前检查现有版本与目标提交。不得移动、强推或覆盖已公开的版本标签和发行资产；修正使用新版本，必要时明确撤回原因。
 
-成功的 `dev` push CI 自动触发测试版发布，版本绑定原 CI run／attempt 和完整源码 SHA。integration 演练通过同一工作流选择 `channel=build`；稳定版显式指定与源码计划匹配的版本。手动调用时，`source` 明确填写已选完整提交 SHA，不用会漂移的分支名代替发行身份。具体触发、发布和恢复合同见[发布 CI](docs/release-ci.md#持续交付与恢复)。
+成功的 `dev` push CI 按原汇总报告选择自动测试版。选中检查单元或首次清单时启动发布，版本绑定原 CI run／attempt 和完整源码 SHA。integration 演练通过同一工作流选择 `channel=build`；稳定版显式指定与源码计划匹配的版本。手动调用时，`source` 明确填写已选完整提交 SHA，不用会漂移的分支名代替发行身份。具体触发、发布和恢复合同见[发布 CI](docs/release-ci.md#持续交付与恢复)。
 
 构建通过、合并或打 tag 都不等于已公开发布；发布时核实际 Release、版本标签、平台资产、摘要、来源和安装使用方的验收。文档或协作规范变更不单独申请稳定版版本号；落地后仍按当前发布工作流处理自动测试版。
 

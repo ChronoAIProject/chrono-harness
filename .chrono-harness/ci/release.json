@@ -3511,6 +3511,11 @@
     }
   },
   "delivery": {
+    "landing_selection": {
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 5,
+      "context_path": "collection/context.json"
+    },
     "workflow": "chrono / collection",
     "branch": "dev",
     "publisher": "publish",
