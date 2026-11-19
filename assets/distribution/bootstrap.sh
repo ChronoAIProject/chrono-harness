@@ -68,8 +68,10 @@ main() {
     trap 'exit 130' INT
     trap 'exit 143' TERM
     installer=$bootstrap_tmp/chrono-distribution
-    fetch "chrono-distribution-$platform" "$installer"
-    verify "$installer" "$installer_sha256" "$installer_size"
+    if ! restore_installer; then
+        fetch "chrono-distribution-$platform" "$installer"
+        verify "$installer" "$installer_sha256" "$installer_size"
+    fi
     chmod 700 "$installer"
     if [ "$mode" = adopt ]; then
         fetch release.json "$bootstrap_tmp/release.json"
@@ -88,6 +90,17 @@ main() {
         "$@"
     fi
     "$installer" install --host-root "$host_root"
+}
+
+restore_installer() {
+    [ "$mode" = install ] && [ -n "$installed_installer" ] || return 1
+    cached="$host_root/$installed_installer"
+    [ ! -L "$host_root/.chrono-harness" ] && [ ! -L "$host_root/.chrono-harness/bin" ] &&
+        [ ! -L "$cached" ] && [ -f "$cached" ] || return 1
+    copy="$bootstrap_tmp/installed-copy"
+    cp -- "$cached" "$copy" || return 1
+    (verify "$copy" "$installer_sha256" "$installer_size") 2>/dev/null || return 1
+    installer=$copy
 }
 
 fetch() {
