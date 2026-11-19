@@ -1,15 +1,36 @@
 //! Real seven-judge short entry, existing local producers and native unit transport.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn initial_check_needs_failure_copy(exit_code: i32) -> (retain: bool)
+    ensures retain == (exit_code != 0),
+{
+    exit_code != 0
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 const PROVIDER: &str = ".chrono-harness/ci/units.json";
+#[cfg(not(verus_keep_ghost))]
 const WORKTREE: &str = ".chrono-harness/worktree.json";
+#[cfg(not(verus_keep_ghost))]
 fn short_host(native: bool) -> (Host, host::FixtureDirectory) {
     configured_short_host(native, None)
 }
+#[cfg(not(verus_keep_ghost))]
 fn configured_short_host(native: bool, age_seconds: Option<f64>) -> (Host, host::FixtureDirectory) {
     configured_short_host_with_governance(native, age_seconds, false)
 }
+#[cfg(not(verus_keep_ghost))]
 fn configured_short_host_with_governance(
     native: bool,
     age_seconds: Option<f64>,
@@ -18,6 +39,7 @@ fn configured_short_host_with_governance(
     let (h, tools) = rust_host();
     adopt_short_host(h, tools, native, age_seconds, governance, false)
 }
+#[cfg(not(verus_keep_ghost))]
 fn adopt_short_host(
     mut h: Host,
     tools: host::FixtureDirectory,
@@ -241,6 +263,7 @@ fn adopt_short_host(
 }
 // Read the registered publication and verify its immutable original. Short
 // stdout is the landed human projection, not a JSON report protocol.
+#[cfg(not(verus_keep_ghost))]
 fn short_report(
     root: &Path,
     args: &[&str],
@@ -294,6 +317,7 @@ fn short_report(
     assert!(output.stdout.len() < 16_384, "{console}");
     report
 }
+#[cfg(not(verus_keep_ghost))]
 fn short(root: &Path, args: &[&str], source: Option<&str>) -> (i32, Value) {
     let root = fs::canonicalize(root).unwrap();
     let mut command = Command::new(root.join(".chrono-harness/bin/chrono-harness"));
@@ -348,6 +372,7 @@ fn short(root: &Path, args: &[&str], source: Option<&str>) -> (i32, Value) {
     (output.status.code().unwrap(), report)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn local_collection_observation(root: &Path, report: &Value) {
     let preparation = &report["preparation"];
     let endpoint = &preparation["request"]["prepared"];
@@ -396,6 +421,7 @@ fn local_collection_observation(root: &Path, report: &Value) {
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn full_provider_report_aliases_fail_before_generation_effects() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -443,11 +469,13 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn local_short_lane(
     age_seconds: Option<f64>,
 ) -> (Host, host::FixtureDirectory, std::path::PathBuf) {
     local_short_lane_with_governance(age_seconds, false)
 }
+#[cfg(not(verus_keep_ghost))]
 fn local_short_lane_with_governance(
     age_seconds: Option<f64>,
     governance: bool,
@@ -455,6 +483,7 @@ fn local_short_lane_with_governance(
     let (h, tools) = configured_short_host_with_governance(false, age_seconds, governance);
     make_local_lane(h, tools, "integration")
 }
+#[cfg(not(verus_keep_ghost))]
 fn make_local_lane(
     h: Host,
     tools: host::FixtureDirectory,
@@ -606,6 +635,7 @@ fn make_local_lane(
     (h, tools, lane)
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn real_short_full_local_units_collection_and_delivery() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -730,6 +760,7 @@ fn real_short_full_local_units_collection_and_delivery() {
 // Deterministic times are fixture input data, not native observations. The
 // registered producer fixture uses the same request/response transport as the
 // existing CI short fixtures; the second producer and all judges are real.
+#[cfg(not(verus_keep_ghost))]
 fn fixture_endpoint(h: &Host, context: &Value, nanos: i128) {
     use chrono_harness::prepared::{self, Context, PreparedCheck};
     let root = h.root();
@@ -777,6 +808,7 @@ fn fixture_endpoint(h: &Host, context: &Value, nanos: i128) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn local_collection_retry_preserves_observation_and_expires_older_producer() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -912,6 +944,7 @@ fn local_collection_retry_preserves_observation_and_expires_older_producer() {
         );
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn native_environment(command: &mut Command, candidate: &str, payload: &Path, job: &str) {
     command
         .env("CHRONO_CHECK_SOURCE", "ci")
@@ -925,6 +958,7 @@ fn native_environment(command: &mut Command, candidate: &str, payload: &Path, jo
         .env("DECLARED_EMPTY", "")
         .env_remove("DECLARED_ABSENT");
 }
+#[cfg(not(verus_keep_ghost))]
 fn native_detection(root: &Path, candidate: &str, payload: &Path) -> Value {
     let mut command = Command::new(root.join(".chrono-harness/bin/chrono-ci"));
     command.current_dir(root).args([
@@ -946,6 +980,7 @@ fn native_detection(root: &Path, candidate: &str, payload: &Path) -> Value {
     );
     chrono_harness::json(&out.stdout).unwrap()["detection"].clone()
 }
+#[cfg(not(verus_keep_ghost))]
 fn native_command(
     root: &Path,
     id: &str,
@@ -1049,6 +1084,7 @@ fn native_command(
     (out.status.code().unwrap(), report)
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn generated_automatic_full_units_gather_originals_on_separate_collection() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1202,6 +1238,7 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
     if !chrono_git_boundary::isolated_git_observation() {
         return;
@@ -1236,7 +1273,7 @@ fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
         "context.json":fs::read_to_string(lane.join(".chrono-harness/state/local/context.json")).unwrap(),
         "origin.json":origin_text
     }));
-    if e != 0 {
+    if initial_check_needs_failure_copy(e) {
         let retained = source()
             .join(".chrono-harness/state/workflow-test-failures")
             .join(sha256(lane.as_os_str().as_encoded_bytes()));
@@ -1288,6 +1325,7 @@ fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn malformed_cached_local_contexts_return_producer_errors() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1313,6 +1351,7 @@ fn malformed_cached_local_contexts_return_producer_errors() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_it() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1383,6 +1422,7 @@ fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_
     assert!(marker(tools.path()).len() >= before.len());
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn fixture_job_id(unit: &str) -> String {
     format!("unit_{unit}")
 }
@@ -1390,6 +1430,7 @@ fn fixture_job_id(unit: &str) -> String {
 // These regressions exercise the value-less local second-producer handoff with
 // real, distinct runner/CI binaries. Optional task-local capture preserves exact
 // original processes and report bytes; ordinary dedicated-suite runs need no flag.
+#[cfg(not(verus_keep_ghost))]
 fn repair_short(root: &Path, name: &str, args: &[&str]) -> (i32, Value) {
     let root = fs::canonicalize(root).unwrap();
     let output = host::capture_native(
@@ -1438,6 +1479,7 @@ fn repair_short(root: &Path, name: &str, args: &[&str]) -> (i32, Value) {
         short_report(&root, args, &output, None),
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn migration_local_short_lane() -> (Host, host::FixtureDirectory, std::path::PathBuf) {
     let mut h = git_facts::bind_host(super::super::migration_host());
     let tools = host::tool_directory("workflow native tools λ ");
@@ -1496,12 +1538,14 @@ fn migration_local_short_lane() -> (Host, host::FixtureDirectory, std::path::Pat
     let (h, tools) = adopt_short_host(h, tools, false, None, false, true);
     make_local_lane(h, tools, "integration")
 }
+#[cfg(not(verus_keep_ghost))]
 fn repair_collected(root: &Path, name: &str) -> Value {
     let (exit, report) = repair_short(root, name, &["check", "--collect"]);
     passed(exit, &report);
     report
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn repair_q1_local_full_migration_preserves_registered_runner_and_retained_conversion() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1571,6 +1615,7 @@ fn repair_q1_local_full_migration_preserves_registered_runner_and_retained_conve
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn repair_q2_local_full_one_and_empty_delta_ignore_unrelated_malformed_and_stale_conversion() {
     if !chrono_git_boundary::isolated_git() {
         return;
