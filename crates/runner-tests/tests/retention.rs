@@ -8383,6 +8383,90 @@ fn archived_interrupted_report_retires_when_its_transitive_inputs_exceed_the_rou
 }
 
 #[test]
+fn archived_run_requires_all_members_and_releases_the_exact_expired_slot() {
+    if !isolated_capability_test(
+        "archived_run_requires_all_members_and_releases_the_exact_expired_slot",
+    ) {
+        return;
+    }
+    let host = deadline_host();
+    let root = host.path();
+    let archive = tempfile::tempdir().unwrap();
+    let survivor = fs::canonicalize(archive.path()).unwrap();
+    let run = ".chrono-harness/state/fixtures/install-run";
+    let slot = ".chrono-harness/state/installed.json";
+    let report = format!("{run}/report.json");
+    let stream = format!("{run}/stdout");
+    let raw = b"successful install";
+    let policy_file = root.join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_file).unwrap()).unwrap();
+    policy["producers"]["check-original"] = json!([".chrono-harness/state/fixtures/"]);
+    fs::write(policy_file, serde_json::to_vec(&policy).unwrap()).unwrap();
+    for base in [root, survivor.as_path()] {
+        fs::create_dir_all(base.join(run)).unwrap();
+        fs::write(base.join(slot), raw).unwrap();
+        fs::write(base.join(&report), raw).unwrap();
+    }
+    fs::write(root.join(&stream), b"download complete").unwrap();
+    let inv = inventory(root);
+    let publication = inventory(root)
+        .begin("check-original", run, json!({}))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication
+        .complete_sealed(json!({"status":"passed"}))
+        .unwrap();
+    let role = retained_artifacts::retention::current_report_role(slot);
+    inv.reference(&role, std::slice::from_ref(&id)).unwrap();
+    let request = json!({"operation":"release-preserved","original":original_identity(root,&id,run),
+        "roles":[role],"survivor_root":survivor,"survivor_path":report,"sha256":chrono_harness::sha256(raw),
+        "length":raw.len(),"archived_slot":{"path":slot,"identity":chrono_harness::artifact_disposal::identity(&root.join(slot)).unwrap()},
+        "reason":"the installer diagnostics are read from the archive","current_consumers_released":true});
+    let reject = || {
+        let result = consumer_call(root, request.clone());
+        assert_eq!(result.exit_code, 2, "{}", result.stdout);
+        assert!(root.join(slot).exists());
+        assert_eq!(ledger(root)["roots"][&role], json!([id]));
+    };
+    fs::copy(root.join(&stream), survivor.join(&stream)).unwrap();
+    reject();
+    let reader = inv.consume(&id).unwrap();
+    let mut output = ledger(root)["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["id"] == id)
+        .unwrap()
+        .clone();
+    output["lifetime"] = json!({"created_at":1,"deadline":2});
+    output["expires"] = json!(2);
+    retention_state::replace_output(root, &output);
+    reject();
+    drop(reader);
+    fs::remove_file(survivor.join(&stream)).unwrap();
+    reject();
+    fs::write(survivor.join(&stream), b"changed contents!").unwrap();
+    reject();
+    fs::copy(root.join(&stream), survivor.join(&stream)).unwrap();
+    fs::remove_file(survivor.join(&report)).unwrap();
+    fs::hard_link(root.join(slot), survivor.join(&report)).unwrap();
+    reject();
+    fs::remove_file(survivor.join(&report)).unwrap();
+    fs::copy(root.join(&report), survivor.join(&report)).unwrap();
+    let result = consumer_call(root, request.clone());
+    assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    assert!(!root.join(slot).exists());
+    assert!(ledger(root)["roots"].get(&role).is_none());
+    assert_eq!(consumer_call(root, request).exit_code, 0);
+    assert_eq!(maintain_fixture_to(root, 0), 0);
+    assert!(!root.join(run).exists());
+    assert_eq!(
+        fs::read(survivor.join(&stream)).unwrap(),
+        b"download complete"
+    );
+}
+
+#[test]
 fn archived_check_requires_its_slot_and_every_sealed_input_before_release() {
     if !isolated_capability_test(
         "archived_check_requires_its_slot_and_every_sealed_input_before_release",

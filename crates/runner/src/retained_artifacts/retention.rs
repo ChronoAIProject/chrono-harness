@@ -54,7 +54,6 @@ use std::{
 use vstd::prelude::*;
 
 #[path = "manifest.rs"]
-#[cfg(not(verus_keep_ghost))]
 mod manifest;
 #[cfg(not(verus_keep_ghost))]
 use manifest::Manifest;
@@ -228,6 +227,13 @@ impl Lifetime {
         })
     }
 }
+#[derive(Clone, Copy, PartialEq)]
+#[cfg(not(verus_keep_ghost))]
+enum NewOutput {
+    Original { tree: bool },
+    BatchDirectory,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg(not(verus_keep_ghost))]
@@ -237,6 +243,8 @@ struct Output {
     path: String,
     identity: String,
     tree: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    batch_directory: bool,
     sha256: Option<String>,
     length: Option<u64>,
     lease: String,
@@ -772,6 +780,7 @@ impl Inventory {
                 || (self.policy.max_lifetime_seconds.is_some()
                     && o.lifetime.is_none()
                     && policy_digest == sha256(&self.policy_bytes))
+                || (o.batch_directory && (!o.tree || o.lifetime.is_none()))
                 || o.path.len() > 4096
                 || o.byte_limit
                     .is_some_and(|n| n == 0 || n > self.policy.max_output_bytes)
@@ -1195,8 +1204,38 @@ impl Inventory {
         tree: bool,
         outcome: Value,
     ) -> Result<Publication, String> {
-        self.reserve(producer, path, outcome, &[], Some(tree), None)
+        self.reserve(
+            producer,
+            path,
+            outcome,
+            &[],
+            Some(NewOutput::Original { tree }),
+            None,
+        )
     }
+    /// A newly allocated business batch owns its directory entries through expiry.
+    /// Other batches may add or release names for the same compiled inputs.
+    pub fn create_batch(
+        self,
+        producer: &str,
+        path: &str,
+        outcome: Value,
+    ) -> Result<Publication, String> {
+        if self.policy.max_lifetime_seconds.is_none() {
+            return Err("batch directory requires a finite creation window".into());
+        }
+        let publication = self.reserve(
+            producer,
+            path,
+            outcome,
+            &[],
+            Some(NewOutput::BatchDirectory),
+            None,
+        )?;
+        publication.materialize()?;
+        Ok(publication)
+    }
+
     /// Declare both a pending output and its existing domain recovery root.
     pub fn plan_rooted(
         self,
@@ -1205,7 +1244,14 @@ impl Inventory {
         outcome: Value,
         root: &str,
     ) -> Result<Publication, String> {
-        self.reserve(producer, path, outcome, &[root.into()], Some(true), None)
+        self.reserve(
+            producer,
+            path,
+            outcome,
+            &[root.into()],
+            Some(NewOutput::Original { tree: true }),
+            None,
+        )
     }
     /// Read the original owner's current recovery attachment, without finding
     /// operations by traversing unrelated output directories.
@@ -1322,7 +1368,7 @@ impl Inventory {
         path: &str,
         outcome: Value,
         roots: &[String],
-        create: Option<bool>,
+        create: Option<NewOutput>,
         requested_limit: Option<u64>,
     ) -> Result<Publication, String> {
         let (publication, _gate, _ledger) =
@@ -1337,7 +1383,7 @@ impl Inventory {
         path: &str,
         outcome: Value,
         roots: &[String],
-        create: Option<bool>,
+        create: Option<NewOutput>,
         requested_limit: Option<u64>,
     ) -> Result<(Publication, Gate, Ledger), String> {
         let byte_limit = requested_limit.unwrap_or(self.policy.max_output_bytes);
@@ -1387,13 +1433,16 @@ impl Inventory {
             return Err("overlapping/already enrolled output identity".into());
         }
         let physical = no_symlink_parents(&self.root, path)?;
-        let (output_identity, tree) = if let Some(tree) = create {
+        let (output_identity, tree) = if let Some(kind) = create {
             match fs::symlink_metadata(&physical) {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
                 Err(e) => return Err(e.to_string()),
                 Ok(_) => return Err("creation destination already exists; preserve it".into()),
             }
-            (String::new(), tree)
+            (
+                String::new(),
+                !matches!(kind, NewOutput::Original { tree: false }),
+            )
         } else {
             let m = fs::symlink_metadata(&physical).map_err(|e| e.to_string())?;
             if !m.is_file() && !m.is_dir() {
@@ -1427,7 +1476,15 @@ impl Inventory {
                 Lifetime::new(created_at, seconds)
             })
             .transpose()?;
-        let requested_expiry = now()?.saturating_add(self.keep_seconds(producer));
+        let batch_directory = create == Some(NewOutput::BatchDirectory);
+        let keep = if batch_directory {
+            self.policy
+                .diagnostic_keep_seconds
+                .max(self.keep_seconds(producer))
+        } else {
+            self.keep_seconds(producer)
+        };
+        let requested_expiry = now()?.saturating_add(keep);
         let expires = lifetime.as_ref().map_or(requested_expiry, |window| {
             bounded_expiry(requested_expiry, window.deadline)
         });
@@ -1437,6 +1494,7 @@ impl Inventory {
             path: path.into(),
             identity: output_identity,
             tree,
+            batch_directory,
             sha256: None,
             length: None,
             lease: id.clone(),
@@ -2239,10 +2297,11 @@ impl Inventory {
             "completion":"not-established"});
         // Use the same lock order as the publisher. Keep the fixed generation
         // excluded through directory synchronization and the durable role update.
+        let run_report = format!("{}/report.json", original.path);
         let slot_guard = if let Some(slot) = archived_slot {
             crate::units::artifact_path(&slot.path)?;
             if roles != [current_report_role(&slot.path)]
-                || survivor_path != original.path
+                || (survivor_path != original.path && survivor_path != run_report)
                 || survivor_root.starts_with(&self.root)
                 || self.root.starts_with(survivor_root)
             {
@@ -2274,10 +2333,8 @@ impl Inventory {
             .iter()
             .find(|o| o.id == original.id)
             .ok_or("preserved original is unavailable")?;
-        if output.tree {
-            return Err(
-                "preserved release requires an explicitly retained regular original".into(),
-            );
+        if output.tree && archived_slot.is_none() {
+            return Err("preserved report directory requires its archived slot".into());
         }
         let actual: Vec<_> = ledger
             .roots
@@ -2300,10 +2357,16 @@ impl Inventory {
                     .is_some_and(|life| life.deadline <= observed)
                 || output.path != original.path
                 || output.identity != original.identity
-                || output.sha256.as_deref() != Some(digest)
-                || output.length != Some(length)
+                || !crate::verified_release::archived_report_binding(
+                    output.tree,
+                    survivor_path == run_report,
+                    output.references.is_empty(),
+                    survivor_path == original.path
+                        && output.sha256.as_deref() == Some(digest)
+                        && output.length == Some(length),
+                )
             {
-                return Err("archived check requires one exact expired report generation".into());
+                return Err("archived slot requires one exact expired report generation".into());
             }
             ledger
                 .outputs
@@ -2325,15 +2388,35 @@ impl Inventory {
             vec![original.clone()]
         };
         let leases = self.original_leases(&ledger, &originals, true)?;
-        let source = no_symlink_parents(&self.root, &original.path)?;
-        if verify(&source)? != original.identity || verify(&survivor)? != survivor_identity {
+        let source_path = if output.tree {
+            &run_report
+        } else {
+            &original.path
+        };
+        let source = no_symlink_parents(&self.root, source_path)?;
+        let source_identity = verify(&source)?;
+        if (!output.tree && source_identity != original.identity)
+            || !crate::verified_release::independent_original(&source_identity, &survivor_identity)
+            || verify(&survivor)? != survivor_identity
+        {
             return Err("preserved release original identity changed".into());
         }
         if let (Some(slot), Some(guard)) = (archived_slot, &slot_guard) {
             let path = no_symlink_parents(&self.root, &slot.path)?;
             let slot_owner = self.removal_gate(std::slice::from_ref(&slot.path))?;
-            let pointer_digest =
-                self.verify_check_archive(&ledger, output, slot, survivor_root, digest)?;
+            let pointer_digest = if output.tree {
+                let archived_slot = no_symlink_parents(survivor_root, &slot.path)?;
+                if verify(&archived_slot)? == slot.identity
+                    || !self
+                        .verified_archive_members(&ledger, slot, survivor_root)?
+                        .contains(run_report.as_str())
+                {
+                    return Err("archived report must include the sealed run and an independent copy of its slot".into());
+                }
+                (digest.to_owned(), length)
+            } else {
+                self.verify_check_archive(&ledger, output, slot, survivor_root, digest)?
+            };
             match fs::symlink_metadata(&path) {
                 Ok(meta) => {
                     if !meta.is_file()
@@ -2422,7 +2505,26 @@ impl Inventory {
                     .into(),
             );
         }
+        let members = self.verified_archive_members(ledger, slot, archive)?;
+        if originals
+            .iter()
+            .any(|path| !members.contains(path.as_str()))
+        {
+            return Err("archived check does not cover its published inputs".into());
+        }
+        Ok((sha256(&pointer_raw), pointer_raw.len() as u64))
+    }
+
+    fn verified_archive_members<'a>(
+        &self,
+        ledger: &'a Ledger,
+        slot: &ArchivedSlot,
+        archive: &Path,
+    ) -> Result<BTreeSet<&'a str>, String> {
         let mut members = BTreeSet::new();
+        let mut source_ids = BTreeSet::from([slot.identity.clone()]);
+        let mut archived_ids =
+            BTreeSet::from([identity(&no_symlink_parents(archive, &slot.path)?)?]);
         for member in &ledger.outputs {
             if member.phase != "released"
                 || !member.manifest.sealed
@@ -2442,7 +2544,7 @@ impl Inventory {
                             || !copy.identity.ends_with(":file")))
                     || source.bytes != copy.bytes
                     || entry.path == slot.path
-                    || !members.insert(&entry.path)
+                    || !members.insert(entry.path.as_str())
                 {
                     return Err(format!(
                         "archived entry identity/type differs: {}",
@@ -2458,13 +2560,15 @@ impl Inventory {
                     {
                         return Err(format!("archived file content changed: {}", entry.path));
                     }
+                    source_ids.insert(source.identity);
+                    archived_ids.insert(copy.identity);
                 }
             }
         }
-        if originals.iter().any(|path| !members.contains(path)) {
-            return Err("archived check does not cover its published inputs".into());
+        if !source_ids.is_disjoint(&archived_ids) {
+            return Err("archive contains a hard link to an original report member".into());
         }
-        Ok((sha256(&pointer_raw), pointer_raw.len() as u64))
+        Ok(members)
     }
     /// Edges are not roots. Released historical cycles can be reclaimed.
     pub fn dependencies(&self, id: &str, references: &[String]) -> Result<(), String> {
@@ -3286,14 +3390,14 @@ impl Inventory {
                             .entry
                             .as_ref()
                             .ok_or("overflow cursor lacks original entry")?;
-                        Manifest::validate(entry, &self.root)?;
+                        Manifest::validate_for_disposal(entry, &self.root, o.batch_directory)?;
                         if let Some(known) = l.outputs[i]
                             .manifest
                             .entries
                             .iter()
                             .find(|e| e.path == pending.path)
                         {
-                            Manifest::validate(known, &self.root)?;
+                            Manifest::validate_for_disposal(known, &self.root, o.batch_directory)?;
                         }
                         if entry.directory {
                             if let Some(child) =
@@ -3337,7 +3441,11 @@ impl Inventory {
                                 if identity(&root)? != o.identity {
                                     return Err("output changed before overflow disposal".into());
                                 }
-                                Manifest::validate(entry, &self.root)
+                                Manifest::validate_for_disposal(
+                                    entry,
+                                    &self.root,
+                                    o.batch_directory,
+                                )
                             },
                         )?;
                         bytes = bytes.saturating_add(entry.bytes);
@@ -3401,7 +3509,7 @@ impl Inventory {
                         Err(e) => return Err(e.to_string()),
                         Ok(_) => (),
                     }
-                    Manifest::validate(&entry, &self.root)?;
+                    Manifest::validate_for_disposal(&entry, &self.root, o.batch_directory)?;
                     if !o.tree
                         && o.sha256.is_some()
                         && entry.bytes <= self.policy.max_bytes_per_round
@@ -3440,7 +3548,7 @@ impl Inventory {
                                 consumer.stable()?;
                             }
                             crate::artifact_disposal::source_safe(&self.root, &o.path)?;
-                            Manifest::validate(&entry, &self.root)?;
+                            Manifest::validate_for_disposal(&entry, &self.root, o.batch_directory)?;
                             if identity(&root)? != o.identity {
                                 return Err("output changed before disposal".into());
                             }
@@ -3996,13 +4104,17 @@ impl Publication {
     }
     /// Keep producer status distinct from storage status; no synthetic success on interruption.
     pub fn complete(self, outcome: Value) -> Result<(), String> {
-        self.complete_mode(outcome, None, false, || {})
+        self.complete_mode(outcome, None, false, false, || {})
+    }
+    /// Record the terminal outcome and its diagnostic expiry in the same publication.
+    pub fn complete_diagnostic(self, outcome: Value) -> Result<(), String> {
+        self.complete_mode(outcome, None, false, true, || {})
     }
     /// Finish the caller's exact publication before a synchronous domain handoff.
     /// Persist each bounded sealing round under the original capability; do not
     /// poll maintenance, drop protection, or start a replacement publication.
     pub fn complete_sealed(self, outcome: Value) -> Result<(), String> {
-        self.complete_mode(outcome, None, true, || {})
+        self.complete_mode(outcome, None, true, false, || {})
     }
     /// Deterministic round exhaustion for the dedicated regression consumer.
     #[cfg(feature = "retention-test")]
@@ -4012,36 +4124,52 @@ impl Publication {
         outcome: Value,
         mut exhausted: impl FnMut(usize) -> bool,
     ) -> Result<(), String> {
-        self.complete_rounds(outcome, None, true, || {}, |_, steps| exhausted(steps))
+        let keep = self.inventory.keep_seconds(&self.initial.producer);
+        self.complete_rounds(
+            outcome,
+            keep,
+            None,
+            true,
+            || {},
+            |_, steps| exhausted(steps),
+        )
     }
     /// A joined producer can release its own publication consumer after the
     /// actual caller has taken custody. Unsettled or interrupted publication
     /// uses complete and preserves the repair handoff.
     pub fn complete_releasing_consumer(self, outcome: Value, consumer: &str) -> Result<(), String> {
-        self.complete_mode(outcome, Some(consumer), false, || {})
+        self.complete_mode(outcome, Some(consumer), false, false, || {})
     }
     /// Deterministic observation at the content-IO boundary for the dedicated
     /// regression consumer; it does not change the publication method.
     #[cfg(feature = "retention-test")]
     #[doc(hidden)]
     pub fn complete_observed(self, outcome: Value, observe: impl FnOnce()) -> Result<(), String> {
-        self.complete_mode(outcome, None, false, observe)
+        self.complete_mode(outcome, None, false, false, observe)
     }
     fn complete_mode(
         self,
         outcome: Value,
         consumer: Option<&str>,
         seal_all: bool,
+        diagnostic: bool,
         observe: impl FnOnce(),
     ) -> Result<(), String> {
         let millis = self.inventory.policy.max_millis_per_round;
-        self.complete_rounds(outcome, consumer, seal_all, observe, |began, _| {
+        let ordinary = self.inventory.keep_seconds(&self.initial.producer);
+        let keep = if diagnostic {
+            ordinary.max(self.inventory.policy.diagnostic_keep_seconds)
+        } else {
+            ordinary
+        };
+        self.complete_rounds(outcome, keep, consumer, seal_all, observe, |began, _| {
             began.elapsed().as_millis() >= millis as u128
         })
     }
     fn complete_rounds(
         self,
         outcome: Value,
+        keep: u64,
         consumer: Option<&str>,
         seal_all: bool,
         observe: impl FnOnce(),
@@ -4051,7 +4179,13 @@ impl Publication {
         // caller before the producer closes. A nested caller may have no durable
         // root left after success, while its parent still needs its exact result.
         self.inventory.remember_output(&self.lease, &self.id)?;
-        self.account_rounds(Some(outcome), consumer, seal_all, observe, exhausted)?;
+        self.account_rounds(
+            Some((outcome, keep)),
+            consumer,
+            seal_all,
+            observe,
+            exhausted,
+        )?;
         let root = self.inventory.root.clone();
         drop(self);
         crate::maintenance_signal::announce_adopted(&root, "retention-complete");
@@ -4061,12 +4195,13 @@ impl Publication {
     /// or recovery measurement. Only a real completion may release publication.
     fn account_rounds(
         &self,
-        outcome: Option<Value>,
+        completion: Option<(Value, u64)>,
         consumer: Option<&str>,
         seal_all: bool,
         observe: impl FnOnce(),
         mut exhausted: impl FnMut(Instant, usize) -> bool,
     ) -> Result<(u64, usize), String> {
+        let (outcome, retention) = completion.unzip();
         let completing = outcome.is_some();
         if serde_json::to_vec(&outcome)
             .map_err(|e| e.to_string())?
@@ -4127,9 +4262,8 @@ impl Publication {
                 o.reserved_bytes = measured.0;
                 o.phase = "released".into();
             }
-            if completing {
-                o.expires =
-                    o.bound_expiry(now()?.saturating_add(self.inventory.keep_seconds(&o.producer)));
+            if let Some(keep) = retention {
+                o.expires = o.bound_expiry(now()?.saturating_add(keep));
             } else if sealed && measured.0 <= self.byte_limit() {
                 // The caller can still write its domain result. Persist a fresh
                 // cursor so the eventual completion must account those bytes too.
@@ -4323,7 +4457,7 @@ fn create_with_consumer(
                 relative,
                 outcome,
                 &roots,
-                Some(tree),
+                Some(NewOutput::Original { tree }),
                 byte_limit,
             )?;
             let consumer = consumer_prefix.map(|prefix| format!("{prefix}:{}", publication.id()));

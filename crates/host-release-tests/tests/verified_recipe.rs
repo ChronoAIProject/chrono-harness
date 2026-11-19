@@ -18,8 +18,16 @@ use vstd::vpanic as panic;
 #[path = "recipe.rs"]
 mod recipe;
 
+// Bind the three actual fixture consumers to the same cleanup decision.
+// Filesystem effects are exercised by the Rust regression in staging.
 #[path = "support/execution.rs"]
 mod execution_fixture;
+#[cfg(verus_keep_ghost)]
+#[path = "support/frontend.rs"]
+mod frontend_fixture;
+#[cfg(verus_keep_ghost)]
+#[path = "staging.rs"]
+mod staging_fixture;
 
 #[cfg(not(verus_keep_ghost))]
 #[path = "support/receipt.rs"]
@@ -37,6 +45,14 @@ fn expect_recipe(actual: bool)
     if !actual {
         panic!();
     }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn release_fixture_cleanup_preserves_the_original_failure() {
+    expect_recipe(execution_fixture::failure_case::propagate_cleanup_error(false, true));
+    expect_recipe(!execution_fixture::failure_case::propagate_cleanup_error(true, true));
+    expect_recipe(!execution_fixture::failure_case::propagate_cleanup_error(false, false));
+    expect_recipe(!execution_fixture::failure_case::propagate_cleanup_error(true, false));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
