@@ -1,5 +1,7 @@
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
+#[path = "../../worktree-tests/tests/support/diagnostic_copy.rs"]
+mod diagnostic_copy;
 use super::*;
 use std::path::PathBuf;
 
@@ -67,28 +69,65 @@ pub(super) struct Owner {
 
 impl Drop for Owner {
     fn drop(&mut self) {
-        if std::thread::panicking() {
-            let destination = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../..")
-                .join(FAMILY)
-                .join(format!(
-                    "owner-fixture-{}",
-                    chrono_harness::sha256(self.root.as_os_str().as_encoded_bytes())
-                ));
-            retain_context_state(&self.root.join(".chrono-harness/state"), &destination);
-            retain_context_state(
-                &self._dir.path().join("linked/.chrono-harness/state"),
-                &destination.join("linked-state"),
-            );
-            eprintln!(
+        if !std::thread::panicking() {
+            return;
+        }
+        let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        match self.publish_failure(&checkout) {
+            Ok(Some(path)) => eprintln!(
                 "original receipt-owner failure evidence: {}",
-                destination.display()
-            );
+                path.display()
+            ),
+            Ok(None) => (),
+            Err(error) => {
+                self._dir.disable_cleanup(true);
+                eprintln!(
+                    "CI failure evidence handoff failed: {error}; original: {}",
+                    self._dir.path().display()
+                );
+            }
         }
     }
 }
 
 impl Owner {
+    fn publish_failure(&self, checkout: &Path) -> Result<Option<PathBuf>, String> {
+        let main = self.root.join(".chrono-harness/state");
+        let linked = self._dir.path().join("linked/.chrono-harness/state");
+        let has_main = main.try_exists().map_err(|e| e.to_string())?;
+        let has_linked = linked.try_exists().map_err(|e| e.to_string())?;
+        if !has_main && !has_linked {
+            return Ok(None);
+        }
+        let family = fs::canonicalize(checkout)
+            .map_err(|e| e.to_string())?
+            .join(FAMILY);
+        if family.starts_with(&main) || family.starts_with(&linked) {
+            return Err("CI failure destination overlaps its source".into());
+        }
+        diagnostic_copy::publish(
+            checkout,
+            "ci-fixture",
+            FAMILY.trim_end_matches('/'),
+            "owner-fixture-",
+            json!({"kind":"ci-receipt-owner","source":self.root}),
+            |directory, publication| {
+                if has_main {
+                    diagnostic_copy::copy_tree(&main, directory, Some(publication))?;
+                }
+                if has_linked {
+                    diagnostic_copy::copy_tree(
+                        &linked,
+                        &directory.join("linked-state"),
+                        Some(publication),
+                    )?;
+                }
+                Ok(())
+            },
+        )
+        .map(Some)
+    }
+
     pub(super) fn preserve_diagnostic(&mut self) {
         self._dir.disable_cleanup(true);
         eprintln!(
@@ -227,6 +266,66 @@ impl Owner {
             .join(FAMILY)
             .join(registry["objects"][0]["path"].as_str().unwrap())
     }
+}
+
+#[test]
+fn receipt_owner_failure_retires_main_and_linked_evidence_together() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let owner = Owner::new();
+    let main = owner.root.join(".chrono-harness/state");
+    let linked = owner._dir.path().join("linked/.chrono-harness/state");
+    fs::create_dir_all(&main).unwrap();
+    fs::create_dir_all(&linked).unwrap();
+    fs::write(main.join("error.txt"), b"main failure").unwrap();
+    fs::write(linked.join("error.txt"), b"linked failure").unwrap();
+    let checkout = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(checkout.path()).unwrap();
+    git(&root, &["init", "-q"]);
+    fs::create_dir(root.join(".chrono-harness")).unwrap();
+    let policy = json!({
+        "schema":"chrono-output-retention/v2","producers":{"ci-fixture":[FAMILY]},
+        "keep_seconds":0,"diagnostic_keep_seconds":86400,"max_lifetime_seconds":86400,
+        "max_related_outputs":512,"max_summaries":128,"max_nodes_per_round":256,
+        "max_bytes_per_round":67108864,"max_millis_per_round":25
+    });
+    fs::write(
+        root.join(".chrono-harness/retention.json"),
+        policy.to_string(),
+    )
+    .unwrap();
+    let batch = owner.publish_failure(&root).unwrap().unwrap();
+    assert_eq!(batch.parent(), Some(root.join(FAMILY).as_path()));
+    assert_eq!(fs::read(batch.join("error.txt")).unwrap(), b"main failure");
+    assert_eq!(
+        fs::read(batch.join("linked-state/error.txt")).unwrap(),
+        b"linked failure"
+    );
+    let store = chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)
+        .unwrap()
+        .unwrap();
+    let records = store.producer_status("ci-fixture", None).unwrap();
+    let [record] = records["records"].as_array().unwrap().as_slice() else {
+        panic!("expected one failure batch")
+    };
+    let deadline = record["lifetime"]["deadline"].as_u64().unwrap();
+    assert_eq!(
+        deadline - record["lifetime"]["created_at"].as_u64().unwrap(),
+        86400
+    );
+    let id = [record["id"].as_str().unwrap().to_owned()];
+    store.maintain_originals_at(&id, deadline - 1).unwrap();
+    assert!(batch.is_dir());
+    for _ in 0..32 {
+        let round = store.maintain_originals_at(&id, deadline).unwrap();
+        assert_eq!(round["accounting_errors"], json!([]));
+        if !batch.exists() {
+            break;
+        }
+    }
+    assert!(!batch.exists());
+    assert!(main.join("error.txt").exists() && linked.join("error.txt").exists());
 }
 
 #[test]
