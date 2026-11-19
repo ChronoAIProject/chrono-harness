@@ -8309,30 +8309,26 @@ fn archived_interrupted_report_retires_when_its_transitive_inputs_exceed_the_rou
     let role = format!("recovery:{path}");
     fs::write(root.join(path), b"").unwrap();
     fs::write(archive.path().join("parent"), b"").unwrap();
-    let parent = inv
+    let parent = inventory(root)
         .begin_rooted("fixture", path, json!(null), std::slice::from_ref(&role))
         .unwrap();
     let id = parent.id().to_owned();
-    let mut children = Vec::new();
-    let mut originals = Vec::new();
-    for n in 0..2 {
-        let mut leaves = Vec::new();
-        for member in ["a", "b", "child"] {
-            let child_path = format!(".chrono-harness/state/fixtures/{n}-{member}");
-            fs::write(root.join(&child_path), b"independent input").unwrap();
-            let child = inv.begin("fixture", &child_path, json!(null)).unwrap();
-            let child_id = child.id().to_owned();
-            child.complete_sealed(json!({"exit":7})).unwrap();
-            if member == "child" {
-                inv.dependencies(&child_id, &leaves).unwrap();
-                children.push(child_id);
-            } else {
-                leaves.push(child_id);
-            }
-            originals.push(child_path);
-        }
-    }
-    inv.dependencies(&id, &children).unwrap();
+    let publish = |name: &str| {
+        let path = format!(".chrono-harness/state/fixtures/{name}");
+        fs::write(root.join(&path), b"independent input").unwrap();
+        let output = inventory(root)
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = output.id().to_owned();
+        output.complete_sealed(json!({"exit":7})).unwrap();
+        (id, path)
+    };
+    let children = [publish("first-child"), publish("second-child")];
+    let child_ids = children
+        .iter()
+        .map(|(id, _)| id.clone())
+        .collect::<Vec<_>>();
+    inv.dependencies(&id, &child_ids).unwrap();
     drop(parent);
     let record_path = retention_state::object_path(root, &id);
     let record = || serde_json::from_slice::<Value>(&fs::read(&record_path).unwrap()).unwrap();
@@ -8352,6 +8348,15 @@ fn archived_interrupted_report_retires_when_its_transitive_inputs_exceed_the_rou
         }),
     );
     assert_eq!(moved.exit_code, 0, "{}", moved.stderr);
+    // Each independent child adds its inputs after the parent has been handed off.
+    // Every update fits the limit, while expanding the whole graph would require seven objects.
+    let mut originals = Vec::new();
+    for (index, (child_id, child_path)) in children.into_iter().enumerate() {
+        let (first, first_path) = publish(&format!("{index}-a"));
+        let (second, second_path) = publish(&format!("{index}-b"));
+        inv.dependencies(&child_id, &[first, second]).unwrap();
+        originals.extend([child_path, first_path, second_path]);
+    }
     let mut disposed = None;
     for _ in 0..12 {
         let round = inv.maintain_originals(std::slice::from_ref(&id)).unwrap();
