@@ -13,6 +13,8 @@ runner 的编译缓存和原证明也沿同一个登记构建入口复用，损�
 
 ## 真实 CI 已验证的范围
 
+Linux 发布作业 `linux_build_runner` 在一次未命中后完成构建并保存缓存。后续发布用相同的键恢复了 108,389,882 字节，恢复回执记录 `exact`，构建作业成功。该观察覆盖一个平台的一个编译目标。实际计费和整轮节省时间仍未知。[保存记录](https://github.com/ChronoAIProject/chrono-harness/actions/runs/44533549909/job/135593843988) · [恢复记录](https://github.com/ChronoAIProject/chrono-harness/actions/runs/44534081150/job/135595800897)
+
 本宿主的 `cache` 单元只消费 `check.cache-tests`；测试项目直接编译生产 CLI，不再恢复或保存生产 target。此前两项 `producer-manifest/v1` 缓存的有限原生观察覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
 
 这些观察只覆盖原候选和登记消费者，不能证明当前候选、其他消费者或完整缓存行为正确。不可用内容恢复、持久修复及修复后在原兼容范围健康精确命中的验收仍未完成；访问失败及部分观察见[退役说明](#retired-remote-acceptance-controls)。实验中的临时优化设置已移除，当前参数以现役登记为准；历史摘要、后端条目、artifact ID 和耗时归原运行。并发、linked 所有权、完整编译器／SDK／输入范围，以及传输、存储和总生命周期成本仍待验收或测量。
