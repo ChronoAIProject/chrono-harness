@@ -1,8 +1,30 @@
 //! A sealed producer tree, not a discovery list assembled during deletion.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+fn sealed_member_matches(same_identity: bool, directory: bool, same_stamp: bool,
+    batch_file: bool, same_data_stamp: bool) -> (accepted: bool)
+    ensures
+        accepted == (same_identity && (directory || same_stamp || (batch_file && same_data_stamp))),
+        !same_identity ==> !accepted,
+        !directory && !same_stamp && accepted ==> batch_file && same_data_stamp,
+{
+    same_identity && (directory || same_stamp || (batch_file && same_data_stamp))
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::artifact_disposal::{entry_path, identity};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, path::Path};
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Entry {
@@ -14,6 +36,7 @@ pub(super) struct Entry {
     #[serde(default)]
     pub allocated_bytes: Option<u64>,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Cursor {
@@ -21,6 +44,7 @@ pub(super) struct Cursor {
     offset: usize,
     children: Option<Vec<String>>,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Manifest {
@@ -29,6 +53,7 @@ pub(super) struct Manifest {
     pub sealed: bool,
     pub bytes: u64,
 }
+#[cfg(not(verus_keep_ghost))]
 fn stamp(m: &fs::Metadata) -> String {
     use std::os::unix::fs::MetadataExt;
     format!(
@@ -40,6 +65,7 @@ fn stamp(m: &fs::Metadata) -> String {
         m.ctime_nsec()
     )
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn observe(root: &Path, path: &str) -> Result<Entry, String> {
     let physical = entry_path(root, path)?;
     let m = fs::symlink_metadata(&physical).map_err(|e| e.to_string())?;
@@ -58,6 +84,7 @@ pub(super) fn observe(root: &Path, path: &str) -> Result<Entry, String> {
         },
     })
 }
+#[cfg(not(verus_keep_ghost))]
 impl Manifest {
     /// Each step consumes one declared child after a finite directory snapshot.
     /// Snapshot names and positions survive interruption in owner metadata.
@@ -147,9 +174,32 @@ impl Manifest {
         Ok(())
     }
     pub fn validate(entry: &Entry, root: &Path) -> Result<(), String> {
+        Self::validate_for_disposal(entry, root, false)
+    }
+
+    pub fn validate_for_disposal(
+        entry: &Entry,
+        root: &Path,
+        batch_directory: bool,
+    ) -> Result<(), String> {
         let current = observe(root, &entry.path)?;
-        if current.identity != entry.identity || (!entry.directory && current.stamp != entry.stamp)
-        {
+        // Unlinking a sibling name changes ctime on the same inode. In a
+        // disposable batch the producer owns the name, including on interruption.
+        // Keep length and mtime checks, and always check the sealed inode and type.
+        let batch_file = batch_directory && entry.identity.ends_with(":file");
+        let same_data_stamp = batch_file
+            && entry
+                .stamp
+                .rsplitn(3, ':')
+                .nth(2)
+                .is_some_and(|stamp| current.stamp.rsplitn(3, ':').nth(2) == Some(stamp));
+        if !sealed_member_matches(
+            current.identity == entry.identity,
+            entry.directory,
+            entry.stamp == current.stamp,
+            batch_file,
+            same_data_stamp,
+        ) {
             return Err("sealed descendant identity/content changed; preserve replacement".into());
         }
         Ok(())
