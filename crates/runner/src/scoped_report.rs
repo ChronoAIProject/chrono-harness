@@ -72,6 +72,26 @@ impl Publication {
     }
 }
 
+/// Only a settled local publication can hand its fixed slot to a mirror.
+pub(crate) fn archived_inputs(
+    value: &Value,
+    slot: &str,
+    exit_code: u64,
+) -> Result<Vec<String>, String> {
+    let publication: Publication =
+        serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+    if !crate::verified_release::report_publication(&publication.schema, publication.exit_code)
+        || u64::from(publication.exit_code) != exit_code
+        || publication.slot != slot
+        || publication.snapshot_failure.is_some()
+        || publication.recovery_root.is_some()
+        || publication.native_delivery.is_some()
+    {
+        return Err("archived check has a different publication or outstanding obligations".into());
+    }
+    Ok(publication.originals)
+}
+
 pub(crate) fn recover(root: &Path, original: &prepared::Original) -> Result<Value, String> {
     use crate::retained_artifacts::retention;
     use crate::verified_release as policy;
