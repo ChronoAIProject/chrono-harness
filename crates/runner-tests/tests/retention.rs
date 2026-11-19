@@ -3085,7 +3085,10 @@ fn one_node_round_retires_empty_role_without_touching_its_replacement() {
 
     let first = owner.maintain_at(1).unwrap();
     assert_eq!(first["nodes"], 1, "{first}");
-    assert!(!original.exists(), "expired role must move under its original exclusion");
+    assert!(
+        !original.exists(),
+        "expired role must move under its original exclusion"
+    );
     let retiring = fs::read_dir(roles).unwrap().next().unwrap().unwrap().path();
     assert!(retiring.join("record.json").is_file());
 
