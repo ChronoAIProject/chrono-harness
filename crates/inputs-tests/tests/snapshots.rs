@@ -1413,14 +1413,17 @@ fn captured_snapshot_and_shared_blobs_enter_the_declared_retention_owner() {
     assert!(!host.path().join(second_path).exists(), "{rounds:?}");
     assert!(!host.path().join(&blob).exists(), "{rounds:?}");
     for id in ids {
-        assert!(
-            !host
-                .path()
-                .join(".chrono-harness/state/output-retention-v1/objects")
-                .join(id)
-                .exists(),
-            "released input metadata did not retire: {rounds:?}"
-        );
+        let store = host
+            .path()
+            .join(".chrono-harness/state/output-retention-v1");
+        let directory = store.join("objects").join(&id);
+        if directory.exists() {
+            let original = fs::read_to_string(directory.join("record.json"));
+            let capability_present = store.join(&id).exists();
+            panic!(
+                "released input metadata did not retire: id={id} capability_present={capability_present} record={original:?}"
+            );
+        }
     }
 }
 #[cfg(not(verus_keep_ghost))]
