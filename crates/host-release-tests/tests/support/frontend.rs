@@ -1,14 +1,20 @@
+#![allow(unexpected_cfgs)]
 //! 发布工具的真实 CLI 与外部 bootstrap 报告样本；样本不冒充真实原生构建。
+#[cfg(not(verus_keep_ghost))]
 #[path = "context.rs"]
 mod context;
+#[cfg(not(verus_keep_ghost))]
 #[path = "recipe.rs"]
 pub mod recipe;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{cell::Cell, fs, os::unix::process::ExitStatusExt, path::Path, process::Command};
 
 #[path = "failure_case.rs"]
 mod failure_case;
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Fixture {
     pub host: recipe::Fixture,
     pub output: tempfile::TempDir,
@@ -17,6 +23,7 @@ pub struct Fixture {
     case: failure_case::FailureCase,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Fixture {
     pub fn new() -> Self {
         let case = failure_case::FailureCase::new("rust-release-frontend-");
@@ -290,6 +297,7 @@ impl Fixture {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Fixture {
     fn drop(&mut self) {
         if std::thread::panicking() {

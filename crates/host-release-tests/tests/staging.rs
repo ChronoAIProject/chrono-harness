@@ -1,7 +1,12 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
 #[path = "support/recipe.rs"]
 mod fixture;
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_release::{recipe::Loaded, staging::Staging};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     os::unix::{
@@ -15,6 +20,7 @@ use std::{
 #[path = "support/failure_case.rs"]
 mod failure_case;
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn release_case_retains_a_failed_batch_until_its_creation_deadline() {
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
@@ -84,6 +90,7 @@ fn release_case_retains_a_failed_batch_until_its_creation_deadline() {
     assert!(!failed_path.exists());
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cache_process(
     root: &Path,
     index: &mut usize,
@@ -127,6 +134,7 @@ fn cache_process(
     output
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_inode() {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -267,6 +275,7 @@ fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_i
     fixture::write(root, "staging.json", &staging.receipt());
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn source(f: &fixture::Fixture) -> Value {
     let path = f.root().join("out/a");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -275,6 +284,7 @@ fn source(f: &fixture::Fixture) -> Value {
     json!({"a":{"identity":{"path":"out/a","sha256":chrono_harness::sha256(b"the selected program"),"size":20,"mode":489,"error":null}}})
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn only_selected_consumers_receive_exact_bytes_mode_and_three_real_observations() {
     let f = fixture::Fixture::new();
@@ -308,6 +318,7 @@ fn only_selected_consumers_receive_exact_bytes_mode_and_three_real_observations(
     assert_eq!(receipt["bindings"][0]["expected"], assets["a"]["identity"]);
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn source_or_destination_byte_and_mode_drift_records_the_actual_failure() {
     for (path, mode) in [
@@ -348,6 +359,7 @@ fn source_or_destination_byte_and_mode_drift_records_the_actual_failure() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn source_drift_or_symlink_never_replaces_the_existing_consumer() {
     for mutation in 0..3 {
@@ -386,6 +398,7 @@ fn source_drift_or_symlink_never_replaces_the_existing_consumer() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn empty_selection_has_empty_successful_observations_and_invalid_asset_vectors_fail() {
     let f = fixture::Fixture::new();
