@@ -69,7 +69,7 @@ flowchart LR
 
 测试版的四个下游采用、问题反馈、稳定判据和正式版交付按[发布迭代流程](release-iteration.md)执行。先完成测试版，再按固定候选的实际验收决定是否发布正式版；流程和 skill 随真实执行改进。
 
-发布工作流订阅 `dev` 的 `chrono / collection` 完成事件，仅原始 push 检查成功才自动构建测试版。测试版版本包含原 CI run／attempt 和完整源码 SHA；正式版必须来自 `main` 当前指向的同一固定源码，并显式指定与源码计划相同的版本。版本唯一绑定源码，不能覆盖已有公开版本或把移动的分支名当发布身份。当前发布计划由 [plan.json](../.chrono-harness/release/plan.json)负责，原 CI 身份、发布和恢复合同归[发布说明](release-ci.md#持续交付与恢复)。
+发布工作流订阅 `dev` 的 `chrono / collection` 完成事件，从成功 push 的原汇总工件读取所选单元，首次清单或有单元受影响时自动构建测试版。测试版版本包含原 CI run／attempt 和完整源码 SHA；正式版必须来自 `main` 当前指向的同一固定源码，并显式指定与源码计划相同的版本。版本唯一绑定源码，不能覆盖已有公开版本或把移动的分支名当发布身份。当前发布计划由 [plan.json](../.chrono-harness/release/plan.json)负责，原 CI 身份、发布和恢复合同归[发布说明](release-ci.md#持续交付与恢复)。
 
 下面列出工作流实现的行为。一次交付是否成功，以对应源码的真实落地检查、原生发布报告、公开资产和两平台安装结果为准；登记或生成成功不能代替这些结果。
 
@@ -79,7 +79,7 @@ flowchart LR
 | PR 的 CI | 已接通；按固定合并候选和登记依赖选测 | 当前运行的 `chrono / collection` 及其原报告 |
 | 原生自动合并 | 仓库已允许；每个就绪 PR 由调用方启用 | 远端 `autoMergeRequest` 或已经合并的实际状态 |
 | 合并后的 CI | 已接通 `dev` push 检查 | 落地 SHA 对应运行的完整 before／after 结果 |
-| 发布构建和验证 | 成功的 dev push CI 自动触发；integration 手动指定完整源码并使用 build 通道 | 固定源码、全部平台及原始验证／collector 结果 |
+| 发布构建和验证 | 成功的 dev push CI 按原汇总的选择触发；integration 手动指定完整源码并使用 build 通道 | 固定源码、全部平台及原始验证／collector 结果 |
 | 自动创建公开 Release、上传发行资产 | 发布作业验证原 CI，续传同身份 draft，核资产后公开并复核；只有该作业取得写权限 | 真实版本、标签源码、公开资产及原发布报告 |
 | 安装验收 | 发布后由 Linux／macOS 作业安装；build 通道消费本次组合包，公开通道从固定版本 HTTPS 地址下载 | 安装器实际回执、完整工具成员、安装字节和执行权限；其他使用方按各自宿主验收 |
 

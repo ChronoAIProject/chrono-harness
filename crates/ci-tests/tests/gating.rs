@@ -1689,6 +1689,7 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
     let mut h = GatedHost {
         host: ShortHost {
             _dir: crate::tools::FixtureDirectory::Ephemeral(dir),
+            failure_destination: FailureDestination::configured(),
             root,
             remote,
             base: base.clone(),

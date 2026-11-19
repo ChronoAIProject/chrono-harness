@@ -1,6 +1,9 @@
 //! CI 字面文本判断的独立成功、失败与边界预期。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
+#[path = "cache.rs"]
+mod cache_expectations;
+#[cfg(verus_keep_ghost)]
 #[path = "gating.rs"]
 mod gating_expectations;
 #[cfg(verus_keep_ghost)]
@@ -12,6 +15,9 @@ mod policy;
 #[cfg(verus_keep_ghost)]
 #[path = "release.rs"]
 mod release_expectations;
+#[cfg(verus_keep_ghost)]
+#[path = "short.rs"]
+mod short_copy;
 #[cfg(verus_keep_ghost)]
 #[path = "startup.rs"]
 mod startup_expectations;
@@ -25,6 +31,16 @@ use vstd::prelude::*;
 use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+#[cfg(verus_keep_ghost)]
+fn failed_fixture_copies_regular_files_and_descends_only_into_directories() {
+    let file = short_copy::short_copy_member(false, true);
+    assert(matches!(file, short_copy::CopyMember::File));
+    let directory = short_copy::short_copy_member(true, false);
+    assert(matches!(directory, short_copy::CopyMember::Directory));
+    let other = short_copy::short_copy_member(false, false);
+    assert(matches!(other, short_copy::CopyMember::Skip));
+}
 
 #[cfg(verus_keep_ghost)]
 fn initial_inventory_rejects_unregistered_files_and_collection_avoids_extra_acquisition() {
