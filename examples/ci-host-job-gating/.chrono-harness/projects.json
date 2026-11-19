@@ -19,6 +19,7 @@
           "operation": "example.program",
           "tool": "python3",
           "argv": [
+            "-B",
             "message.py"
           ]
         }
@@ -33,6 +34,7 @@
           "operation": "example.check",
           "tool": "python3",
           "argv": [
+            "-B",
             "check.py"
           ]
         }
