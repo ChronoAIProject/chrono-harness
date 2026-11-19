@@ -8391,6 +8391,7 @@ fn archived_run_requires_all_members_and_releases_the_exact_expired_slot() {
     }
     archived_install_run_handoff(None);
     archived_install_run_handoff(Some(0));
+    archived_install_run_handoff(Some(1));
     archived_install_run_handoff(Some(86400));
 }
 
@@ -8465,6 +8466,13 @@ fn archived_install_run_handoff(diagnostic_window: Option<u64>) {
         reject();
         return;
     }
+    if diagnostic_window == Some(1) {
+        let born = fs::metadata(root.join(run)).unwrap().created().unwrap();
+        let due = born + std::time::Duration::from_secs(1);
+        if let Ok(remaining) = due.duration_since(std::time::SystemTime::now()) {
+            std::thread::sleep(remaining);
+        }
+    }
     fs::remove_file(survivor.join(&stream)).unwrap();
     reject();
     fs::write(survivor.join(&stream), b"changed contents!").unwrap();
@@ -8478,7 +8486,7 @@ fn archived_install_run_handoff(diagnostic_window: Option<u64>) {
     let result = consumer_call(root, request.clone());
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     assert!(!root.join(slot).exists());
-    if diagnostic_window.is_some() {
+    if let Some(seconds) = diagnostic_window {
         let born = fs::metadata(root.join(run))
             .unwrap()
             .created()
@@ -8493,7 +8501,10 @@ fn archived_install_run_handoff(diagnostic_window: Option<u64>) {
             .iter()
             .find(|o| o["id"] == id)
             .unwrap();
-        assert_eq!(run["lifetime"], json!({"created_at":born,"deadline":born}));
+        assert_eq!(
+            run["lifetime"],
+            json!({"created_at":born,"deadline":born+seconds})
+        );
     }
     assert!(ledger(root)["roots"].get(&role).is_none());
     assert_eq!(consumer_call(root, request).exit_code, 0);

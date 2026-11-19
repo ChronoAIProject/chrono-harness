@@ -218,9 +218,6 @@ impl Lifetime {
         let deadline = created_at
             .checked_add(seconds)
             .ok_or("output deadline overflow")?;
-        if seconds == 0 {
-            return Err("output lifetime must be positive".into());
-        }
         Ok(Self {
             created_at: Some(created_at),
             deadline,
@@ -770,9 +767,11 @@ impl Inventory {
             if !ids.insert(o.id.clone())
                 || o.lifetime.as_ref().is_some_and(|window| {
                     window.deadline == 0
-                        || window
-                            .created_at
-                            .is_some_and(|created_at| window.deadline <= created_at)
+                        || window.created_at.is_some_and(|created_at| {
+                            window.deadline < created_at
+                                || (window.deadline == created_at
+                                    && !matches!(o.phase.as_str(), "released" | "disposing"))
+                        })
                         || (window.created_at.is_none()
                             && !matches!(o.phase.as_str(), "disposing" | "sealing"))
                         || o.expires > window.deadline
