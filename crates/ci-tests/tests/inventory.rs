@@ -1,11 +1,28 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+#[cfg(verus_keep_ghost)]
+verus! {
+fn failed_inventory_keeps_its_failed_outcome() {
+    let status = super::policy::inventory_output::listing_status(false);
+    assert(status@ == "failed"@);
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::sha256;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, path::Path};
 
+#[cfg(not(verus_keep_ghost))]
 #[allow(dead_code)]
 #[path = "support/tools.rs"]
 mod tools;
 
+#[cfg(not(verus_keep_ghost))]
 fn fixture(root: &Path, mode: &str) {
     let groups = json!({"t":"left","opaque":"right"});
     let mut actions = json!({});
@@ -38,6 +55,7 @@ fn fixture(root: &Path, mode: &str) {
     fs::write(root.join("config.json"), config.to_string()).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn execute(root: &Path) -> Result<String, String> {
     chrono_ci::dispatch(&[
         "test-inventory".into(),
@@ -48,10 +66,89 @@ fn execute(root: &Path) -> Result<String, String> {
     ])
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn read(root: &Path, path: &str) -> Value {
     serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn adopted_inventory_keeps_each_completed_or_failed_listing_in_its_own_window() {
+    if !tools::isolated_git() {
+        return;
+    }
+    let host = tools::temporary_host("retained inventory ");
+    let root = host.path();
+    assert!(
+        std::process::Command::new(tools::fixture_git())
+            .args(["init", "-q"])
+            .current_dir(root)
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
+    let policy = json!({
+        "schema":"chrono-output-retention/v2","producers":{"check-original":[".chrono-harness/state/"]},
+        "keep_seconds":0,"diagnostic_keep_seconds":86400,"max_lifetime_seconds":86400,
+        "max_related_outputs":512,"max_summaries":128,"max_nodes_per_round":256,
+        "max_bytes_per_round":67108864,"max_millis_per_round":25
+    });
+    fs::write(
+        root.join(".chrono-harness/retention.json"),
+        policy.to_string(),
+    )
+    .unwrap();
+    let configure = |mode| {
+        fixture(root, mode);
+        let mut config = read(root, "config.json");
+        config["report_directory"] = json!(".chrono-harness/state/inventory");
+        fs::write(root.join("config.json"), config.to_string()).unwrap();
+    };
+    configure("ok");
+    let result: Value = serde_json::from_str(&execute(root).unwrap()).unwrap();
+    let directory = result["report_directory"].as_str().unwrap();
+    assert!(directory.starts_with(".chrono-harness/state/inventory-"));
+    let report = read(root, &format!("{directory}/inventory.json"));
+    let original = report["receipts"][0]["stdout"].as_str().unwrap();
+    let bytes = fs::read(root.join(original)).unwrap();
+    configure("failed");
+    let error = execute(root).unwrap_err();
+    let failed = error.split_once("report_directory=").unwrap().1;
+    assert_ne!(directory, failed);
+    let receipts = read(root, &format!("{failed}/receipts.json"));
+    assert_eq!(receipts[0]["exit_code"], 7);
+    assert_eq!(fs::read(root.join(original)).unwrap(), bytes);
+    assert!(!root.join(failed).join("inventory.json").exists());
+    let owner = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
+        .unwrap()
+        .unwrap();
+    for (path, expected_status) in [(directory, "passed"), (failed, "failed")] {
+        let observed = owner.producer_status("check-original", Some(path)).unwrap();
+        let record = &observed["records"][0];
+        assert_eq!(record["outcome"]["status"], expected_status);
+        assert_eq!(record["sealed"], true);
+        let born = record["lifetime"]["created_at"].as_u64().unwrap();
+        let deadline = record["lifetime"]["deadline"].as_u64().unwrap();
+        assert_eq!(deadline - born, 86400);
+        assert_eq!(record["expires"], deadline);
+        let original = [record["id"].as_str().unwrap().to_owned()];
+        owner
+            .maintain_originals_at(&original, deadline - 1)
+            .unwrap();
+        assert!(root.join(path).is_dir());
+        for _ in 0..32 {
+            let round = owner.maintain_originals_at(&original, deadline).unwrap();
+            assert_eq!(round["accounting_errors"], json!([]));
+            if !root.join(path).exists() {
+                break;
+            }
+        }
+        assert!(!root.join(path).exists());
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn explicit_test_inventory_keeps_complete_disjoint_groups_and_original_receipts() {
     if !tools::isolated_git() {
@@ -90,6 +187,7 @@ fn explicit_test_inventory_keeps_complete_disjoint_groups_and_original_receipts(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn test_inventory_rejects_missing_overlapping_ignored_drifting_and_malformed_lists() {
     if !tools::isolated_git() {
@@ -116,6 +214,7 @@ fn test_inventory_rejects_missing_overlapping_ignored_drifting_and_malformed_lis
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn test_inventory_keeps_nonzero_timeout_and_output_bound_originals() {
     if !tools::isolated_git() {

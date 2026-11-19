@@ -1,6 +1,10 @@
 //! 清单边界的独立预期，同时执行 Verus 证明和 Rust 断言。
 #![allow(unexpected_cfgs)]
 
+#[cfg(verus_keep_ghost)]
+#[path = "inventory.rs"]
+mod inventory_output_expectations;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(verus_keep_ghost)]

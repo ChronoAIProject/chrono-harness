@@ -12,6 +12,8 @@ chrono-ci test-inventory --host-root HOST --config CONFIG
 
 `timeout_seconds`、`output_limit_bytes` 约束既有 Rust 进程执行器；子进程继承调用方环境，租约描述符由执行器传递。`report_directory` 接收各次列举的 stdout／stderr 原字节和 `receipts.json`，保留 argv、原退出、失败、耗时及流摘要。全部校验通过后写 `inventory.json`，绑定配置／项目原字节摘要、完整清单和各分组。退出 0 并输出数量摘要表示本次验证成功；配置、列举或覆盖失败时输出 `E_CI` 并退出 1。成功报告须结合本次退出与摘要消费。
 
+采用 `check-original` 保管且配置覆盖报告位置时，每次 `test-inventory` 使用同一父目录下带独立身份的报告目录。成功的 JSON 摘要在 `report_directory` 返回实际相对地址。失败消息在末尾返回同一字段，已取得的列举流和回执可在那里读取。使用方应在创建窗口内按地址读回或转存。成功和失败均按实际结果封存；独立调用没有采用该保管范围时沿配置地址输出。旧固定目录的保管和退役须由原使用方另行交接。
+
 ## 本仓如何划分测试
 
 本仓 workflow 专属测试项目明确登记三组，分别分配给 `judge-workflow`（核心）、`judge-workflow-units`（直接完整单元测试）、`judge-workflow-short`（完整短命令测试）。action 明确选择成员，清单保护核覆盖范围，不推断依赖。三组合计覆盖原两个测试二进制，保留 fixture、profile 和业务限制。发布仍使用不带过滤的 `actions.execute`／原 `test.judge-workflow-tests`，旧测试身份通过 `test_groups` 绑定独立的核心过滤 action。
