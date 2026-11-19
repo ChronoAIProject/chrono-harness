@@ -20,14 +20,14 @@ mod recipe;
 
 // Bind the three actual fixture consumers to the same cleanup decision.
 // Filesystem effects are exercised by the Rust regression in staging.
-#[cfg(verus_keep_ghost)]
-#[path = "staging.rs"]
-mod staging_fixture;
+#[path = "support/execution.rs"]
+mod execution_fixture;
 #[cfg(verus_keep_ghost)]
 #[path = "support/frontend.rs"]
 mod frontend_fixture;
-#[path = "support/execution.rs"]
-mod execution_fixture;
+#[cfg(verus_keep_ghost)]
+#[path = "staging.rs"]
+mod staging_fixture;
 
 #[cfg(not(verus_keep_ghost))]
 #[path = "support/receipt.rs"]

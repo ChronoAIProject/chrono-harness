@@ -14,11 +14,11 @@ fn compiler_fixture_directory(distinct: bool) -> (path: Option<&'static str>)
     if distinct { Some("active") } else { None }
 }
 }
-#[path = "failure_case.rs"]
-pub(crate) mod failure_case;
 #[cfg(not(verus_keep_ghost))]
 #[path = "context.rs"]
 mod context;
+#[path = "failure_case.rs"]
+pub(crate) mod failure_case;
 #[cfg(not(verus_keep_ghost))]
 #[path = "recipe.rs"]
 mod recipe;
