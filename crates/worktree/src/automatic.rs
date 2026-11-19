@@ -953,9 +953,14 @@ impl ManagedProcessOriginals {
     fn run(
         self,
         target: &Path,
-        command: &CommandSpec,
+        mut command: CommandSpec,
         report: &mut Value,
     ) -> Result<chrono_harness::ProcessResult, String> {
+        let directory = self
+            .directory
+            .to_str()
+            .ok_or("managed process directory UTF-8")?;
+        chrono_harness::verified_verifier::bind_compiler_directory(&mut command.args, directory);
         let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
         let intent = value!({"schema":"chrono-worktree-managed-process-intent/v1",
             "cwd":target,"program":command.program,"argv":command.args,
@@ -970,7 +975,7 @@ impl ManagedProcessOriginals {
         let process = chrono_harness::prepared::process_identities(
             chrono_harness::run_process_observed_retained(
                 target,
-                command,
+                &command,
                 &[],
                 &digest,
                 &chrono_harness::ProcessEvidence {
@@ -5289,7 +5294,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             };
                             drop(manager);
                             let process = ManagedProcessOriginals::begin(report)?
-                                .run(target, &command, report)?;
+                                .run(target, command, report)?;
                             // This main checkout has no cache enrollment, but
                             // its caller still consumes the agent's pending work.
                             let observer = Manager::open(
@@ -5428,7 +5433,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         report["artifact_directory"] =
                             value!({"producer":artifact_producer,"path":artifact.path()});
                     }
-                    let process = originals.run(target, &command, report)?;
+                    let process = originals.run(target, command, report)?;
                     let artifact_error = if let Some(artifact) = &mut artifact {
                         match artifact.finish(process.failure.is_some() || process.exit_code != 0) {
                             Ok(handoff) => {
