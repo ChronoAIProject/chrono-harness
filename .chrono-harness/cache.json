@@ -1193,6 +1193,26 @@
       "kind": "json-value",
       "path": ".chrono-harness/release/build.json",
       "pointer": "/units/36"
+    },
+    "instructions.defaults.catalog": {
+      "kind": "file",
+      "path": "assets/instructions/catalog.json",
+      "presence": "present"
+    },
+    "instructions.defaults.manifest": {
+      "kind": "file",
+      "path": "assets/instructions/default-manifest.json",
+      "presence": "present"
+    },
+    "instructions.standalone-retention": {
+      "kind": "file",
+      "path": "assets/instructions/standalone-retention.json",
+      "presence": "present"
+    },
+    "distribution.bootstrap-template": {
+      "kind": "file",
+      "path": "assets/distribution/bootstrap.sh",
+      "presence": "present"
     }
   },
   "artifacts": {
@@ -1481,7 +1501,10 @@
         "bootstrap.toolchains"
       ],
       "source_inputs": [
-        "instructions-tests.sources"
+        "instructions-tests.sources",
+        "instructions.defaults.catalog",
+        "instructions.defaults.manifest",
+        "instructions.standalone-retention"
       ],
       "restore": "compatible",
       "refresh_sources": true
@@ -2375,7 +2398,10 @@
         "release.unit.build_instructions"
       ],
       "source_inputs": [
-        "instructions.sources"
+        "instructions.sources",
+        "instructions.defaults.catalog",
+        "instructions.defaults.manifest",
+        "instructions.standalone-retention"
       ],
       "restore": "compatible",
       "refresh_sources": true
@@ -2991,7 +3017,8 @@
         "release.unit.build_distribution"
       ],
       "source_inputs": [
-        "distribution.sources"
+        "distribution.sources",
+        "distribution.bootstrap-template"
       ],
       "restore": "compatible",
       "refresh_sources": true
@@ -3665,7 +3692,10 @@
         "release.action.test.instructions-tests"
       ],
       "source_inputs": [
-        "instructions-tests.sources"
+        "instructions-tests.sources",
+        "instructions.defaults.catalog",
+        "instructions.defaults.manifest",
+        "instructions.standalone-retention"
       ],
       "restore": "compatible",
       "refresh_sources": true
@@ -4157,7 +4187,10 @@
         "release.unit.build_instructions"
       ],
       "source_inputs": [
-        "instructions.sources"
+        "instructions.sources",
+        "instructions.defaults.catalog",
+        "instructions.defaults.manifest",
+        "instructions.standalone-retention"
       ],
       "restore": "compatible",
       "refresh_sources": true
@@ -4784,7 +4817,8 @@
         "release.unit.build_distribution"
       ],
       "source_inputs": [
-        "distribution.sources"
+        "distribution.sources",
+        "distribution.bootstrap-template"
       ],
       "restore": "compatible",
       "refresh_sources": true
@@ -5469,7 +5503,10 @@
         "release.action.test.instructions-tests"
       ],
       "source_inputs": [
-        "instructions-tests.sources"
+        "instructions-tests.sources",
+        "instructions.defaults.catalog",
+        "instructions.defaults.manifest",
+        "instructions.standalone-retention"
       ],
       "restore": "compatible",
       "refresh_sources": true
