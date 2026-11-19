@@ -1,7 +1,27 @@
 //! Verify explicit Cargo/libtest groups; never discover dependencies or select tests.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn listing_status(passed: bool) -> (status: &'static str)
+    ensures status@ == if passed { "passed"@ } else { "failed"@ },
+{
+    if passed { "passed" } else { "failed" }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::retained_artifacts::retention;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{CommandSpec, decode, file_identity, no_symlink_parents, sha256};
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -9,6 +29,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Config {
@@ -24,12 +45,14 @@ struct Config {
     output_limit_bytes: usize,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn string(value: &Value) -> Result<&str, String> {
     value
         .as_str()
         .ok_or_else(|| "inventory string field missing".into())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn parse_listing(
     stdout: &str,
     stderr: &str,
@@ -109,16 +132,23 @@ fn parse_listing(
         .collect())
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Inventory<'a> {
     root: &'a Path,
     config: Config,
     project: &'a Value,
     receipts: Vec<Value>,
+    publication: Option<retention::Publication>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Inventory<'_> {
     fn write(&self, name: &str, bytes: &[u8]) -> Result<String, String> {
         let path = format!("{}/{name}", self.config.report_directory);
         let destination = no_symlink_parents(self.root, &path)?;
+        if let Some(publication) = &self.publication {
+            publication.replace_file(&destination, bytes)?;
+            return Ok(path);
+        }
         fs::create_dir_all(
             destination
                 .parent()
@@ -207,13 +237,40 @@ impl Inventory<'_> {
                 .ok_or("inventory action binaries missing")?,
         )
     }
+    fn collect(&mut self, config_bytes: &[u8], projects_bytes: &[u8]) -> Result<Value, String> {
+        let all = self.config.unfiltered_action.clone();
+        let groups = self.config.groups.clone();
+        let complete = self.listing(&all, false)?;
+        let ignored = self.listing(&all, true)?;
+        let observed = groups
+            .iter()
+            .map(|(id, action)| Ok((id.clone(), self.listing(action, false)?)))
+            .collect::<Result<BTreeMap<_, _>, String>>()?;
+        crate::verified_inventory::check_inventory_partition(
+            &complete,
+            &ignored,
+            &observed,
+            |union| format!("{:?}", union.symmetric_difference(&complete)),
+            &|parts: [&str; 2]| parts.concat(),
+        )?;
+        let report = json!({"schema":self.config.schema,"project":self.config.project,
+        "config_sha256":sha256(config_bytes),"projects_sha256":sha256(projects_bytes),
+        "complete":complete,"groups":observed,"receipts":self.receipts});
+        self.write(
+            "inventory.json",
+            &serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?,
+        )?;
+        Ok(json!({"complete":complete.len(),"groups":observed.iter()
+        .map(|(id,tests)|(id,tests.len())).collect::<BTreeMap<_,_>>() }))
+    }
 }
 
 /// Consume only the declared project, actions, groups, tool bindings and bounds.
+#[cfg(not(verus_keep_ghost))]
 pub fn execute(root: &Path, path: &str) -> Result<String, String> {
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
     let config_bytes = fs::read(no_symlink_parents(&root, path)?).map_err(|e| e.to_string())?;
-    let config: Config = decode(&config_bytes)?;
+    let mut config: Config = decode(&config_bytes)?;
     if config.schema != "chrono-workflow-inventory/v1" {
         return Err("unsupported inventory schema".into());
     }
@@ -236,37 +293,62 @@ pub fn execute(root: &Path, path: &str) -> Result<String, String> {
     if rows.len() != 1 || rows[0]["test_groups"] != json!(config.groups) {
         return Err("inventory group binding drift".into());
     }
-    let all = config.unfiltered_action.clone();
-    let groups = config.groups.clone();
+    let _caller = retention::read_scope(&root)?;
+    let mut publication = None;
+    if let Some(owner) = retention::Inventory::adopted(&root)?
+        .filter(|owner| owner.accepts("check-original", &format!("{}-", config.report_directory)))
+    {
+        let base = no_symlink_parents(&root, &config.report_directory)?;
+        let parent = base.parent().ok_or("inventory report parent")?;
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        let prefix = base
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or("inventory report basename")?;
+        let path = retention::unique_path(parent, &format!("{prefix}-"), "")?;
+        let relative = path
+            .strip_prefix(&root)
+            .map_err(|e| e.to_string())?
+            .to_str()
+            .ok_or("inventory report path UTF-8")?
+            .to_owned();
+        let original = owner.plan(
+            "check-original",
+            &relative,
+            true,
+            json!({"kind":"test-inventory","project":config.project,"status":"running"}),
+        )?;
+        original.materialize()?;
+        config.report_directory = relative;
+        publication = Some(original);
+    }
     let mut inventory = Inventory {
         root: &root,
         config,
         project: rows[0],
         receipts: Vec::new(),
+        publication,
     };
-    let complete = inventory.listing(&all, false)?;
-    let ignored = inventory.listing(&all, true)?;
-    let observed = groups
-        .iter()
-        .map(|(id, action)| Ok((id.clone(), inventory.listing(action, false)?)))
-        .collect::<Result<BTreeMap<_, _>, String>>()?;
-    crate::verified_inventory::check_inventory_partition(
-        &complete,
-        &ignored,
-        &observed,
-        |union| format!("{:?}", union.symmetric_difference(&complete)),
-        &|parts: [&str; 2]| parts.concat(),
-    )?;
-    let report = json!({"schema":inventory.config.schema,"project":inventory.config.project,
-        "config_sha256":sha256(&config_bytes),"projects_sha256":sha256(&projects_bytes),
-        "complete":complete,"groups":observed,"receipts":inventory.receipts});
-    inventory.write(
-        "inventory.json",
-        &serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?,
-    )?;
-    Ok(format!(
-        "{}\n",
-        json!({"complete":complete.len(),"groups":observed.iter()
-        .map(|(id,tests)|(id,tests.len())).collect::<BTreeMap<_,_>>()})
-    ))
+    let mut result = inventory.collect(&config_bytes, &projects_bytes);
+    if let Some(publication) = inventory.publication.take() {
+        let directory = &inventory.config.report_directory;
+        let outcome = json!({"kind":"test-inventory","project":inventory.config.project,
+            "status":listing_status(result.is_ok())});
+        let seal = publication.complete_sealed(outcome).and_then(|()| {
+            retention::Inventory::adopted(&root)?
+                .ok_or("inventory retention policy disappeared")?
+                .retain_diagnostic_path(directory)
+        });
+        if let Err(error) = seal {
+            let listing = result.err().map(|e| format!("{e}; ")).unwrap_or_default();
+            return Err(format!(
+                "{listing}inventory publication: {error}; report_directory={directory}"
+            ));
+        }
+        let summary = result
+            .as_mut()
+            .map_err(|error| format!("{error}; report_directory={directory}"))?;
+        summary["report_directory"] = json!(directory);
+    }
+    Ok(format!("{}\n", result?))
 }
