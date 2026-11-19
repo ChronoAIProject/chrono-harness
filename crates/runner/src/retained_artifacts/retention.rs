@@ -54,7 +54,6 @@ use std::{
 use vstd::prelude::*;
 
 #[path = "manifest.rs"]
-#[cfg(not(verus_keep_ghost))]
 mod manifest;
 #[cfg(not(verus_keep_ghost))]
 use manifest::Manifest;
