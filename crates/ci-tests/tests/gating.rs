@@ -2491,6 +2491,15 @@ fn download_only_install_cache_wraps_the_registered_bootstrap_without_a_planner(
             .contains("hashFiles('.chrono-harness/distribution.json')")
     );
 
+    let mut read_only = config.clone();
+    read_only["persistent_cache"]["downloads"]["entries"]["tools"]
+        .as_object_mut()
+        .unwrap()
+        .remove("save_job");
+    let read_only = render(read_only).unwrap();
+    assert!(read_only.contains("Restore download cache tools"));
+    assert!(!read_only.contains("actions/cache/save@"));
+
     config["persistent_cache"]["program"] = json!(".chrono-harness/bin/unused");
     assert!(render(config.clone()).is_err());
     config["persistent_cache"]
