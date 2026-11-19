@@ -1,21 +1,8 @@
 #![allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::verus;
+#[path = "../../worktree-tests/tests/support/diagnostic_copy.rs"]
+mod diagnostic_copy;
 #[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-pub enum CopyMember { Directory, File, Skip }
-
-pub fn short_copy_member(directory: bool, file: bool) -> (member: CopyMember)
-    ensures
-        matches!(member, CopyMember::Directory) == directory,
-        matches!(member, CopyMember::File) == (!directory && file),
-        matches!(member, CopyMember::Skip) == (!directory && !file),
-{
-    if directory { CopyMember::Directory } else if file { CopyMember::File } else { CopyMember::Skip }
-}
-}
+pub use diagnostic_copy::{CopyMember, short_copy_member};
 
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 #[cfg(not(verus_keep_ghost))]
@@ -483,75 +470,24 @@ impl FailureDestination {
     fn preserve(&self, fixture: &Path) -> Result<PathBuf, String> {
         let source = fixture.join(".chrono-harness/state");
         let label = sha256(fixture.as_os_str().as_encoded_bytes());
-        let host = match self {
+        match self {
             Self::Caller(directory) => {
                 let target = directory.join(label);
-                copy_short_state(&source, &target, None)?;
-                return Ok(target);
+                diagnostic_copy::copy_tree(&source, &target, None)?;
+                Ok(target)
             }
-            Self::Checkout(host) => fs::canonicalize(host).map_err(|e| e.to_string())?,
-        };
-        let owner =
-            retention::Inventory::adopted(&host)?.ok_or("missing CI fixture retention policy")?;
-        let family = chrono_harness::no_symlink_parents(&host, FAILURE_FAMILY)?;
-        fs::create_dir_all(&family).map_err(|e| e.to_string())?;
-        let address = retention::unique_path(&family, "short-", "")?;
-        let relative = format!(
-            "{FAILURE_FAMILY}/{}",
-            address
-                .file_name()
-                .and_then(|s| s.to_str())
-                .ok_or("invalid failure copy address")?
-        );
-        let target = host.join(&relative);
-        let publication = owner.plan(
-            "ci-fixture",
-            &relative,
-            true,
-            json!({"kind":"short-fixture","source":label}),
-        )?;
-        publication.materialize()?;
-        let copying = copy_short_state(&source, &target, Some(&publication));
-        // Keep the directory alive between sealing and setting its diagnostic expiry.
-        let reader_owner =
-            retention::Inventory::adopted(&host)?.ok_or("missing CI fixture retention policy")?;
-        let _reader = reader_owner.consume(publication.id())?;
-        let seal = publication
-            .complete_sealed(
-                json!({"kind":"short-fixture","source":label,"copy_error":copying.as_ref().err()}),
-            )
-            .and_then(|()| reader_owner.retain_diagnostic_path(&relative));
-        if let Err(error) = copying {
-            return Err(match seal {
-                Ok(()) => format!("{}: {error}", target.display()),
-                Err(seal_error) => {
-                    format!("{}: {error}; publication: {seal_error}", target.display())
-                }
-            });
-        }
-        seal?;
-        Ok(target)
-    }
-}
-
-#[cfg(not(verus_keep_ghost))]
-fn copy_short_state(
-    source: &Path,
-    target: &Path,
-    publication: Option<&retention::Publication>,
-) -> Result<(), String> {
-    retention::directory_adopted(publication, target)?;
-    for entry in fs::read_dir(source).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let target = target.join(entry.file_name());
-        let kind = entry.file_type().map_err(|e| e.to_string())?;
-        match short_copy_member(kind.is_dir(), kind.is_file()) {
-            CopyMember::Directory => copy_short_state(&entry.path(), &target, publication)?,
-            CopyMember::File => retention::copy_adopted(publication, &entry.path(), &target)?,
-            CopyMember::Skip => {}
+            Self::Checkout(host) => diagnostic_copy::publish(
+                host,
+                "ci-fixture",
+                FAILURE_FAMILY,
+                "short-",
+                json!({"kind":"short-fixture","source":label}),
+                |target, publication| {
+                    diagnostic_copy::copy_tree(&source, target, Some(publication))
+                },
+            ),
         }
     }
-    Ok(())
 }
 
 // Keep original fixture reports before TempDir teardown on an unexpected owner

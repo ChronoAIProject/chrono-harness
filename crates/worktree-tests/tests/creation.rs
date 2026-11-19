@@ -73,6 +73,11 @@ fn enclosing_fixture_requires_retired_objects_metadata_and_known_members() {
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 #[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[path = "support/diagnostic_copy.rs"]
+#[cfg(not(verus_keep_ghost))]
+mod diagnostic_copy;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::retained_artifacts::retention;
 #[path = "support/fixture_coordinator.rs"]
 #[cfg(not(verus_keep_ghost))]
 mod fixture_coordinator;
@@ -357,21 +362,27 @@ struct Host {
     parent: PathBuf,
 }
 #[cfg(not(verus_keep_ghost))]
-fn retain_fixture_state(root: &Path, destination: &Path) -> std::io::Result<()> {
-    if !root.is_dir() {
-        return Ok(());
+const FAILURE_FAMILY: &str = ".chrono-harness/state/worktree-test-failures";
+
+#[cfg(not(verus_keep_ghost))]
+enum DiagnosticDestination {
+    Checkout(PathBuf),
+    Caller(PathBuf),
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn retain_fixture_state(
+    root: &Path,
+    destination: &Path,
+    publication: Option<&retention::Publication>,
+) -> Result<(), String> {
+    match fs::symlink_metadata(root) {
+        Ok(info) if info.is_dir() => (),
+        Ok(_) => return Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.to_string()),
     }
-    fs::create_dir_all(destination)?;
-    for row in fs::read_dir(root)? {
-        let row = row?;
-        let kind = row.file_type()?;
-        if kind.is_dir() {
-            retain_fixture_state(&row.path(), &destination.join(row.file_name()))?;
-        } else if kind.is_file() {
-            fs::copy(row.path(), destination.join(row.file_name()))?;
-        }
-    }
-    Ok(())
+    diagnostic_copy::copy_tree(root, destination, publication)
 }
 #[cfg(not(verus_keep_ghost))]
 impl Drop for Host {
@@ -387,67 +398,77 @@ impl Drop for Host {
 }
 #[cfg(not(verus_keep_ghost))]
 impl Host {
-    fn diagnostic_directory(failed: bool) -> Option<PathBuf> {
+    fn diagnostic_directory(failed: bool) -> Option<DiagnosticDestination> {
         std::env::var_os("CHRONO_WORKTREE_TEST_RECEIPTS")
-            .map(PathBuf::from)
-            .or_else(|| {
-                failed.then(|| source().join(".chrono-harness/state/worktree-test-failures"))
-            })
+            .map(|path| DiagnosticDestination::Caller(path.into()))
+            .or_else(|| failed.then(|| DiagnosticDestination::Checkout(source())))
     }
-    fn retain_fixture_diagnostics(&self, directory: &Path) {
+    fn retain_fixture_diagnostics(&self, directory: &DiagnosticDestination) {
         if let Err(error) = self._dir.retain_diagnostic(
             "actual requested or failed fixture diagnostics remain to be consumed",
         ) {
             eprintln!("worktree fixture diagnostic reference unavailable: {error}");
         }
-        let destination = directory.join(format!(
-            "fixture-{}",
-            sha256(self.root.as_os_str().as_encoded_bytes())
-        ));
-        let retain = || -> std::io::Result<()> {
-            retain_fixture_state(
-                &self.root.join(".chrono-harness/state"),
-                &destination.join("coordinator-state"),
-            )?;
-            for name in [
-                "git-mutation.stdout",
-                "git-mutation.stderr",
-                "admission-holder",
-                "native-hook",
-            ] {
-                let path = self.parent.join(name);
-                if path.is_file() {
-                    fs::copy(path, destination.join(name))?;
-                }
+        let label = sha256(self.root.as_os_str().as_encoded_bytes());
+        let result = match directory {
+            DiagnosticDestination::Caller(directory) => {
+                let target = directory.join(format!("fixture-{label}"));
+                self.copy_fixture_state(&target, None).map(|()| target)
             }
-            // Only explicitly enrolled fixtures, never live worker artifacts.
-            if let Ok(ledger) = automatic::snapshot(&self.root) {
-                for entry in ledger["entries"].as_array().into_iter().flatten() {
-                    let Some(path) = entry["path"].as_str() else {
-                        continue;
-                    };
-                    let target = Path::new(path);
-                    retain_fixture_state(
-                        &target.join(".chrono-harness/state"),
-                        &destination.join(format!(
-                            "enrollment-{}",
-                            sha256(target.as_os_str().as_encoded_bytes())
-                        )),
-                    )?;
-                }
-            }
-            Ok(())
+            DiagnosticDestination::Checkout(checkout) => diagnostic_copy::publish(
+                checkout,
+                "worktree-fixture",
+                FAILURE_FAMILY,
+                "fixture-",
+                value!({"kind":"worktree-fixture","source":label}),
+                |target, publication| self.copy_fixture_state(target, Some(publication)),
+            ),
         };
-        match retain() {
-            Ok(()) => eprintln!(
-                "worktree fixture evidence retained at {}",
-                destination.display()
-            ),
-            Err(error) => eprintln!(
-                "worktree fixture evidence at {} is incomplete: {error}",
-                destination.display()
-            ),
+        match result {
+            Ok(path) => eprintln!("worktree fixture evidence retained at {}", path.display()),
+            Err(error) => eprintln!("worktree fixture evidence is incomplete: {error}"),
         }
+    }
+
+    fn copy_fixture_state(
+        &self,
+        destination: &Path,
+        publication: Option<&retention::Publication>,
+    ) -> Result<(), String> {
+        retain_fixture_state(
+            &self.root.join(".chrono-harness/state"),
+            &destination.join("coordinator-state"),
+            publication,
+        )?;
+        for name in [
+            "git-mutation.stdout",
+            "git-mutation.stderr",
+            "admission-holder",
+            "native-hook",
+        ] {
+            let path = self.parent.join(name);
+            if path.is_file() {
+                retention::copy_adopted(publication, &path, &destination.join(name))?;
+            }
+        }
+        // Only explicitly enrolled fixtures, never live worker artifacts.
+        if let Ok(ledger) = automatic::snapshot(&self.root) {
+            for entry in ledger["entries"].as_array().into_iter().flatten() {
+                let Some(path) = entry["path"].as_str() else {
+                    continue;
+                };
+                let target = Path::new(path);
+                retain_fixture_state(
+                    &target.join(".chrono-harness/state"),
+                    &destination.join(format!(
+                        "enrollment-{}",
+                        sha256(target.as_os_str().as_encoded_bytes())
+                    )),
+                    publication,
+                )?;
+            }
+        }
+        Ok(())
     }
 }
 
