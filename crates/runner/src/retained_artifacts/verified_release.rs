@@ -141,6 +141,46 @@ pub proof fn retirement_within_service_bound(
     }
 }
 
+/// Count the bytes retained at this observation across all creation ticks.
+pub open spec fn temporary_bytes_by_age(cohorts: Seq<nat>) -> nat
+    decreases cohorts.len(),
+{
+    if cohorts.len() == 0 { 0 } else {
+        cohorts.first() + temporary_bytes_by_age(cohorts.drop_first())
+    }
+}
+
+/// At one observation, entry i charges all live temporary bytes born i ticks
+/// ago, including later growth, directories and custody metadata. The host
+/// must establish both the per-cohort ceiling and actual retirement age.
+pub proof fn rolling_storage_bound(cohorts: Seq<nat>, lifetime: nat, peak: nat)
+    requires
+        forall|i: int| 0 <= i < cohorts.len() ==> #[trigger] cohorts[i] <= peak,
+        forall|i: int| lifetime <= i < cohorts.len() ==> #[trigger] cohorts[i] == 0,
+    ensures temporary_bytes_by_age(cohorts) <= lifetime * peak,
+    decreases cohorts.len(),
+{
+    if cohorts.len() > 0 {
+        let rest = cohorts.drop_first();
+        let remaining = if lifetime == 0 { 0nat } else { (lifetime - 1) as nat };
+        assert forall|i: int| 0 <= i < rest.len() implies #[trigger] rest[i] <= peak by {
+            assert(rest[i] == cohorts[i + 1]);
+        }
+        assert forall|i: int| remaining <= i < rest.len() implies #[trigger] rest[i] == 0 by {
+            assert(lifetime <= i + 1);
+            assert(rest[i] == cohorts[i + 1]);
+        }
+        rolling_storage_bound(rest, remaining, peak);
+        assert(cohorts.first() == cohorts[0]);
+        if lifetime > 0 {
+            vstd::arithmetic::mul::lemma_mul_is_distributive_add_other_way(
+                peak as int, remaining as int, 1,
+            );
+            assert(lifetime * peak == remaining * peak + peak);
+        }
+    }
+}
+
 /// Fixed output generations are numbered with each retaining consumer before
 /// its inputs. Debt includes both the original and its retirement metadata.
 pub open spec fn parents_retired(edge: spec_fn(nat, nat) -> bool,

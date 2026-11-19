@@ -27,6 +27,21 @@ mod retention_frontier;
 
 verus! {
 
+proof fn two_creation_ticks_can_fill_the_storage_bound() {
+    let live = seq![3nat, 3nat, 0nat];
+    policy::rolling_storage_bound(live, 2, 3);
+    reveal_with_fuel(policy::temporary_bytes_by_age, 4);
+    assert(policy::temporary_bytes_by_age(live) == 6);
+}
+
+/// Even if every generation disappears on its next tick, the current
+/// generation alone can exceed any proposed capacity without a size bound.
+proof fn one_tick_disposal_allows_arbitrary_volume(limit: nat) {
+    let live = seq![limit + 1, 0nat];
+    reveal_with_fuel(policy::temporary_bytes_by_age, 3);
+    assert(live[1] == 0 && policy::temporary_bytes_by_age(live) > limit);
+}
+
 /// For every proposed deadline there is a fair trace whose single file is
 /// still present at that deadline. The file disappears one second later.
 proof fn fairness_allows_arbitrarily_late_disposal(limit: nat) {
