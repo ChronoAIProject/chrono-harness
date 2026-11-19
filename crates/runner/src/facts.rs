@@ -178,6 +178,15 @@ pub type RegistrySnapshot = crate::verified_status::RegistrySnapshot<Value>;
 pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistrySnapshot, String> {
     Reader::legacy().registry_snapshot(root, oid, path)
 }
+/// Resolve the effective configuration from the caller's fixed Git endpoint.
+#[cfg(not(verus_keep_ghost))]
+pub fn selected_config_with(
+    path: &str,
+    mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<Value, String> {
+    let bytes = read(path)?;
+    crate::facts_configs::resolve(path, bytes, read).map(|(_, _, config, _)| config)
+}
 /// Assemble one fixed registry snapshot through the caller's blob reader.
 /// The caller binds acquisition to its immutable endpoint and retains any
 /// process observations; this helper performs no disk or Git acquisition.
