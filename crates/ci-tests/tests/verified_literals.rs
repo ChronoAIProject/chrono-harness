@@ -16,6 +16,9 @@ mod policy;
 #[path = "release.rs"]
 mod release_expectations;
 #[cfg(verus_keep_ghost)]
+#[path = "retained_receipts.rs"]
+mod retained_receipts;
+#[cfg(verus_keep_ghost)]
 #[path = "short.rs"]
 mod short_copy;
 #[cfg(verus_keep_ghost)]
@@ -31,6 +34,15 @@ use vstd::prelude::*;
 use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+#[cfg(verus_keep_ghost)]
+fn receipt_failure_batch_exists_for_either_checkout() {
+    let empty = retained_receipts::needs_failure_batch(false, false);
+    let main_only = retained_receipts::needs_failure_batch(true, false);
+    let linked_only = retained_receipts::needs_failure_batch(false, true);
+    let both = retained_receipts::needs_failure_batch(true, true);
+    assert(!empty && main_only && linked_only && both);
+}
 
 #[cfg(verus_keep_ghost)]
 fn failed_fixture_copies_regular_files_and_descends_only_into_directories() {

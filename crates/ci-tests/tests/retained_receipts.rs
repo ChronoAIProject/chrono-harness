@@ -1,14 +1,37 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn needs_failure_batch(main_present: bool, linked_present: bool) -> (needed: bool)
+    ensures needed == (main_present || linked_present),
+{
+    main_present || linked_present
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[path = "../../worktree-tests/tests/support/diagnostic_copy.rs"]
+#[cfg(not(verus_keep_ghost))]
+mod diagnostic_copy;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use std::path::PathBuf;
 
+#[cfg(not(verus_keep_ghost))]
 const FAMILY: &str = ".chrono-harness/state/ci-test-failures/";
+#[cfg(not(verus_keep_ghost))]
 const GENERATED: &[&str] = &[
     "original-state/cargo/producer/target/",
     "original-state/cargo/tests/target/",
 ];
 
+#[cfg(not(verus_keep_ghost))]
 fn producer_objects(report: &Value) -> Value {
     let objects: Vec<_> = report["producer_drains"]
         .as_array()
@@ -37,6 +60,7 @@ fn producer_objects(report: &Value) -> Value {
 }
 
 // Assertion view of the current producer's explicit registrations.
+#[cfg(not(verus_keep_ghost))]
 fn registry(directory: &Path) -> Value {
     let bytes = fs::read(directory.join("objects.json")).unwrap();
     let mut owner: Value = serde_json::from_slice(&bytes).unwrap();
@@ -53,6 +77,7 @@ fn registry(directory: &Path) -> Value {
     owner["objects"] = json!(objects);
     owner
 }
+#[cfg(not(verus_keep_ghost))]
 fn object_record(directory: &Path, allocation: &Path) -> PathBuf {
     directory.join("producer-records").join(format!(
         "{}.json",
@@ -60,35 +85,75 @@ fn object_record(directory: &Path, allocation: &Path) -> PathBuf {
     ))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Owner {
     _dir: tempfile::TempDir,
     pub(super) root: PathBuf,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Owner {
     fn drop(&mut self) {
-        if std::thread::panicking() {
-            let destination = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../..")
-                .join(FAMILY)
-                .join(format!(
-                    "owner-fixture-{}",
-                    chrono_harness::sha256(self.root.as_os_str().as_encoded_bytes())
-                ));
-            retain_context_state(&self.root.join(".chrono-harness/state"), &destination);
-            retain_context_state(
-                &self._dir.path().join("linked/.chrono-harness/state"),
-                &destination.join("linked-state"),
-            );
-            eprintln!(
+        if !std::thread::panicking() {
+            return;
+        }
+        let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        match self.publish_failure(&checkout) {
+            Ok(Some(path)) => eprintln!(
                 "original receipt-owner failure evidence: {}",
-                destination.display()
-            );
+                path.display()
+            ),
+            Ok(None) => (),
+            Err(error) => {
+                self._dir.disable_cleanup(true);
+                eprintln!(
+                    "CI failure evidence handoff failed: {error}; original: {}",
+                    self._dir.path().display()
+                );
+            }
         }
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Owner {
+    fn publish_failure(&self, checkout: &Path) -> Result<Option<PathBuf>, String> {
+        let main = self.root.join(".chrono-harness/state");
+        let linked = self._dir.path().join("linked/.chrono-harness/state");
+        let has_main = main.try_exists().map_err(|e| e.to_string())?;
+        let has_linked = linked.try_exists().map_err(|e| e.to_string())?;
+        if !needs_failure_batch(has_main, has_linked) {
+            return Ok(None);
+        }
+        let family = fs::canonicalize(checkout)
+            .map_err(|e| e.to_string())?
+            .join(FAMILY);
+        if family.starts_with(&main) || family.starts_with(&linked) {
+            return Err("CI failure destination overlaps its source".into());
+        }
+        diagnostic_copy::publish(
+            checkout,
+            "ci-fixture",
+            FAMILY.trim_end_matches('/'),
+            "owner-fixture-",
+            json!({"kind":"ci-receipt-owner","source":self.root}),
+            |directory, publication| {
+                if has_main {
+                    diagnostic_copy::copy_tree(&main, directory, Some(publication))?;
+                }
+                if has_linked {
+                    diagnostic_copy::copy_tree(
+                        &linked,
+                        &directory.join("linked-state"),
+                        Some(publication),
+                    )?;
+                }
+                Ok(())
+            },
+        )
+        .map(Some)
+    }
+
     pub(super) fn preserve_diagnostic(&mut self) {
         self._dir.disable_cleanup(true);
         eprintln!(
@@ -230,6 +295,68 @@ impl Owner {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
+fn receipt_owner_failure_retires_main_and_linked_evidence_together() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let owner = Owner::new();
+    let main = owner.root.join(".chrono-harness/state");
+    let linked = owner._dir.path().join("linked/.chrono-harness/state");
+    fs::create_dir_all(&main).unwrap();
+    fs::create_dir_all(&linked).unwrap();
+    fs::write(main.join("error.txt"), b"main failure").unwrap();
+    fs::write(linked.join("error.txt"), b"linked failure").unwrap();
+    let checkout = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(checkout.path()).unwrap();
+    git(&root, &["init", "-q"]);
+    fs::create_dir(root.join(".chrono-harness")).unwrap();
+    let policy = json!({
+        "schema":"chrono-output-retention/v2","producers":{"ci-fixture":[FAMILY]},
+        "keep_seconds":0,"diagnostic_keep_seconds":86400,"max_lifetime_seconds":86400,
+        "max_related_outputs":512,"max_summaries":128,"max_nodes_per_round":256,
+        "max_bytes_per_round":67108864,"max_millis_per_round":25
+    });
+    fs::write(
+        root.join(".chrono-harness/retention.json"),
+        policy.to_string(),
+    )
+    .unwrap();
+    let batch = owner.publish_failure(&root).unwrap().unwrap();
+    assert_eq!(batch.parent(), Some(root.join(FAMILY).as_path()));
+    assert_eq!(fs::read(batch.join("error.txt")).unwrap(), b"main failure");
+    assert_eq!(
+        fs::read(batch.join("linked-state/error.txt")).unwrap(),
+        b"linked failure"
+    );
+    let store = chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)
+        .unwrap()
+        .unwrap();
+    let records = store.producer_status("ci-fixture", None).unwrap();
+    let [record] = records["records"].as_array().unwrap().as_slice() else {
+        panic!("expected one failure batch")
+    };
+    let deadline = record["lifetime"]["deadline"].as_u64().unwrap();
+    assert_eq!(
+        deadline - record["lifetime"]["created_at"].as_u64().unwrap(),
+        86400
+    );
+    let id = [record["id"].as_str().unwrap().to_owned()];
+    store.maintain_originals_at(&id, deadline - 1).unwrap();
+    assert!(batch.is_dir());
+    for _ in 0..32 {
+        let round = store.maintain_originals_at(&id, deadline).unwrap();
+        assert_eq!(round["accounting_errors"], json!([]));
+        if !batch.exists() {
+            break;
+        }
+    }
+    assert!(!batch.exists());
+    assert!(main.join("error.txt").exists() && linked.join("error.txt").exists());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_receipt_export_keeps_original_bytes_and_independent_diagnostic_reference() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -279,6 +406,7 @@ fn explicit_receipt_export_keeps_original_bytes_and_independent_diagnostic_refer
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn linked_default_wrapper_reclaims_released_copies_on_explicit_maintenance() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -379,6 +507,7 @@ fn linked_default_wrapper_reclaims_released_copies_on_explicit_maintenance() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_store_resolution_rejects_undeclared_ambiguous_drifted_and_symlink_routes() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -499,6 +628,7 @@ fn producer_store_resolution_rejects_undeclared_ambiguous_drifted_and_symlink_ro
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_wrapper_refuses_unknown_destination_before_publication() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -545,6 +675,7 @@ fn producer_wrapper_refuses_unknown_destination_before_publication() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cargo_result(fail: bool) -> (tempfile::TempDir, std::process::Output, Vec<String>) {
     let dir = tempfile::tempdir().unwrap();
     let fixtures =
@@ -611,6 +742,7 @@ fn cargo_result(fail: bool) -> (tempfile::TempDir, std::process::Output, Vec<Str
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn real_receipt_producer_expected_failure_diagnostic_release_and_legacy_unknown() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -694,6 +826,7 @@ fn real_receipt_producer_expected_failure_diagnostic_release_and_legacy_unknown(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn receipt_interrupted_publication_and_unreleased_failure_remain_protected_on_reentry() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -751,6 +884,7 @@ fn receipt_interrupted_publication_and_unreleased_failure_remain_protected_on_re
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -812,6 +946,7 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn typed_registration_preserves_strict_maps_and_nested_fields_for_its_allocation() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -928,6 +1063,7 @@ fn typed_registration_preserves_strict_maps_and_nested_fields_for_its_allocation
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn established_namespace_does_not_reenter_birth_during_unrelated_store_exclusion() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -981,6 +1117,7 @@ fn established_namespace_does_not_reenter_birth_during_unrelated_store_exclusion
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn established_namespace_never_recreates_or_rebinds_its_records_directory() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1035,6 +1172,7 @@ fn established_namespace_never_recreates_or_rebinds_its_records_directory() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_commands() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1216,6 +1354,7 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_registry_birth_preserves_unknown_preexisting_lease_and_registry() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1302,6 +1441,7 @@ fn producer_registry_birth_preserves_unknown_preexisting_lease_and_registry() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_does_not_dispose_copied_outputs_without_exact_source_declarations() {
     if !chrono_git_boundary::isolated_git() {
         return;
