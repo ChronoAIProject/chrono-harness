@@ -1,20 +1,46 @@
 //! 原始构建报告的候选校验器；只读取 producer 声明和原字节，不启动其工具或选择可写环境。
+#[cfg(verus_keep_ghost)]
+use super::{identifiers::equal_text, same_name_list, text_list_equal};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_bindings::text_list_equal;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{verified_identifiers::equal_text, verus};
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn operation_record_matches(tool: &str, expected_tool: &str,
+    argv: &Vec<String>, expected_argv: &Vec<String>, cwd: &str, expected_cwd: &str,
+    pid: u32, exit_code: i32) -> (valid: bool)
+    ensures valid <==> (tool@ == expected_tool@ && same_name_list(argv@, expected_argv@)
+        && cwd@ == expected_cwd@ && pid > 0 && exit_code == 0),
+{
+    equal_text(tool, expected_tool) && text_list_equal(argv, expected_argv)
+        && equal_text(cwd, expected_cwd) && pid > 0 && exit_code == 0
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Declarations, NativePlatform},
     construction::Report,
-    execution::{Method, methods},
+    execution::{Method, methods, operation_argv},
     profile::Profile,
     source::SourceObservation,
     verified_bindings::{self as policy, BuildStatus, Executable},
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{json, sha256};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::json;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
 
 /// 所有者升级读取本宿主已安装工具的固定 producer；不执行其源码或 SDK。
+#[cfg(not(verus_keep_ghost))]
 pub fn validate_fixed_execution(
     root: &Path,
     environment: &crate::bindings::Environment,
@@ -47,6 +73,7 @@ pub fn validate_fixed_execution(
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Producer {
     pub profile: Profile,
     config: String,
@@ -55,6 +82,7 @@ pub struct Producer {
     methods: BTreeMap<String, Method>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn declared(path: &str, prefix: &[u8]) -> Result<(), String> {
     if !policy::host_path(path.as_bytes(), prefix) {
         return Err(format!("invalid original producer input path: {path}"));
@@ -62,6 +90,7 @@ fn declared(path: &str, prefix: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Producer {
     pub fn read(
         config: &str,
@@ -275,8 +304,7 @@ impl Producer {
                     configured.clone()
                 }
             };
-            let mut argv = vec![executable];
-            argv.extend(method.argv.iter().cloned());
+            let argv = operation_argv(executable, method, Path::new(&row.stdout.path))?;
             if !policy::operation_record_matches(
                 &row.tool,
                 &method.tool,
