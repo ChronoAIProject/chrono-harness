@@ -2852,6 +2852,9 @@ impl Inventory {
                 let expires = output.bound_expiry(output.expires);
                 changed |= output.expires != expires;
                 output.expires = expires;
+                let metadata_expires = output.bound_expiry(record.metadata_expires);
+                changed |= record.metadata_expires != metadata_expires;
+                record.metadata_expires = metadata_expires;
             }
             if changed {
                 record.policy_sha256 = digest.clone();
@@ -3025,6 +3028,10 @@ impl Inventory {
                 record.prune_path = Some(record.path.clone());
             }
             record.output = ledger.outputs.iter().find(|o| o.id == *id).cloned();
+            if let Some(output) = &record.output {
+                // An adopted file can predate its metadata declaration.
+                record.metadata_expires = output.bound_expiry(record.metadata_expires);
+            }
             record.retired_leases = ledger
                 .retired_leases
                 .iter()
