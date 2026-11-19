@@ -398,6 +398,62 @@ fn lengthening_policy_does_not_extend_an_empty_path_address() {
 }
 
 #[test]
+fn historical_object_metadata_uses_its_validated_directory_birth_after_body_retirement() {
+    if !isolated_capability_test(
+        "historical_object_metadata_uses_its_validated_directory_birth_after_body_retirement",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["keep_seconds"] = json!(0);
+    policy["metadata_keep_seconds"] = json!(86400);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let path = ".chrono-harness/state/fixtures/legacy-object-metadata";
+    fs::write(h.path().join(path), b"released").unwrap();
+    let owner = inventory(h.path());
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!({}))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete_sealed(json!({"exit_code":0})).unwrap();
+    let record = retention_state::object_path(h.path(), &id);
+    let directory = record.parent().unwrap();
+    let birth = fs::metadata(directory)
+        .unwrap()
+        .created()
+        .unwrap()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    for _ in 0..8 {
+        owner
+            .maintain_originals_at(std::slice::from_ref(&id), birth + 59)
+            .unwrap();
+        if !h.path().join(path).exists() {
+            break;
+        }
+    }
+    let mut retired: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert!(retired["output"].is_null());
+    assert!(!h.path().join(path).exists());
+    retired["metadata_expires"] = json!(birth + 86400);
+    fs::write(&record, serde_json::to_vec(&retired).unwrap()).unwrap();
+    owner
+        .maintain_originals_at(std::slice::from_ref(&id), birth + 59)
+        .unwrap();
+    let bounded: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(bounded["metadata_expires"], birth + 60);
+    policy["max_lifetime_seconds"] = json!(3600);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    inventory(h.path())
+        .maintain_originals_at(std::slice::from_ref(&id), birth + 60)
+        .unwrap();
+    assert!(!directory.exists());
+}
+
+#[test]
 fn empty_historical_role_keeps_the_window_of_its_directory_generation() {
     if !isolated_capability_test(
         "empty_historical_role_keeps_the_window_of_its_directory_generation",
