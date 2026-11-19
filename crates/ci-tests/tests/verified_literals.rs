@@ -31,9 +31,12 @@ verus! {
 
 #[cfg(verus_keep_ghost)]
 fn failed_fixture_copies_regular_files_and_descends_only_into_directories() {
-    assert(matches!(short_copy::short_copy_member(false, true), short_copy::CopyMember::File));
-    assert(matches!(short_copy::short_copy_member(true, false), short_copy::CopyMember::Directory));
-    assert(matches!(short_copy::short_copy_member(false, false), short_copy::CopyMember::Skip));
+    let file = short_copy::short_copy_member(false, true);
+    assert(matches!(file, short_copy::CopyMember::File));
+    let directory = short_copy::short_copy_member(true, false);
+    assert(matches!(directory, short_copy::CopyMember::Directory));
+    let other = short_copy::short_copy_member(false, false);
+    assert(matches!(other, short_copy::CopyMember::Skip));
 }
 
 #[cfg(verus_keep_ghost)]
