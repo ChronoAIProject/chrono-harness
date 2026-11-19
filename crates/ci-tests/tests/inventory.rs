@@ -117,7 +117,12 @@ fn adopted_inventory_keeps_each_completed_or_failed_listing_in_its_own_window() 
     let failed = error.split_once("report_directory=").unwrap().1;
     assert_ne!(directory, failed);
     let receipts = read(root, &format!("{failed}/receipts.json"));
-    assert_eq!(receipts[0]["exit_code"], 7);
+    let failed_listing = receipts.as_array().unwrap().last().unwrap();
+    assert_eq!(failed_listing["action"], "right");
+    assert_eq!(failed_listing["exit_code"], 7);
+    let stderr = fs::read(root.join(failed_listing["stderr"].as_str().unwrap())).unwrap();
+    assert_eq!(stderr, b"original failure\n");
+    assert_eq!(failed_listing["stderr_sha256"], sha256(&stderr));
     assert_eq!(fs::read(root.join(original)).unwrap(), bytes);
     assert!(!root.join(failed).join("inventory.json").exists());
     let owner = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
