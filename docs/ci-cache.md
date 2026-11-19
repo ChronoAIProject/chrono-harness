@@ -218,6 +218,8 @@ inputs 与 workflow 专属测试均在各自 target 从唯一生产 `main.rs` �
 
 发布缓存按登记选择项目输出，验证与包收集操作由现役 Rust 发布配方执行。分组测试中不同生产者使用不同条目。两平台的发布编译缓存键读取各自单元、平台前端和共享 Rust 设置。验证单元还读取所用项目操作，有发布资产依赖时读取相应暂存位置。修改一个验证单元的依赖时，其他单元可以继续命中自己的键。首次采用这份登记会生成新键，实际构建和验证仍由原发布作业执行。
 
+发布编译缓存的兼容输入包含该平台实际参与 Cargo 解析的本地包清单。构建发行工具时，根项目的 `Cargo.lock` 决定依赖版本；只修改路径依赖作为独立项目使用的锁文件，可以沿用该工具的键。验证操作还可能读取自己的测试输入，按操作的登记恢复。
+
 缓存种子运行 `host.bootstrap-cache`，通过已有 bootstrap 所有者和 `build.cache` 构建候选 planner，再安装二进制。其配方明确 `report_path: .chrono-harness/state/cache-bootstrap.json`；之后 core bootstrap 保留默认 `.chrono-harness/state/bootstrap.json`。
 
 宿主 bootstrap 接受可选的 `.chrono-harness/state/` 下字面报告文件，拒绝越界或符号链接位置，并传递报告发布错误。各配方拥有自己的报告位置；重复用同一位置会替换最新结果。已有产物上传保留两份独立记录。
