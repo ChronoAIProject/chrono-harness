@@ -12,18 +12,76 @@ use std::{
     process::{Command, Output},
 };
 
-struct CacheCase(Option<tempfile::TempDir>);
+#[path = "support/failure_case.rs"]
+mod failure_case;
 
-impl Drop for CacheCase {
-    fn drop(&mut self) {
-        if std::thread::panicking() {
-            let path = self.0.take().unwrap().keep();
-            eprintln!(
-                "original release cache regression evidence: {}",
-                path.display()
-            );
+#[test]
+fn release_case_retains_a_failed_batch_until_its_creation_deadline() {
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let host = tempfile::tempdir().unwrap();
+    let root = host.path().canonicalize().unwrap();
+    let policy = root.join(POLICY_PATH);
+    fs::create_dir_all(policy.parent().unwrap()).unwrap();
+    fs::write(
+        &policy,
+        serde_json::to_vec(&json!({
+            "schema":"chrono-output-retention/v2",
+            "producers":{"check-original":[".chrono-harness/state/release-test-failures/"]},
+            "max_lifetime_seconds":3600, "keep_seconds":0, "diagnostic_keep_seconds":86400,
+            "metadata_keep_seconds":0, "max_related_outputs":32, "max_summaries":16,
+            "max_nodes_per_round":256, "max_bytes_per_round":1048576, "max_millis_per_round":100
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let owner = Inventory::adopted(&root).unwrap().unwrap();
+    let mut failed_path = None;
+    let failure = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let case = failure_case::FailureCase::allocate(&root, "failed-").unwrap();
+        let path = case.path().to_owned();
+        fs::write(path.join("stderr"), b"original failure").unwrap();
+        failed_path = Some(path);
+        panic!("release verification failed");
+    }));
+    assert!(failure.is_err());
+    let failed_path = failed_path.unwrap();
+    let observed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    owner.maintain_at(observed + 1).unwrap();
+    assert_eq!(
+        fs::read(failed_path.join("stderr")).unwrap(),
+        b"original failure"
+    );
+    let case = failure_case::FailureCase::allocate(&root, "passed-").unwrap();
+    let success = case.path().to_owned();
+    fs::write(success.join("stdout"), b"passed").unwrap();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    for _ in 0..8 {
+        owner.maintain_at(now + 3601).unwrap();
+        if !failed_path.exists() {
+            break;
         }
     }
+    assert!(
+        success.is_dir(),
+        "running verification holds the batch lease"
+    );
+    drop(case);
+    for _ in 0..8 {
+        owner.maintain_at(now + 3601).unwrap();
+        if !success.exists() {
+            break;
+        }
+    }
+    assert!(!success.exists());
+    assert!(!failed_path.exists());
 }
 
 fn cache_process(
@@ -75,15 +133,8 @@ fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_i
         .join("../..")
         .canonicalize()
         .unwrap();
-    let state = repository.join(".chrono-harness/state/release-test-failures");
-    fs::create_dir_all(&state).unwrap();
-    let case = CacheCase(Some(
-        tempfile::Builder::new()
-            .prefix("rust-release-cache-")
-            .tempdir_in(state)
-            .unwrap(),
-    ));
-    let root = case.0.as_ref().unwrap().path();
+    let case = failure_case::FailureCase::new("rust-release-cache-");
+    let root = case.path();
     let read = |relative: &str| -> Value {
         serde_json::from_slice(&fs::read(repository.join(relative)).unwrap()).unwrap()
     };

@@ -6,23 +6,20 @@ pub mod recipe;
 use serde_json::{Value, json};
 use std::{cell::Cell, fs, os::unix::process::ExitStatusExt, path::Path, process::Command};
 
+#[path = "failure_case.rs"]
+mod failure_case;
+
 pub struct Fixture {
-    case: tempfile::TempDir,
     pub host: recipe::Fixture,
     pub output: tempfile::TempDir,
     pub report: Value,
     calls: Cell<usize>,
+    case: failure_case::FailureCase,
 }
 
 impl Fixture {
     pub fn new() -> Self {
-        let state = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.chrono-harness/state/release-test-failures");
-        fs::create_dir_all(&state).unwrap();
-        let case = tempfile::Builder::new()
-            .prefix("rust-release-frontend-")
-            .tempdir_in(&state)
-            .unwrap();
+        let case = failure_case::FailureCase::new("rust-release-frontend-");
         let mut host = recipe::Fixture::new();
         host.temp = tempfile::Builder::new()
             .prefix("source-")
@@ -298,7 +295,6 @@ impl Drop for Fixture {
         if std::thread::panicking() {
             self.host.temp.disable_cleanup(true);
             self.output.disable_cleanup(true);
-            self.case.disable_cleanup(true);
             eprintln!(
                 "original release frontend fixture retained: {}",
                 self.case.path().display()

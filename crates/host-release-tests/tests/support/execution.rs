@@ -15,6 +15,9 @@ fn compiler_fixture_directory(distinct: bool) -> (path: Option<&'static str>)
 }
 }
 #[cfg(not(verus_keep_ghost))]
+#[path = "failure_case.rs"]
+mod failure_case;
+#[cfg(not(verus_keep_ghost))]
 #[path = "context.rs"]
 mod context;
 #[cfg(not(verus_keep_ghost))]
@@ -35,12 +38,12 @@ use std::{
 #[cfg(not(verus_keep_ghost))]
 pub struct Fixture {
     pub host: recipe::Fixture,
-    _case: tempfile::TempDir,
     _tools: tempfile::TempDir,
     pub outputs: tempfile::TempDir,
     _nested: tempfile::TempDir,
     pub git: PathBuf,
     pub outcomes: serde_json::Map<String, Value>,
+    _case: failure_case::FailureCase,
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -53,13 +56,7 @@ fn capture(command: &mut Command) -> Output {
 impl Fixture {
     pub fn new(behavior: &str, tracked: bool) -> Self {
         let mut host = recipe::Fixture::new();
-        let state = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.chrono-harness/state/release-test-failures");
-        fs::create_dir_all(&state).unwrap();
-        let case = tempfile::Builder::new()
-            .prefix("rust-release-")
-            .tempdir_in(state)
-            .unwrap();
+        let case = failure_case::FailureCase::new("rust-release-");
         host.temp = tempfile::Builder::new()
             .prefix("source-")
             .tempdir_in(case.path())
@@ -248,7 +245,6 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         if std::thread::panicking() {
             self.host.temp.disable_cleanup(true);
-            self._case.disable_cleanup(true);
             self._tools.disable_cleanup(true);
             self.outputs.disable_cleanup(true);
             self._nested.disable_cleanup(true);
