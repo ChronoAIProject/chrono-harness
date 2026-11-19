@@ -379,6 +379,45 @@ fn published_owner_qualifies_fixed_producer_after_candidate_changes_and_retains_
 }
 
 #[test]
+fn overwritten_stage_slot_resolves_the_installed_report_streams_to_the_exact_original() {
+    let staged = Staged::new();
+    let root = &staged.fixture.root;
+    let slot = ".chrono-harness/state/bootstrap-owner-stage.json";
+    let installation = ".chrono-harness/state/bootstrap.json";
+    let mut adoption = staged.publish_external_inputs();
+    let receipt = adoption.as_object_mut().unwrap().remove("receipt").unwrap();
+    adoption["stage_result"] = json!(slot);
+    let receipt_path = receipt["path"].as_str().unwrap();
+    write_json(&root.join(receipt_path), &adoption);
+    adoption["receipt"] = json!({"path":receipt_path,"sha256":chrono_harness::sha256(&fs::read(root.join(receipt_path)).unwrap())});
+    write_json(&root.join(owner::CURRENT), &adoption);
+    let mut installed = staged.report.clone();
+    for operation in installed["operations"].as_array_mut().unwrap() {
+        operation["reused_from"] = json!({"path":slot,"sha256":staged.digest});
+    }
+    write_json(&root.join(installation), &installed);
+    fs::write(root.join(slot), b"later stage report").unwrap();
+    let native = native_platform().unwrap();
+    let qualify = || {
+        owner::qualified_selected_original(
+            root,
+            &staged.fixture.environment,
+            &native,
+            installation,
+            ".chrono-harness/bin/cargo",
+        )
+    };
+    let original = qualify().unwrap();
+    assert_eq!(original.path, staged.reference);
+    assert_eq!(original.sha256, staged.digest);
+    assert_eq!(fs::read(root.join(slot)).unwrap(), b"later stage report");
+    installed["operations"][0]["stderr"]["path"] =
+        json!(".chrono-harness/state/bootstrap-other/0.stderr");
+    write_json(&root.join(installation), &installed);
+    assert!(qualify().is_err());
+}
+
+#[test]
 fn published_owner_rejects_corrupted_missing_or_misbound_originals() {
     let staged = Staged::new();
     let adoption = staged.publish_external_inputs();
