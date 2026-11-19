@@ -28,6 +28,17 @@ mod retention_frontier;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn archive_handoff_requires_matching_publication_and_completed_obligations() {
+    expect_true(policy::archived_slot_ready(true, true, 2, 2, false, false, false));
+    expect_true(!policy::archived_slot_ready(false, true, 2, 2, false, false, false));
+    expect_true(!policy::archived_slot_ready(true, false, 2, 2, false, false, false));
+    expect_true(!policy::archived_slot_ready(true, true, 2, 0, false, false, false));
+    expect_true(!policy::archived_slot_ready(true, true, 2, 2, true, false, false));
+    expect_true(!policy::archived_slot_ready(true, true, 2, 2, false, true, false));
+    expect_true(!policy::archived_slot_ready(true, true, 2, 2, false, false, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn creation_window_and_expiry_clamp_keep_exact_time_boundaries() {
     expect_true(!accounting::within_creation_window(10, 20, 9));
     expect_true(accounting::within_creation_window(10, 20, 10));

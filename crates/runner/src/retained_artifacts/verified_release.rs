@@ -14,6 +14,13 @@ pub mod accounting;
 #[cfg(verus_keep_ghost)]
 #[path = "retention_command.rs"]
 pub(crate) mod commands;
+#[cfg(verus_keep_ghost)]
+#[path = "../scoped_report.rs"]
+pub mod scoped_report;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::scoped_report::archived_slot_ready;
+#[cfg(verus_keep_ghost)]
+pub use scoped_report::archived_slot_ready;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]

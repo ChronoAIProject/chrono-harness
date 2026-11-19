@@ -57,6 +57,7 @@ enum Request {
         survivor_path: String,
         sha256: String,
         length: u64,
+        archived_slot: Option<super::retention::ArchivedSlot>,
         current_consumers_released: bool,
         reason: String,
     },
@@ -152,6 +153,7 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
             survivor_path,
             sha256,
             length,
+            archived_slot,
             current_consumers_released,
             reason,
         } => inventory.release_preserved(
@@ -161,6 +163,7 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
             &survivor_path,
             &sha256,
             length,
+            archived_slot.as_ref(),
             current_consumers_released,
             &reason,
         ),

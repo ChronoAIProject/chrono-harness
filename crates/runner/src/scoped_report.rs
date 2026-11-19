@@ -1,16 +1,42 @@
 //! Scoped report storage keeps original process streams once, independently of read projections.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// The publisher still owns the fixed pointer while any publication obligation is outstanding.
+pub fn archived_slot_ready(valid_publication: bool, same_slot: bool, published_exit: u8,
+    recorded_exit: u64, snapshot_failed: bool, pending_recovery: bool, pending_delivery: bool,
+) -> (ready: bool)
+    ensures ready == (valid_publication && same_slot && published_exit as u64 == recorded_exit
+        && !snapshot_failed && !pending_recovery && !pending_delivery),
+{
+    valid_publication && same_slot && published_exit as u64 == recorded_exit
+        && !snapshot_failed && !pending_recovery && !pending_delivery
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{ProcessResult, prepared, sha256};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::path::Path;
 
+#[cfg(not(verus_keep_ghost))]
 pub const SCHEMA: &str = "chrono-check-report/v2";
+#[cfg(not(verus_keep_ghost))]
 const INLINE_STREAMS: &[&str] = &["stdout", "stderr", "stdout_bytes", "stderr_bytes"];
 
 /// The final original owns the exact remaining publication obligation. It is
 /// not another operation ledger and never authorizes judge dispatch.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct Publication {
     schema: String,
     slot: String,
@@ -22,6 +48,7 @@ pub(crate) struct Publication {
     exit_code: u8,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn slot_digest(root: &Path, slot: &str) -> Result<Option<String>, String> {
     let path = crate::no_symlink_parents(root, slot)?;
     match std::fs::symlink_metadata(&path) {
@@ -37,6 +64,7 @@ fn slot_digest(root: &Path, slot: &str) -> Result<Option<String>, String> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn publication(
     root: &Path,
     slot: &str,
@@ -66,12 +94,37 @@ pub(crate) fn publication(
     (publication, guard)
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Publication {
     pub(crate) fn failure(&self) -> Option<&str> {
         self.snapshot_failure.as_deref()
     }
 }
 
+/// Only a settled local publication can hand its fixed slot to a mirror.
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn archived_inputs(
+    value: &Value,
+    slot: &str,
+    exit_code: u64,
+) -> Result<Vec<String>, String> {
+    let publication: Publication =
+        serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+    if !archived_slot_ready(
+        crate::verified_release::report_publication(&publication.schema, publication.exit_code),
+        publication.slot == slot,
+        publication.exit_code,
+        exit_code,
+        publication.snapshot_failure.is_some(),
+        publication.recovery_root.is_some(),
+        publication.native_delivery.is_some(),
+    ) {
+        return Err("archived check has a different publication or outstanding obligations".into());
+    }
+    Ok(publication.originals)
+}
+
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn recover(root: &Path, original: &prepared::Original) -> Result<Value, String> {
     use crate::retained_artifacts::retention;
     use crate::verified_release as policy;
@@ -225,6 +278,7 @@ pub(crate) fn recover(root: &Path, original: &prepared::Original) -> Result<Valu
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn publication_error(
     process: &ProcessResult,
     stream: &str,
@@ -243,6 +297,7 @@ fn publication_error(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn retain_process(
     root: &Path,
     directory: &str,
@@ -267,6 +322,7 @@ pub fn retain_process(
 /// after the process has exited, since an enclosing owner can terminate the
 /// runner between those two points.  The launch record remains an independently
 /// addressed original and makes a partial receipt traceable.
+#[cfg(not(verus_keep_ghost))]
 pub fn retain_process_evidence(
     root: &Path,
     process: &ProcessResult,
@@ -314,6 +370,7 @@ pub fn retain_process_evidence(
 
 /// The caller owns path admission, transport and the cumulative read budget.
 /// Reconstructed text/byte views are transient; they are not new originals.
+#[cfg(not(verus_keep_ghost))]
 pub fn restore_process(
     value: &Value,
     mut read: impl FnMut(&prepared::Original) -> Result<Vec<u8>, String>,
