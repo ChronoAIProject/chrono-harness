@@ -1,4 +1,18 @@
 //! 源码构建报告的实际生产者；所有者保护、升级和共享交接由外层现役入口编排。
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn published_slot<'a>(declared: Option<&'a str>, passed: bool) -> (slot: Option<&'a str>)
+    ensures slot == (if passed { declared } else { None }),
+{
+    if passed { declared } else { None }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{Declarations, Environment},
     environment::{Failure, Prepared, Selected},
@@ -7,9 +21,13 @@ use crate::{
     source::{self, SourceIdentity, SourceObservation},
     verified_bindings::{self as policy, BuildStatus},
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{file_identity, resolve_program, retained_artifacts::retention};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     ffi::OsStr,
@@ -20,10 +38,12 @@ use std::{
 };
 
 #[derive(Debug)]
+#[cfg(not(verus_keep_ghost))]
 pub struct BuildFailure {
     pub message: String,
     pub exit_code: Option<i32>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl From<String> for BuildFailure {
     fn from(message: String) -> Self {
         Self {
@@ -32,11 +52,13 @@ impl From<String> for BuildFailure {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl From<&str> for BuildFailure {
     fn from(message: &str) -> Self {
         message.to_owned().into()
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl From<Failure> for BuildFailure {
     fn from(failure: Failure) -> Self {
         let exit_code = match &failure {
@@ -52,6 +74,7 @@ impl From<Failure> for BuildFailure {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Installed {
     pub path: String,
     pub sha256: String,
@@ -59,6 +82,7 @@ pub struct Installed {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Report {
     pub schema: String,
     pub config: String,
@@ -83,6 +107,7 @@ pub struct Report {
     pub error: Option<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Construction<'a> {
     pub root: &'a Path,
     pub profile: Profile,
@@ -99,12 +124,14 @@ pub struct Construction<'a> {
     _inputs: retention::ReadScope,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Published {
     pub original: PathBuf,
     pub report: Report,
     pub outcome: Result<(), BuildFailure>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn environment_text(environment: &Environment, key: &str) -> Result<Option<String>, String> {
     environment
         .get(OsStr::new(key))
@@ -117,6 +144,7 @@ fn environment_text(environment: &Environment, key: &str) -> Result<Option<Strin
         .transpose()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn configured(
     root: &Path,
     name: &str,
@@ -133,6 +161,7 @@ fn configured(
     resolve_program(root, program, search)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn execute(
     root: &Path,
     directory: &Path,
@@ -172,6 +201,7 @@ fn execute(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl<'a> Construction<'a> {
     pub fn begin(
         root: &'a Path,
@@ -559,11 +589,7 @@ impl<'a> Construction<'a> {
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("non UTF-8 bootstrap directory")?;
-            let slot = self
-                .profile
-                .report_path
-                .as_deref()
-                .filter(|_| outcome.is_ok());
+            let slot = published_slot(self.profile.report_path.as_deref(), outcome.is_ok());
             let adopted = self.publication.is_some();
             let dependencies: Vec<String> = self
                 .report

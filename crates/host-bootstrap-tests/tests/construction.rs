@@ -1,13 +1,43 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::policy::construction::published_slot;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::construction::published_slot;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_a_successful_run_with_a_declared_slot_publishes_a_current_report() {
+    let current = published_slot(Some("core"), true);
+    let failed = published_slot(Some("core"), false);
+    let run_only = published_slot(None, true);
+    let failed_run_only = published_slot(None, false);
+    assert(current == Some("core"));
+    assert(failed.is_none() && run_only.is_none() && failed_run_only.is_none());
+}
+}
+
 #[path = "support/construction.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod support;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::retained_artifacts::retention::{self, Inventory};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, process::Command};
+#[cfg(not(verus_keep_ghost))]
 use support::Fixture;
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod isolated_capability;
+#[cfg(not(verus_keep_ghost))]
 use isolated_capability::isolated_capability_test;
 
+#[cfg(not(verus_keep_ghost))]
 fn successful_build(fixture: &Fixture) -> chrono_host_bootstrap::construction::Published {
     if fixture.root.join("prepared").exists() {
         fs::remove_file(fixture.root.join("prepared")).unwrap();
@@ -24,6 +54,7 @@ fn successful_build(fixture: &Fixture) -> chrono_host_bootstrap::construction::P
     published
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn maintain(fixture: &Fixture) {
     let inventory = Inventory::adopted(&fixture.root).unwrap().unwrap();
     for _ in 0..4 {
@@ -33,6 +64,7 @@ fn maintain(fixture: &Fixture) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn adopted_bootstrap_rotates_whole_directories_after_current_report_and_readers_release() {
     if !isolated_capability_test(
         "adopted_bootstrap_rotates_whole_directories_after_current_report_and_readers_release",
@@ -77,6 +109,7 @@ fn adopted_bootstrap_rotates_whole_directories_after_current_report_and_readers_
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn run_only_report_expires_after_its_reader_releases_without_another_build() {
     if !isolated_capability_test(
         "run_only_report_expires_after_its_reader_releases_without_another_build",
@@ -106,6 +139,7 @@ fn run_only_report_expires_after_its_reader_releases_without_another_build() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn adopted_bootstrap_keeps_reused_streams_until_their_last_report_retires() {
     if !isolated_capability_test(
         "adopted_bootstrap_keeps_reused_streams_until_their_last_report_retires",
@@ -137,6 +171,7 @@ fn adopted_bootstrap_keeps_reused_streams_until_their_last_report_retires() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn adopted_bootstrap_retains_failed_and_interrupted_originals_for_diagnosis() {
     if !isolated_capability_test(
         "adopted_bootstrap_retains_failed_and_interrupted_originals_for_diagnosis",
@@ -178,6 +213,7 @@ fn adopted_bootstrap_retains_failed_and_interrupted_originals_for_diagnosis() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn upgrade_attempt_without_json_retains_raw_failure_then_expires() {
     if !isolated_capability_test("upgrade_attempt_without_json_retains_raw_failure_then_expires") {
         return;
@@ -262,6 +298,7 @@ fn upgrade_attempt_without_json_retains_raw_failure_then_expires() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn upgrade_phase_hands_success_and_failure_originals_to_the_rolling_directory() {
     if !isolated_capability_test(
         "upgrade_phase_hands_success_and_failure_originals_to_the_rolling_directory",
@@ -351,6 +388,7 @@ fn upgrade_phase_hands_success_and_failure_originals_to_the_rolling_directory() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn construction_preserves_order_selected_tools_installation_and_original_report() {
     let fixture = Fixture::new();
     let mut build = fixture.committed();
@@ -416,6 +454,7 @@ fn construction_preserves_order_selected_tools_installation_and_original_report(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_prerequisite_keeps_original_exit_and_streams_without_selecting_sdk_or_creating_build_homes()
  {
     let mut fixture = Fixture::new();
@@ -451,6 +490,7 @@ fn failed_prerequisite_keeps_original_exit_and_streams_without_selecting_sdk_or_
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_build_keeps_old_selected_report_and_original_non_utf8_process_before_installation() {
     let mut fixture = Fixture::new();
     fixture.failed_operation("build", 23);
@@ -487,6 +527,7 @@ fn failed_build_keeps_old_selected_report_and_original_non_utf8_process_before_i
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn incomplete_construction_cannot_publish_success_even_if_the_caller_returns_ok() {
     let fixture = Fixture::new();
     let published = fixture.begin().finish(Ok(())).unwrap();
@@ -518,6 +559,7 @@ fn incomplete_construction_cannot_publish_success_even_if_the_caller_returns_ok(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn installer_failure_and_secondary_report_io_failure_preserve_the_actual_original_exit() {
     let mut fixture = Fixture::new();
     fs::write(fixture.tools.join("fail-install"), b"").unwrap();
