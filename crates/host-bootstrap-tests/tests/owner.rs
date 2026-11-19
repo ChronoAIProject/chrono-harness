@@ -16,6 +16,8 @@ fn stage_recovery_requires_the_same_source_and_installed_bytes() {
     proof {
         reveal_strlit("stage"); reveal_strlit("earlier");
         reveal_strlit("first"); reveal_strlit("later");
+        assert("stage"@.len() != "earlier"@.len());
+        assert("first"@[0] != "later"@[0]);
     }
     let exact = stage_owner::stage_reuse_matches("stage", "first", "stage", "first");
     let other_slot = stage_owner::stage_reuse_matches("earlier", "first", "stage", "first");
