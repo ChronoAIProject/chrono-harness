@@ -10,7 +10,17 @@ use vstd::prelude::*;
 #[path = "../../identifiers/src/lib.rs"]
 mod identifiers;
 
+#[cfg(verus_keep_ghost)]
+#[path = "../../judge-routes-tests/tests/support/tool.rs"]
+mod compiler_fixture;
+
 verus! {
+
+#[cfg(verus_keep_ghost)]
+fn a_mismatch_between_the_two_compiler_destinations_is_rejected(count: usize, has_flag: bool) {
+    let accepted = compiler_fixture::accepts_output(count, has_flag, false);
+    assert(!accepted);
+}
 
 #[cfg(verus_keep_ghost)]
 fn another_operations_compiler_output_cannot_be_claimed(flat: bool, canonical: bool) {
