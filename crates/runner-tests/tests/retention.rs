@@ -445,9 +445,14 @@ fn historical_object_metadata_uses_its_validated_directory_birth_after_body_reti
         .unwrap();
     let bounded: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
     assert_eq!(bounded["metadata_expires"], birth + 60);
+    let previous = fs::read(&policy_path).unwrap();
     policy["max_lifetime_seconds"] = json!(3600);
     fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
-    inventory(h.path())
+    let owner = inventory(h.path());
+    owner
+        .migrate_policy(&previous, Some(std::slice::from_ref(&id)))
+        .unwrap();
+    owner
         .maintain_originals_at(std::slice::from_ref(&id), birth + 60)
         .unwrap();
     assert!(!directory.exists());
