@@ -288,9 +288,10 @@ fn output_metadata_retires_within_the_original_creation_window() {
     );
 
     let active = owner.consume(&id).unwrap();
-    owner
+    let protected = owner
         .maintain_originals_at(std::slice::from_ref(&id), deadline)
         .unwrap();
+    assert!(protected.get("retired_object_metadata").is_none());
     assert!(physical.is_file());
     assert!(metadata.is_file());
     drop(active);
@@ -298,9 +299,14 @@ fn output_metadata_retires_within_the_original_creation_window() {
         if !metadata.exists() {
             break;
         }
-        owner
+        let round = owner
             .maintain_originals_at(std::slice::from_ref(&id), deadline)
             .unwrap();
+        if metadata.parent().unwrap().exists() {
+            assert!(round.get("retired_object_metadata").is_none(), "{round}");
+        } else {
+            assert_eq!(round["retired_object_metadata"], json!([id]), "{round}");
+        }
     }
     assert!(!physical.exists());
     assert!(
