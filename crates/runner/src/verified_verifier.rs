@@ -619,3 +619,21 @@ pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRea
 }
 
 }
+
+/// Bind the declared proof outputs to the directory already owned by the caller.
+/// Both the projects planner and direct managed use record this resolved argv.
+#[cfg(not(verus_keep_ghost))]
+pub fn bind_compiler_directory(args: &mut Vec<String>, directory: &str) {
+    let Some(name) = args
+        .get(10)
+        .and_then(|output| output.strip_prefix("{operation_state}/"))
+    else {
+        return;
+    };
+    if !name.ends_with(".rlib") || name.contains('/') || !canonical_verifier_arguments(args) {
+        return;
+    }
+    let output = format!("{directory}/{name}");
+    args[7] = format!("--emit=link={output},dep-info={output}.d");
+    args[10] = output;
+}

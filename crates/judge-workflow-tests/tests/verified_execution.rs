@@ -1,6 +1,10 @@
 //! Independent boundary expectations for workflow execution admission.
 #![allow(unexpected_cfgs)]
 
+#[cfg(verus_keep_ghost)]
+#[path = "full_short.rs"]
+mod freshness;
+
 #[path = "../../judge-workflow/src/verified_execution.rs"]
 mod policy;
 
@@ -14,6 +18,13 @@ use vstd::string::StringSliceAdditionalSpecFns;
 use vstd::vpanic as panic;
 
 verus! {
+
+#[cfg(verus_keep_ghost)]
+fn freshness_failure_copy_follows_original_exit(exit_code: i32) {
+    let retain = freshness::initial_check_needs_failure_copy(exit_code);
+    if exit_code == 0 { assert(!retain); }
+    if exit_code < 0 || exit_code > 0 { assert(retain); }
+}
 
 fn expect(actual: bool)
     requires actual,
