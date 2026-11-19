@@ -65,6 +65,7 @@ mod runtime {
                 "manifest_size",
                 "lock_sha256",
                 "lock_size",
+                "installed_installer",
             ]
             .contains(&name)
             {
@@ -309,15 +310,30 @@ mod runtime {
             .prefix("chrono-install.")
             .tempdir_in(env::var_os("TMPDIR").ok_or("private launcher temporary root required")?)
             .map_err(|e| e.to_string())?;
-        let program = temporary.path().join("chrono-distribution");
-        if let Some(code) = fetch(
-            &profile,
-            &format!("chrono-distribution-{platform}"),
-            &program,
-        )? {
-            return Ok(code);
-        }
-        verify(&program, digest, *size)?;
+        let copy = temporary.path().join("installed-copy");
+        let restored = !adopt
+            && profile.get("installed_installer").is_some_and(|path| {
+                let Ok(path) = chrono_harness::no_symlink_parents(&root, path) else {
+                    return false;
+                };
+                path.is_file()
+                    && fs::copy(path, &copy).is_ok()
+                    && verify(&copy, digest, *size).is_ok()
+            });
+        let program = if restored {
+            copy
+        } else {
+            let downloaded = temporary.path().join("chrono-distribution");
+            if let Some(code) = fetch(
+                &profile,
+                &format!("chrono-distribution-{platform}"),
+                &downloaded,
+            )? {
+                return Ok(code);
+            }
+            verify(&downloaded, digest, *size)?;
+            downloaded
+        };
         fs::set_permissions(&program, fs::Permissions::from_mode(0o700))
             .map_err(|e| e.to_string())?;
         if adopt {

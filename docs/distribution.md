@@ -152,7 +152,7 @@ sh HOST/.chrono-harness/install.sh --host-root HOST
 
 首次采用者也须核验执行的安装器身份。
 
-本地和 CI 共用同一 `sh .chrono-harness/install.sh --host-root .`。生成入口验证安装声明和已锁定 installer，执行该 Rust installer；Rust 验证锁定清单、版本、平台和所选资产。缺失平台/成员、摘要/长度不符、目的冲突、未知 schema 均非零。安装不读取宿主源码、语言 manifest、目录布局或测试配置。语言 SDK 继续由宿主自己的显式登记负责。
+本地和 CI 共用同一 `sh .chrono-harness/install.sh --host-root .`。生成入口验证安装声明。宿主选择安装 `chrono-distribution` 时，入口将已安装的普通文件复制到私有临时目录，按当前平台锁定的长度和 SHA-256 核验，通过后执行该副本。缺失、链接或校验失败时从固定发行源取得并核验安装器。Rust 验证锁定清单、版本、平台和所选资产。缺失平台/成员、摘要/长度不符、目的冲突、未知 schema 均非零。安装不读取宿主源码、语言 manifest、目录布局或测试配置。语言 SDK 继续由宿主自己的显式登记负责。
 
 离线分发在 assemble/adopt 时可以 `--source-dir ABSOLUTE_PACKAGE` 替代 HTTPS 参数，使用同一个校验/安装路径；本地绝对路径不适合提交给公共消费者。
 

@@ -494,10 +494,16 @@ fn launcher(path: &Path, l: &Lock, bound_lock: Option<&Asset>) -> Result<()> {
         declarations.push_str(&format!("    {name}={}\n", shell_quote(value)));
     }
     if let Some(a) = bound_lock {
+        let installed = l
+            .install
+            .get("chrono-distribution")
+            .map(String::as_str)
+            .unwrap_or("");
         declarations.push_str(&format!(
-            "    lock_sha256={}\n    lock_size={}\n",
+            "    lock_sha256={}\n    lock_size={}\n    installed_installer={}\n",
             shell_quote(&a.sha256),
-            a.size
+            a.size,
+            shell_quote(installed),
         ));
     }
     let mut installers = String::new();

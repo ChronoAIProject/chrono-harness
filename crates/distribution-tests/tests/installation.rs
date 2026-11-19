@@ -299,6 +299,46 @@ fn adoption_is_explicit_and_preserves_customizations() {
 }
 
 #[test]
+fn locked_launcher_recovers_invalid_installer_and_reuses_verified_installed_bytes() {
+    let f = Fixture::new();
+    adopt(
+        f.host.path(),
+        &f.manifest,
+        Source::Directory {
+            path: f.release.path().into(),
+        },
+        &["chrono-distribution".into(), "alpha".into()],
+        false,
+    )
+    .unwrap();
+    let source = f
+        .release
+        .path()
+        .join(format!("chrono-distribution-{}", platform()));
+    let original = fs::read(&source).unwrap();
+    let cache = f.binary("chrono-distribution");
+    fs::create_dir_all(cache.parent().unwrap()).unwrap();
+    let tools = shell_tools(f.host.path());
+    let launch = || {
+        let mut command = bootstrap_command();
+        shell_environment(&mut command, &tools, f.host.path());
+        command
+            .arg(f.host.path().join(".chrono-harness/install.sh"))
+            .arg("--host-root")
+            .arg(f.host.path())
+            .output()
+            .unwrap()
+    };
+    fs::write(&cache, include_bytes!("fixtures/installer-exit-23.sh")).unwrap();
+    assert!(launch().status.success());
+    fs::write(&cache, &original).unwrap();
+    fs::remove_file(&source).unwrap();
+    assert!(launch().status.success());
+    fs::write(&cache, include_bytes!("fixtures/installer-exit-23.sh")).unwrap();
+    assert!(!launch().status.success());
+}
+
+#[test]
 fn bootstrap_rejects_corrupt_installer_and_propagates_real_exit() {
     let f = Fixture::new();
     let path = f
