@@ -22,6 +22,8 @@ chrono-ci verify --host-root HOST --config .chrono-harness/ci/release.json
 
 本仓将 `push_branches` 置空，采用 `delivery` 订阅 dev 的 `chrono / collection` 完成事件；自动测试版读取该次成功 push 的汇总工件。首次清单或非空的 `detection.required_units` 启动发布。普通变更选中零个单元时跳过构建、打包、公开和安装。缺失或不匹配的来源、运行身份及选择记录使选择作业失败。手动通道按调用方选定的固定源码执行。临时 integration 通过 `workflow_dispatch` 的 `source` 和默认 `channel=build` 验证构建，不公开版本。常规变更仍由登记的 PR CI 验收。
 
+排查自动测试版时，先打开 `select_preview` 日志，核对 `LANDING_SHA`、`LANDING_RUN` 和 `LANDING_ATTEMPT`，再查看该次落地汇总的 `detection.required_units`。工作流页面显示的是运行编排所用的提交。零单元时只有选择作业运行。两平台打包作业逐项读取配方中直接生产者的状态，遇到实际构建失败时仍收集诊断。曾经使用 `needs.*.result` 时，文档变更跳过了两平台前端，打包作业仍试图读取缺失的前端目录。[原始失败](https://github.com/ChronoAIProject/chrono-harness/actions/runs/44557016060)
+
 新登记应明确设置 `include_hidden_files: true`。v1／v2 都支持，本仓已采用；它让上传保留登记产物根中的隐藏路径，范围仍取 `artifact_directory`。省略或 false 保留原投影及序列化源身份。
 
 ## 本仓采用
