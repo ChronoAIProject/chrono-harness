@@ -1203,7 +1203,7 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
 
 #[test]
 fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
-    if !chrono_git_boundary::isolated_git() {
+    if !chrono_git_boundary::isolated_git_observation() {
         return;
     }
     let freshness_seconds = 30.0;
@@ -1225,27 +1225,17 @@ fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
             .to_string()
     );
     fs::write(&timing_path, serde_json::to_vec(&timing).unwrap()).unwrap();
-    // Successful libtest output is captured and its temporary lane is removed.
-    // Keep the measured phases and original producer clocks for either result.
-    let observations = source()
-        .join(".chrono-harness/state/workflow-test-observations")
-        .join(sha256(lane.as_os_str().as_encoded_bytes()));
-    fs::create_dir_all(&observations).unwrap();
-    fs::copy(&timing_path, observations.join("freshness-setup.json")).unwrap();
-    let origin_path = lane.join(".chrono-harness/state/origin.json");
-    let origin: Value = chrono_harness::json(&fs::read(&origin_path).unwrap()).unwrap();
-    fs::copy(origin_path, observations.join("origin.json")).unwrap();
-    fs::copy(
-        lane.join(origin["birth_report"].as_str().unwrap()),
-        observations.join("birth.json"),
-    )
-    .unwrap();
-    fs::copy(
-        lane.join(".chrono-harness/state/local/context.json"),
-        observations.join("context.json"),
-    )
-    .unwrap();
-    println!("FRESHNESS_PHASES {timing}");
+    // Keep exact JSON file text so a consumer of the joined process original
+    // can recover the producer's clocks and birth record byte for byte.
+    let origin_text = fs::read_to_string(lane.join(".chrono-harness/state/origin.json")).unwrap();
+    let origin: Value = chrono_harness::json(origin_text.as_bytes()).unwrap();
+    chrono_git_boundary::emit_observation(json!({
+        "kind":"workflow-freshness","first_check_exit":e,
+        "freshness-setup.json":fs::read_to_string(&timing_path).unwrap(),
+        "birth.json":fs::read_to_string(lane.join(origin["birth_report"].as_str().unwrap())).unwrap(),
+        "context.json":fs::read_to_string(lane.join(".chrono-harness/state/local/context.json")).unwrap(),
+        "origin.json":origin_text
+    }));
     if e != 0 {
         let retained = source()
             .join(".chrono-harness/state/workflow-test-failures")
