@@ -3066,6 +3066,42 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
     }
 }
 #[test]
+fn one_node_round_retires_empty_role_without_touching_its_replacement() {
+    if !isolated_capability_test(
+        "one_node_round_retires_empty_role_without_touching_its_replacement",
+    ) {
+        return;
+    }
+    let h = host(1, 16);
+    let owner = inventory(h.path());
+    let name = "consumer:one-node-retirement";
+    owner.reference(name, &[]).unwrap();
+    let record = retention_state::role_path(h.path(), name);
+    let original = record.parent().unwrap();
+    let roles = original.parent().unwrap();
+    let mut role: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    role["metadata_expires"] = json!(1);
+    fs::write(&record, serde_json::to_vec(&role).unwrap()).unwrap();
+
+    let first = owner.maintain_at(1).unwrap();
+    assert_eq!(first["nodes"], 1, "{first}");
+    assert!(!original.exists(), "expired role must move under its original exclusion");
+    let retiring = fs::read_dir(roles).unwrap().next().unwrap().unwrap().path();
+    assert!(retiring.join("record.json").is_file());
+
+    owner.reference(name, &[]).unwrap();
+    let replacement = fs::read(&record).unwrap();
+    for directory_present in [true, false] {
+        let round = inventory(h.path()).maintain_explicit().unwrap();
+        assert!(round["round_maxima"]["nodes"].as_u64().unwrap() <= 1);
+        assert!(!retiring.join("record.json").exists());
+        assert_eq!(retiring.exists(), directory_present);
+        assert_eq!(fs::read(&record).unwrap(), replacement);
+    }
+    assert!(!retiring.exists());
+}
+
+#[test]
 fn interrupted_empty_role_birth_recovers_original_deadline_then_retires() {
     if !isolated_capability_test(
         "interrupted_empty_role_birth_recovers_original_deadline_then_retires",
