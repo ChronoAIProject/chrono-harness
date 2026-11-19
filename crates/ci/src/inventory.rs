@@ -257,7 +257,7 @@ impl Inventory<'_> {
         "config_sha256":sha256(config_bytes),"projects_sha256":sha256(projects_bytes),
         "complete":complete,"groups":observed,"receipts":self.receipts});
         self.write(
-            "self.json",
+            "inventory.json",
             &serde_json::to_vec_pretty(&report).map_err(|e| e.to_string())?,
         )?;
         Ok(json!({"complete":complete.len(),"groups":observed.iter()
