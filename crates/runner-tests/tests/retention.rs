@@ -8291,6 +8291,93 @@ fn preserved_original_release_requires_exact_archive_roles_and_closed_users() {
 }
 
 #[test]
+fn archived_interrupted_report_retires_when_its_transitive_inputs_exceed_the_round_limit() {
+    if !isolated_capability_test(
+        "archived_interrupted_report_retires_when_its_transitive_inputs_exceed_the_round_limit",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let root = h.path();
+    let config = root.join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(4);
+    fs::write(config, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let archive = tempfile::tempdir().unwrap();
+    let inv = inventory(root);
+    let path = ".chrono-harness/state/fixtures/interrupted-parent";
+    let role = format!("recovery:{path}");
+    fs::write(root.join(path), b"").unwrap();
+    fs::write(archive.path().join("parent"), b"").unwrap();
+    let parent = inv
+        .begin_rooted("fixture", path, json!(null), std::slice::from_ref(&role))
+        .unwrap();
+    let id = parent.id().to_owned();
+    let mut children = Vec::new();
+    let mut originals = Vec::new();
+    for n in 0..2 {
+        let mut leaves = Vec::new();
+        for member in ["a", "b", "child"] {
+            let child_path = format!(".chrono-harness/state/fixtures/{n}-{member}");
+            fs::write(root.join(&child_path), b"independent input").unwrap();
+            let child = inv.begin("fixture", &child_path, json!(null)).unwrap();
+            let child_id = child.id().to_owned();
+            child.complete_sealed(json!({"exit":7})).unwrap();
+            if member == "child" {
+                inv.dependencies(&child_id, &leaves).unwrap();
+                children.push(child_id);
+            } else {
+                leaves.push(child_id);
+            }
+            originals.push(child_path);
+        }
+    }
+    inv.dependencies(&id, &children).unwrap();
+    drop(parent);
+    let record_path = retention_state::object_path(root, &id);
+    let record = || serde_json::from_slice::<Value>(&fs::read(&record_path).unwrap()).unwrap();
+    let round = inv.maintain_originals(std::slice::from_ref(&id)).unwrap();
+    assert_eq!(round["accounting_errors"], json!([]));
+    let interrupted = record()["output"].clone();
+    assert_eq!(interrupted["phase"], "sealing");
+    assert_eq!(interrupted["manifest"]["sealed"], true);
+    assert_eq!(interrupted["outcome"]["publication"], "interrupted");
+    let moved = consumer_call(
+        root,
+        json!({
+            "operation":"release-preserved","original":original_identity(root,&id,path),"roles":[role],
+            "survivor_root":fs::canonicalize(archive.path()).unwrap(),"survivor_path":"parent",
+            "sha256":chrono_harness::sha256(b""),"length":0,"current_consumers_released":true,
+            "reason":"recovery read back the interrupted parent from its independent copy"
+        }),
+    );
+    assert_eq!(moved.exit_code, 0, "{}", moved.stderr);
+    let mut disposed = None;
+    for _ in 0..12 {
+        let round = inv.maintain_originals(std::slice::from_ref(&id)).unwrap();
+        assert_eq!(round["accounting_errors"], json!([]), "{round}");
+        if let Some(summary) = round["disposed"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == id)
+        {
+            disposed = Some(summary.clone());
+            break;
+        }
+    }
+    assert_eq!(
+        disposed.unwrap()["original_outcome"],
+        interrupted["outcome"]
+    );
+    assert!(!root.join(path).exists());
+    assert_eq!(fs::read(archive.path().join("parent")).unwrap(), b"");
+    for original in originals {
+        assert_eq!(fs::read(root.join(original)).unwrap(), b"independent input");
+    }
+}
+
+#[test]
 fn archived_check_requires_its_slot_and_every_sealed_input_before_release() {
     if !isolated_capability_test(
         "archived_check_requires_its_slot_and_every_sealed_input_before_release",
