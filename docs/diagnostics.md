@@ -22,10 +22,9 @@
 tail -F .chrono-harness/state/logs/runtime.jsonl
 ```
 
-兼容的日志写入程序和维护程序部署后，宿主可在 `.chrono-harness/logging.json` 设置
-`keep_seconds`。每份新日志的首行是 `chrono-runtime-log-generation/v1`，
+本仓的 `.chrono-harness/logging.json` 将 `keep_seconds` 设为 86400 秒。采用这份配置的检出需要兼容的写入程序和维护程序。每份新日志的首行是 `chrono-runtime-log-generation/v1`，
 记录该份日志的 Unix 到期秒数。诊断事件自第二行开始。追加、容量轮转和政策改动均沿用
-原文件的期限。设定 86400 秒时，每份新日志从创建起最多使用 24 小时。
+原文件的期限。创建满 24 小时后，该代日志可由写入器或维护程序清理。
 
 统一维护从物理协调者及已核验的关联检出读取该配置。它用原日志锁排除并发写入，
 检查固定日志槽位，即使停止写入也回收合格的到期文件。原报告记录忙碌、回收数量、
