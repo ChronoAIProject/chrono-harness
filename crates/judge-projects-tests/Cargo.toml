@@ -43,6 +43,12 @@ path = "../judge-ci/src/main.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "chrono-projects-test-compiler"
+path = "../judge-routes-tests/tests/support/tool.rs"
+test = false
+bench = false
+
 [dev-dependencies]
 libc = "0.2"
 tracing = { version = "0.1", default-features = false, features = ["std"] }

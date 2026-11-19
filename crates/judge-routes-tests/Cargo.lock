@@ -127,6 +127,7 @@ dependencies = [
  "chrono-judge-routes",
  "serde_json",
  "tempfile",
+ "verus_builtin_macros",
 ]
 
 [[package]]

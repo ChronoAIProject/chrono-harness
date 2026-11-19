@@ -201,13 +201,18 @@ pub fn operation_state_path(report_path: &str, run: &Value) -> String {
 }
 #[cfg(not(verus_keep_ghost))]
 pub fn expand(argv: &[String], binding: &Value) -> Vec<String> {
-    argv.iter()
+    let mut args = argv
+        .iter()
         .map(|a| match a.as_str() {
             "{base}" => binding["base"].as_str().unwrap_or("").into(),
             "{candidate}" => binding["candidate"].as_str().unwrap_or("").into(),
             _ => a.clone(),
         })
-        .collect()
+        .collect();
+    if let Some(directory) = binding["operation_state"].as_str() {
+        chrono_harness::verified_verifier::bind_compiler_directory(&mut args, directory);
+    }
+    args
 }
 /// Merge explicit sequences into a DAG before observing tools or launching any command.
 #[cfg(not(verus_keep_ghost))]
