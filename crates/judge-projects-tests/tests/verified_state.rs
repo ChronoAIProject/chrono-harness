@@ -30,11 +30,14 @@ fn another_operations_compiler_output_cannot_be_claimed(flat: bool, canonical: b
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn compiler_release_needs_success_join_and_operation_ownership() {
+    proof {
+        reveal_strlit("passed"); reveal_strlit("error");
+        assert("passed"@.len() != "error"@.len());
+    }
     let completed = state::can_release_compiler_files("passed", true, true);
     let failed = state::can_release_compiler_files("error", true, true);
     let incomplete = state::can_release_compiler_files("passed", false, true);
     let external = state::can_release_compiler_files("passed", true, false);
-    proof { reveal_strlit("passed"); reveal_strlit("error"); }
     assert(completed && !failed && !incomplete && !external);
 }
 
