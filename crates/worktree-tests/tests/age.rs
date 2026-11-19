@@ -270,9 +270,7 @@ fn expired_linked_caller_preserves_its_source_and_head_while_retiring_another_ch
             Ok((source, head, sibling_exists))
         },
         |(h, _, _)| {
-            h.retain_fixture_diagnostics(
-                &source().join(".chrono-harness/state/worktree-test-failures"),
-            );
+            h.retain_fixture_diagnostics(&DiagnosticDestination::Checkout(source()));
         },
     )
 }
