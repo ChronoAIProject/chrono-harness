@@ -8291,6 +8291,115 @@ fn preserved_original_release_requires_exact_archive_roles_and_closed_users() {
 }
 
 #[test]
+fn archived_check_requires_its_slot_and_every_sealed_input_before_release() {
+    if !isolated_capability_test(
+        "archived_check_requires_its_slot_and_every_sealed_input_before_release",
+    ) {
+        return;
+    }
+    let host = deadline_host();
+    let root = host.path();
+    let archive = tempfile::tempdir().unwrap();
+    let survivor = fs::canonicalize(archive.path()).unwrap();
+    let directory = ".chrono-harness/state/fixtures";
+    fs::create_dir_all(survivor.join(directory)).unwrap();
+    let report = format!("{directory}/report.json");
+    let input = format!("{directory}/result");
+    let member = format!("{input}/stdout");
+    let slot = ".chrono-harness/state/check.json";
+    let policy_path = root.join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["producers"]["check-original"] = json!([format!("{directory}/")]);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let inv = inventory(root);
+    for base in [root, survivor.as_path()] {
+        fs::create_dir(base.join(&input)).unwrap();
+    }
+    fs::write(root.join(&member), b"judge output").unwrap();
+    let child = inventory(root)
+        .begin("check-original", &input, json!({}))
+        .unwrap();
+    let child_id = child.id().to_owned();
+    child.complete_sealed(json!({"exit_code":0})).unwrap();
+    inv.reference("shared-input", std::slice::from_ref(&child_id))
+        .unwrap();
+    let raw = serde_json::to_vec(&json!({"schema":"chrono-check-report/v2","retained_report":report,
+        "request":{"host_root":fs::canonicalize(root).unwrap(),"request_id":"checked",
+        "protocol":"chrono-ci-judge/v2","config_path":".chrono-harness/ci/check.json","config_sha256":"a".repeat(64),
+        "base":null,"candidate":"c".repeat(40),"initial":true},"publication":{"schema":"chrono-report-publication/v1",
+        "slot":slot,"previous_sha256":null,"snapshot_failure":null,"originals":[member],
+        "native_delivery":null,"recovery_root":null,"exit_code":0}})).unwrap();
+    let digest = chrono_harness::sha256(&raw);
+    let pointer = serde_json::to_vec(
+        &json!({"schema":"chrono-check-reference/v1","original":{"path":report,"sha256":digest}}),
+    )
+    .unwrap();
+    for base in [root, survivor.as_path()] {
+        fs::write(base.join(&report), &raw).unwrap();
+        fs::write(base.join(slot), &pointer).unwrap();
+    }
+    let publication = inventory(root)
+        .begin("check-original", &report, json!({}))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication
+        .complete_sealed(json!({"request_id":"checked","exit_code":0}))
+        .unwrap();
+    inv.dependencies(&id, std::slice::from_ref(&child_id))
+        .unwrap();
+    let role = retained_artifacts::retention::current_report_role(slot);
+    inv.reference(&role, std::slice::from_ref(&id)).unwrap();
+    let mut output = ledger(root)["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["id"] == id)
+        .unwrap()
+        .clone();
+    output["lifetime"] = json!({"created_at":1,"deadline":2});
+    output["expires"] = json!(2);
+    retention_state::replace_output(root, &output);
+    let mut request = json!({"operation":"release-preserved","original":original_identity(root,&id,&report),
+        "roles":[role],"survivor_root":survivor,"survivor_path":report,"sha256":digest,"length":raw.len(),
+        "reason":"The maintainer now reads this check and its inputs from the archive","current_consumers_released":true});
+    let roots = ledger(root)["roots"].clone();
+    let reject = |request: &Value| {
+        let result = consumer_call(root, request.clone());
+        assert_eq!(result.exit_code, 2, "{}", result.stdout);
+        assert_eq!(ledger(root)["roots"], roots);
+        assert!(root.join(slot).is_file());
+    };
+    reject(&request);
+    let slot_identity = chrono_harness::artifact_disposal::identity(&root.join(slot)).unwrap();
+    request["archived_slot"] = json!({"path":slot,"identity":slot_identity});
+    reject(&request);
+    fs::copy(root.join(&member), survivor.join(&member)).unwrap();
+    let reader = inv.consume(&child_id).unwrap();
+    reject(&request);
+    drop(reader);
+    fs::write(survivor.join(&member), b"wrong bytes").unwrap();
+    reject(&request);
+    fs::copy(root.join(&member), survivor.join(&member)).unwrap();
+    fs::write(root.join(slot), b"new publication").unwrap();
+    reject(&request);
+    fs::write(root.join(slot), &pointer).unwrap();
+    let mut stale = request.clone();
+    stale["archived_slot"]["identity"] = json!("replaced");
+    reject(&stale);
+    let result = consumer_call(root, request.clone());
+    assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    assert!(!root.join(slot).exists());
+    assert!(ledger(root)["roots"].get(&role).is_none());
+    assert_eq!(ledger(root)["roots"]["shared-input"], json!([child_id]));
+    assert_eq!(consumer_call(root, request).exit_code, 0);
+    assert_eq!(maintain_fixture_to(root, 1), 1);
+    assert!(!root.join(&report).exists());
+    assert!(root.join(&member).is_file());
+    assert_eq!(fs::read(survivor.join(slot)).unwrap(), pointer);
+    assert_eq!(fs::read(survivor.join(&member)).unwrap(), b"judge output");
+}
+
+#[test]
 fn preserved_original_release_keeps_other_members_of_the_same_consumer() {
     if !isolated_capability_test(
         "preserved_original_release_keeps_other_members_of_the_same_consumer",
