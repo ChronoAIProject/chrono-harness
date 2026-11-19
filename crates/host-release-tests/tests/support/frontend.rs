@@ -1,43 +1,50 @@
+#![allow(unexpected_cfgs)]
 //! 发布工具的真实 CLI 与外部 bootstrap 报告样本；样本不冒充真实原生构建。
+#[cfg(not(verus_keep_ghost))]
 #[path = "context.rs"]
 mod context;
+#[cfg(not(verus_keep_ghost))]
 #[path = "recipe.rs"]
 pub mod recipe;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{cell::Cell, fs, os::unix::process::ExitStatusExt, path::Path, process::Command};
 
+#[path = "failure_case.rs"]
+mod failure_case;
+
+#[cfg(not(verus_keep_ghost))]
 pub struct Fixture {
-    case: tempfile::TempDir,
     pub host: recipe::Fixture,
     pub output: tempfile::TempDir,
     pub report: Value,
     calls: Cell<usize>,
+    tools: tempfile::TempDir,
+    case: failure_case::FailureCase,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Fixture {
     pub fn new() -> Self {
-        let state = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.chrono-harness/state/release-test-failures");
-        fs::create_dir_all(&state).unwrap();
-        let case = tempfile::Builder::new()
-            .prefix("rust-release-frontend-")
-            .tempdir_in(&state)
-            .unwrap();
+        let case = failure_case::FailureCase::new("rust-release-frontend-");
         let mut host = recipe::Fixture::new();
         host.temp = tempfile::Builder::new()
             .prefix("source-")
             .tempdir_in(case.path())
             .unwrap();
-        let tools = case.path().join("tools");
-        fs::create_dir(&tools).unwrap();
-        let git_tool = tools.join("git");
+        let tools = tempfile::Builder::new()
+            .prefix("tools-")
+            .tempdir_in(case.path())
+            .unwrap();
+        let git_tool = tools.path().join("git");
         fs::hard_link(
             env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
             &git_tool,
         )
         .unwrap();
         host.config["tools"]["git"] = json!(git_tool);
-        let probe = tools.join("probe");
+        let probe = tools.path().join("probe");
         fs::hard_link(
             env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
             &probe,
@@ -121,6 +128,7 @@ impl Fixture {
             case,
             report,
             calls: Cell::new(0),
+            tools,
         };
         fixture.save();
         fixture
@@ -158,7 +166,7 @@ impl Fixture {
     }
 
     pub fn capture_result(&self, command: &mut Command) -> std::io::Result<std::process::Output> {
-        command.env("PATH", self.case.path().join("tools"));
+        command.env("PATH", self.tools.path());
         chrono_harness::process_fds::forward_command(command, &[]).unwrap();
         let index = self.calls.get();
         self.calls.set(index + 1);
@@ -293,12 +301,13 @@ impl Fixture {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Fixture {
     fn drop(&mut self) {
         if std::thread::panicking() {
             self.host.temp.disable_cleanup(true);
             self.output.disable_cleanup(true);
-            self.case.disable_cleanup(true);
+            self.tools.disable_cleanup(true);
             eprintln!(
                 "original release frontend fixture retained: {}",
                 self.case.path().display()
