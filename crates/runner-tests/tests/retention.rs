@@ -398,6 +398,41 @@ fn lengthening_policy_does_not_extend_an_empty_path_address() {
 }
 
 #[test]
+fn empty_historical_role_keeps_the_window_of_its_directory_generation() {
+    if !isolated_capability_test(
+        "empty_historical_role_keeps_the_window_of_its_directory_generation",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let owner = inventory(h.path());
+    let name = "consumer:previous-maintenance-program";
+    owner.reference(name, &[]).unwrap();
+    let record = retention_state::role_path(h.path(), name);
+    let directory = record.parent().unwrap();
+    let birth = fs::metadata(directory)
+        .unwrap()
+        .created()
+        .unwrap()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let mut role: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    role["metadata_expires"] = json!(birth + 86400);
+    fs::write(&record, serde_json::to_vec(&role).unwrap()).unwrap();
+
+    owner.maintain_at(birth + 59).unwrap();
+    let bounded: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(bounded["metadata_expires"], birth + 60);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_lifetime_seconds"] = json!(3600);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    inventory(h.path()).maintain_at(birth + 60).unwrap();
+    assert!(!directory.exists());
+}
+
+#[test]
 fn consumer_metadata_keeps_its_creation_deadline_until_release() {
     if !isolated_capability_test("consumer_metadata_keeps_its_creation_deadline_until_release") {
         return;
