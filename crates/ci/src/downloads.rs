@@ -54,7 +54,8 @@ pub struct Entry {
     pub compatibility_files: Vec<String>,
     pub source_files: Vec<String>,
     pub consumers: Vec<String>,
-    pub save_job: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub save_job: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restore_from: Option<String>,
 }
@@ -98,7 +99,10 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
                 && unique(&entry.source_files)
                 && unique(&entry.consumers),
             entry.consumers.iter().all(|id| jobs.contains(id))
-                && entry.consumers.contains(&entry.save_job),
+                && entry
+                    .save_job
+                    .as_ref()
+                    .is_none_or(|writer| entry.consumers.contains(writer)),
             entry.restore_from.is_none()
                 || fallback.is_some_and(|other| {
                     entry.restore_from.as_ref() != Some(id)
@@ -239,7 +243,11 @@ pub(crate) fn project(
             .map(|id| format!("            {}\n", prefix(c, id, &c.entries[id])))
             .unwrap_or_default();
         restore.push_str(&format!("      - name: Restore download cache {id}\n        id: chrono_download_{index}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}          restore-keys: |\n            {stem}\n{fallback}          fail-on-cache-miss: false\n", parent.restore_action, scalar(&key)));
-        if saves_download(&entry.save_job, job) {
+        if entry
+            .save_job
+            .as_deref()
+            .is_some_and(|writer| saves_download(writer, job))
+        {
             save.push_str(&format!("      - name: Save download cache {id}\n        if: ${{{{ {event_guard}always() && !cancelled() && steps.chrono_download_{index}.outcome == 'success' && steps.chrono_download_{index}.outputs.cache-hit != 'true' }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}", parent.save_action, scalar(&key)));
         }
     }
