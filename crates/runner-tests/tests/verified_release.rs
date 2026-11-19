@@ -27,6 +27,25 @@ mod retention_frontier;
 
 verus! {
 
+/// For every proposed deadline there is a fair trace whose single file is
+/// still present at that deadline. The file disappears one second later.
+proof fn fairness_allows_arbitrarily_late_disposal(limit: nat) {
+    let remaining = |second: nat| if second <= limit { 1nat } else { 0nat };
+    assert forall|second: nat| #[trigger] remaining(second) > 0 implies
+        exists|later: nat| second < later && #[trigger] remaining(later) < remaining(second) by {
+        assert(remaining(limit + 1) == 0);
+    }
+    assert(policy::fair_retirement(remaining, 0));
+    assert(remaining(limit) == 1);
+}
+
+/// A one-second service bound with two obligations is attained exactly.
+proof fn two_effects_can_use_both_seconds() {
+    let remaining = |second: nat| if second < 2 { (2 - second) as nat } else { 0nat };
+    policy::retirement_within_service_bound(remaining, 0, 1);
+    assert(remaining(1) == 1 && remaining(2) == 0);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn creation_window_and_expiry_clamp_keep_exact_time_boundaries() {
     expect_true(!accounting::within_creation_window(10, 20, 9));
