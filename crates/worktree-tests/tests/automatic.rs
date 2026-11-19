@@ -1522,14 +1522,13 @@ fn superseded_cleanup_original_retires_only_after_its_independent_reader_release
         let path = ".chrono-harness/state/worktrees/cleanup-superseded.json";
         let raw = b"original cleanup failure retained for its actual reader\n";
         fs::write(h.root.join(path), raw).unwrap();
-        Inventory::adopted(&h.root)
-            .unwrap()
-            .unwrap()
-            .begin("lifecycle-original", path, value!(null))
-            .unwrap()
-            .complete(value!({"status":"failed"}))
-            .unwrap();
         let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+        let publication = inventory
+            .begin("lifecycle-original", path, value!(null))
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete(value!({"status":"failed"})).unwrap();
+        let object_path = retention_state::object_path(&h.root, &id);
         let role = format!(
             "worktree-enrollment:{}",
             sha256(h.target.to_str().unwrap().as_bytes())
@@ -1554,33 +1553,32 @@ fn superseded_cleanup_original_retires_only_after_its_independent_reader_release
         );
         fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
         let reader = read_guard(&h.root, path).unwrap();
-        let mut output = retention_state::snapshot(&h.root)["outputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|o| o["path"] == path)
-            .unwrap()
-            .clone();
+        let original = json(&fs::read(&object_path).unwrap()).unwrap();
+        let mut output = original["output"].clone();
+        assert_eq!(output["id"], id);
+        assert_eq!(output["path"], path);
         output["lifetime"] = value!({"created_at":1,"deadline":2});
         output["expires"] = value!(2);
         retention_state::replace_output(&h.root, &output);
         let (code, report) = h.invoke("maintain", false);
         assert_eq!(code, 0, "{pending}: {report}");
         assert_eq!(fs::read(h.root.join(path)).unwrap(), raw);
-        let snapshot = retention_state::snapshot(&h.root);
-        let referenced = snapshot["roots"][&role]
-            .as_array()
-            .is_some_and(|ids| ids.contains(&output["id"]));
+        let role_path = retention_state::role_path(&h.root, &role);
+        let referenced = if role_path.parent().unwrap().try_exists().unwrap() {
+            let record = json(&fs::read(&role_path).unwrap()).unwrap();
+            assert_eq!(record["role"], role);
+            record["ids"].as_array().unwrap().contains(&output["id"])
+        } else {
+            false
+        };
         assert_eq!(
             referenced, pending,
             "unknown attempts keep their responsibility"
         );
-        let observed = snapshot["outputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|o| o["id"] == output["id"])
-            .unwrap();
+        let record = json(&fs::read(&object_path).unwrap()).unwrap();
+        let observed = &record["output"];
+        assert_eq!(observed["id"], id);
+        assert_eq!(observed["path"], path);
         assert_eq!(observed["lifetime"], output["lifetime"]);
         assert_eq!(observed["expires"], output["expires"]);
         drop(reader);
@@ -1592,9 +1590,7 @@ fn superseded_cleanup_original_retires_only_after_its_independent_reader_release
             for _ in 0..8 {
                 inventory.maintain_explicit().unwrap();
             }
-            assert!(
-                !retention_state::object_path(&h.root, output["id"].as_str().unwrap()).exists()
-            );
+            assert!(!object_path.try_exists().unwrap());
         }
     }
 }
