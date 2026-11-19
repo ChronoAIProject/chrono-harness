@@ -796,14 +796,16 @@ fn expired_import_original_hands_policy_to_current_state_without_renewal() {
             .reference_paths(&role, &[h.original.clone()])
             .unwrap();
         let reader = read_guard(&h.root, &h.original).unwrap();
-        let snapshot = retention_state::snapshot(&h.root);
-        let mut output = snapshot["outputs"]
-            .as_array()
+        let (id, path, _, _) = inventory
+            .rooted_original("lifecycle-original", &role)
             .unwrap()
-            .iter()
-            .find(|output| output["path"] == h.original)
-            .unwrap()
-            .clone();
+            .unwrap();
+        assert_eq!(path, h.original);
+        let record_path = retention_state::object_path(&h.root, &id);
+        let read_output = || json(&fs::read(&record_path).unwrap()).unwrap()["output"].clone();
+        let mut output = read_output();
+        assert_eq!(output["id"], id);
+        assert_eq!(output["path"], h.original);
         output["lifetime"] = value!({"created_at":1,"deadline":2});
         output["expires"] = value!(2);
         retention_state::replace_output(&h.root, &output);
@@ -817,13 +819,8 @@ fn expired_import_original_hands_policy_to_current_state_without_renewal() {
             original,
             "an independent active reader still owns the original"
         );
-        let snapshot = retention_state::snapshot(&h.root);
-        let observed = snapshot["outputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|observed| observed["id"] == output["id"])
-            .unwrap();
+        let observed = read_output();
+        assert_eq!(observed["id"], id);
         assert_eq!(observed["lifetime"], output["lifetime"]);
         assert_eq!(observed["expires"], output["expires"]);
         assert!(read_guard(&h.root, &h.original).is_err());
