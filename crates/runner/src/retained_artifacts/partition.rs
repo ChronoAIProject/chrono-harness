@@ -1936,6 +1936,32 @@ impl Inventory {
             unvisited_relations: BTreeSet::new(),
         })
     }
+    pub(super) fn expire_archived_slot_address(
+        &self,
+        gate: &Gate,
+        slot: &str,
+        deadline: u64,
+    ) -> Result<(), String> {
+        let directory = gate
+            .paths
+            .get(slot)
+            .filter(|_| gate.exclusive_paths.contains(slot))
+            .ok_or("archived slot requires its exclusive path lease")?;
+        let marker = directory.join("address.json");
+        let mut address: Address = self
+            .read_metadata(&marker)?
+            .ok_or("archived slot address is missing")?;
+        if address.path != slot || address.output.is_some() {
+            return Err("archived slot address changed".into());
+        }
+        let expires = super::bounded_expiry(address.metadata_expires.unwrap_or(deadline), deadline);
+        if address.metadata_expires != Some(expires) {
+            self.stable(gate)?;
+            address.metadata_expires = Some(expires);
+            self.write_metadata(&marker, &address)?;
+        }
+        Ok(())
+    }
     pub(super) fn partition_ids(&self) -> Result<Vec<String>, String> {
         let mut ids = Vec::new();
         for entry in fs::read_dir(self.directory.join("objects")).map_err(|e| e.to_string())? {

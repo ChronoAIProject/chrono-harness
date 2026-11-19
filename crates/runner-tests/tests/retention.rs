@@ -8483,7 +8483,16 @@ fn archived_check_requires_its_slot_and_every_sealed_input_before_release() {
     assert!(!root.join(slot).exists());
     assert!(ledger(root)["roots"].get(&role).is_none());
     assert_eq!(ledger(root)["roots"]["shared-input"], json!([child_id]));
+    let mut slot_address = root.join(".chrono-harness/state/output-retention-v1/paths");
+    for component in slot.split('/') {
+        slot_address.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    let marker: Value =
+        serde_json::from_slice(&fs::read(slot_address.join("address.json")).unwrap()).unwrap();
+    assert_eq!(marker["metadata_expires"], 2, "{marker}");
     assert_eq!(consumer_call(root, request).exit_code, 0);
+    inv.maintain_explicit().unwrap();
+    assert!(!slot_address.exists());
     assert_eq!(maintain_fixture_to(root, 1), 1);
     assert!(!root.join(&report).exists());
     assert!(root.join(&member).is_file());
