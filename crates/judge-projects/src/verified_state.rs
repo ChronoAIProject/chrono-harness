@@ -10,6 +10,10 @@ mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
 
+#[cfg(verus_keep_ghost)]
+#[path = "state.rs"]
+pub mod operation_io;
+
 verus! {
 
 /// process_terminal 是现役 process_completion_known 对真实退出码／signal
@@ -51,6 +55,14 @@ pub fn all_terminal(rows: &Vec<OperationObservation>) -> (known: bool)
         i += 1;
     }
     true
+}
+
+/// Once the result is durable, only this operation's completed successful proof
+/// may release the measured library and dep-info files.
+pub fn can_release_compiler_files(status: &str, joined: bool, owned_output: bool) -> (release: bool)
+    ensures release == (status@ == "passed"@ && joined && owned_output),
+{
+    identifiers::equal_text(status, "passed") && joined && owned_output
 }
 
 pub open spec fn original_matches(

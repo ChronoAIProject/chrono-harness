@@ -34,6 +34,14 @@ mod runtime {
         isolation::isolated_git_with_retirement(retired)
     }
 
+    pub fn isolated_git_observation() -> bool {
+        isolation::isolated_git_with_observation(retired, true)
+    }
+
+    pub fn emit_observation(value: Value) {
+        eprintln!("{}{value}", isolation::OBSERVATION_PREFIX);
+    }
+
     pub fn retired(root: &Path) -> Result<bool, String> {
         chrono_worktree::TemporaryHost::retired_registered_fixture_stores(
             root,
@@ -109,4 +117,4 @@ mod runtime {
     }
 }
 #[cfg(not(verus_keep_ghost))]
-pub use runtime::{isolated_git, retired, root};
+pub use runtime::{emit_observation, isolated_git, isolated_git_observation, retired, root};
