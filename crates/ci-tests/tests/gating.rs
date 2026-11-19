@@ -2061,7 +2061,7 @@ fn registered_dotted_and_underscore_unit_ids_have_distinct_valid_jobs_and_actual
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn current_product_host_registration_and_generated_parent_select_the_real_source_delta() {
-    if !chrono_git_boundary::isolated_git() {
+    if !chrono_git_boundary::isolated_git_observation() {
         return;
     }
     let source = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
@@ -2328,12 +2328,12 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         after["test_groups"],
         json!({"judge-workflow-tests":"execute_core", "workflow-units":"execute_units", "workflow-short":"execute_short"})
     );
-    // Retain the real selection as bounded validation data, not a fabricated check verdict.
-    json_file(
-        &source,
-        ".chrono-harness/state/current-host-delta-selection.json",
-        &json!({"source_baseline":original,"fixture_base":base,"fixture_candidate":candidate,"selection_scope":"declared-current-source-bytes-and-explicit-fixture-delta","detection":result["detection"],"global_selected":result["requirements"]["global_selected"],"native_actions_verified":false}),
-    );
+    chrono_git_boundary::emit_observation(json!({
+        "kind":"host-delta-selection","source_baseline":original,"fixture_base":base,
+        "fixture_candidate":candidate,"selection_scope":"declared-current-source-bytes-and-explicit-fixture-delta",
+        "detection":result["detection"],"global_selected":result["requirements"]["global_selected"],
+        "native_actions_verified":false
+    }));
 }
 
 #[test]

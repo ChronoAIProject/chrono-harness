@@ -23,10 +23,23 @@ pub fn isolated_capability_test(name: &str) -> bool {
     isolated_test(name, "CHRONO_RETENTION_CAPABILITY_TEST", &[])
 }
 
+#[cfg(not(verus_keep_ghost))]
+pub const OBSERVATION_PREFIX: &str = "CHRONO_TEST_OBSERVATION ";
+
 /// The Git fixture needs the same native completion and single-test result
 /// check, with a private child environment instead of global PATH mutation.
 #[cfg(not(verus_keep_ghost))]
 pub fn isolated_test(name: &str, marker: &str, environment: &[(&str, std::ffi::OsString)]) -> bool {
+    run_isolated_test(name, marker, environment, false)
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn run_isolated_test(
+    name: &str,
+    marker: &str,
+    environment: &[(&str, std::ffi::OsString)],
+    forward_observation: bool,
+) -> bool {
     if same_test(name, std::env::var(marker).ok().as_deref()) {
         return true;
     }
@@ -47,6 +60,21 @@ pub fn isolated_test(name: &str, marker: &str, environment: &[(&str, std::ffi::O
         stdout,
         String::from_utf8_lossy(&output.stderr)
     );
+    // Successful libtest capture normally hides nested observations. Forward only
+    // explicitly emitted records into the enclosing operation's retained stderr.
+    // The failure assertion above already carries both original streams.
+    if forward_observation {
+        use std::io::Write;
+        let mut records = output
+            .stderr
+            .split_inclusive(|byte| *byte == b'\n')
+            .filter(|line| line.starts_with(OBSERVATION_PREFIX.as_bytes()));
+        let record = records
+            .next()
+            .expect("successful child omitted its observation");
+        assert!(records.next().is_none(), "ambiguous child observation");
+        std::io::stderr().lock().write_all(record).unwrap();
+    }
     false
 }
 
@@ -62,6 +90,14 @@ pub fn isolated_git() -> bool {
 #[cfg(not(verus_keep_ghost))]
 pub fn isolated_git_with_retirement(
     retirement: impl FnOnce(&std::path::Path) -> Result<bool, String>,
+) -> bool {
+    isolated_git_with_observation(retirement, false)
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub fn isolated_git_with_observation(
+    retirement: impl FnOnce(&std::path::Path) -> Result<bool, String>,
+    forward_observation: bool,
 ) -> bool {
     let thread = std::thread::current();
     let name = thread.name().expect("libtest case identity");
@@ -90,7 +126,7 @@ pub fn isolated_git_with_retirement(
             .unwrap()
             .expect("new private fixture directory is available");
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let value = isolated_test(
+        let value = run_isolated_test(
             name,
             MARKER,
             &[
@@ -100,6 +136,7 @@ pub fn isolated_git_with_retirement(
                     directory.path().join("custody").into_os_string(),
                 ),
             ],
+            forward_observation,
         );
         let custody = directory.path().join("custody");
         let retired = if custody.try_exists().unwrap() {
