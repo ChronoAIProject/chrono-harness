@@ -2447,3 +2447,68 @@ pub(super) fn parent_lookup_count(selected: bool) -> (count: usize)
     if selected { 2 } else { 1 }
 }
 }
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn download_only_install_cache_wraps_the_registered_bootstrap_without_a_planner() {
+    let units: Value = serde_json::from_str(include_str!(
+        "../../../examples/ci-host-job-gating/.chrono-harness/ci/units.json"
+    ))
+    .unwrap();
+    let mut config = units["collection"].clone();
+    config["persistent_cache"] = json!({
+        "schema":"chrono-github-cache/v1","jobs":{},"save_on_push_only":true,
+        "restore_action":"actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
+        "save_action":"actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+        "downloads":{"schema":"chrono-github-downloads/v1","namespace":"install","environment":{},
+            "artifact_registry":".chrono-harness/config.json",
+            "entries":{"tools":{"owner":"repository","need":"Pinned release tools","output_use":"Verify and install",
+                "paths":[".chrono-harness/bin/"],"compatibility_files":[".chrono-harness/distribution.json"],
+                "source_files":[".chrono-harness/install.sh"],"consumers":["check"],"save_job":"check"}}}
+    });
+    let render = |value: Value| {
+        chrono_ci::render(
+            &serde_json::from_value(value).unwrap(),
+            ".chrono-harness/ci/github.json",
+        )
+    };
+    let yaml: Value = serde_yaml_ng::from_str(&render(config.clone()).unwrap()).unwrap();
+    let job = &yaml["jobs"]["check"];
+    assert!(job.get("env").is_none());
+    let steps = job["steps"].as_array().unwrap();
+    let index = |name: &str| steps.iter().position(|s| s["name"] == name).unwrap();
+    assert!(index("Restore download cache tools") < index("Bootstrap registered tools"));
+    assert!(index("Canonical harness check") < index("Save download cache tools"));
+    assert!(
+        !steps
+            .iter()
+            .any(|s| s["name"] == "Prepare registered caches")
+    );
+    assert!(
+        steps[index("Restore download cache tools")]["with"]["key"]
+            .as_str()
+            .unwrap()
+            .contains("hashFiles('.chrono-harness/distribution.json')")
+    );
+
+    let mut read_only = config.clone();
+    read_only["persistent_cache"]["downloads"]["entries"]["tools"]
+        .as_object_mut()
+        .unwrap()
+        .remove("save_job");
+    let read_only = render(read_only).unwrap();
+    assert!(read_only.contains("Restore download cache tools"));
+    assert!(!read_only.contains("actions/cache/save@"));
+
+    config["persistent_cache"]["program"] = json!(".chrono-harness/bin/unused");
+    assert!(render(config.clone()).is_err());
+    config["persistent_cache"]
+        .as_object_mut()
+        .unwrap()
+        .remove("program");
+    config["persistent_cache"]["downloads"]
+        .as_object_mut()
+        .unwrap()
+        .remove("artifact_registry");
+    assert!(render(config).is_err());
+}

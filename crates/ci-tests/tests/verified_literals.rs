@@ -1,6 +1,9 @@
 //! CI 字面文本判断的独立成功、失败与边界预期。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
+#[path = "cache.rs"]
+mod cache_expectations;
+#[cfg(verus_keep_ghost)]
 #[path = "gating.rs"]
 mod gating_expectations;
 #[cfg(verus_keep_ghost)]

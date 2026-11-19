@@ -1,8 +1,26 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn complete_release_jobs(registered: usize, selector: bool, projected: usize) -> (valid: bool)
+    ensures valid == (projected as int == registered as int + if selector { 1int } else { 0int }),
+{
+    projected >= registered && projected - registered == if selector { 1 } else { 0 }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, path::Path, process::Command};
+#[cfg(not(verus_keep_ghost))]
 #[path = "startup.rs"]
 mod startup;
 
+#[cfg(not(verus_keep_ghost))]
 fn source(path: &str) -> Value {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -12,6 +30,7 @@ fn source(path: &str) -> Value {
     serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn adoption(job: &str) -> Value {
     json!({"schema":"chrono-github-cache/v1",
         "program":".chrono-harness/bin/chrono-cache", "config":".chrono-harness/cache.json",
@@ -21,6 +40,7 @@ fn adoption(job: &str) -> Value {
         "jobs":{job:{"need":"Reuse this existing job's compilation outputs between runners", "output_use":"The original registered build revalidates the restored target before checking", "prepare":["/usr/bin/printf","%s","literal ' argument $(printf unsafe)"], "consumer":"host.build", "caches":["core.target"]}}})
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn download_adoption() -> Value {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");
@@ -40,6 +60,7 @@ fn download_adoption() -> Value {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn push_only_saving_limits_downloads_and_targets_but_preserves_pr_restores() {
     let mut value = download_adoption();
     value["persistent_cache"]["save_on_push_only"] = json!(true);
@@ -96,6 +117,7 @@ fn push_only_saving_limits_downloads_and_targets_but_preserves_pr_restores() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn downloads_restore_before_compiling_the_planner_and_keep_the_original_check() {
     let value = download_adoption();
     let config = serde_json::from_value(value).unwrap();
@@ -149,6 +171,7 @@ fn downloads_restore_before_compiling_the_planner_and_keep_the_original_check() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn downloads_reject_missing_writers_duplicate_inputs_and_incompatible_fallbacks() {
     let value = download_adoption();
     for (pointer, replacement) in [
@@ -188,6 +211,7 @@ fn downloads_reject_missing_writers_duplicate_inputs_and_incompatible_fallbacks(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn downloads_bind_exact_artifact_owners_and_inputs_before_writing_a_workflow() {
     let root = tempfile::tempdir().unwrap();
     let write = |path: &str, bytes: &[u8]| {
@@ -252,6 +276,7 @@ fn downloads_bind_exact_artifact_owners_and_inputs_before_writing_a_workflow() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_save_ownership_keeps_restores_and_original_checks_in_read_only_consumers() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");
@@ -286,6 +311,7 @@ fn explicit_save_ownership_keeps_restores_and_original_checks_in_read_only_consu
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn detector_retains_declared_originals_even_when_work_fails() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("detect");
@@ -338,6 +364,7 @@ fn detector_retains_declared_originals_even_when_work_fails() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");
@@ -405,6 +432,7 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn completed_bootstrap_caches_can_be_saved_after_a_later_check_failure() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");
@@ -446,6 +474,7 @@ fn completed_bootstrap_caches_can_be_saved_after_a_later_check_failure() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registered_cache_ids_fit_native_step_limits_without_truncating_cache_identity() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");
@@ -470,6 +499,7 @@ fn registered_cache_ids_fit_native_step_limits_without_truncating_cache_identity
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn actual_host_projections_fit_native_workflow_size() {
     let units = serde_json::from_value(source(".chrono-harness/ci/units.json")).unwrap();
     let release = serde_json::from_value(source(".chrono-harness/ci/release.json")).unwrap();
@@ -488,10 +518,17 @@ fn actual_host_projections_fit_native_workflow_size() {
     let yaml = chrono_ci::release::render(&release).unwrap();
     let expanded: Value = serde_yaml_ng::from_str(&yaml).unwrap();
     assert!(expanded["permissions"].get("actions").is_none());
-    assert_eq!(
-        expanded["jobs"].as_object().unwrap().len(),
-        release.jobs.len()
-    );
+    let selector = release
+        .delivery
+        .as_ref()
+        .is_some_and(|d| d.landing_selection.is_some());
+    let jobs = expanded["jobs"].as_object().unwrap();
+    assert_eq!(jobs.contains_key("select_preview"), selector);
+    assert!(complete_release_jobs(
+        release.jobs.len(),
+        selector,
+        jobs.len()
+    ));
     for job in &release.jobs {
         let actual = &expanded["jobs"][&job.id];
         if !job.needs.is_empty() {
@@ -527,6 +564,7 @@ fn actual_host_projections_fit_native_workflow_size() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_cache_wraps_only_the_named_original_unit() {
     let mut value = source(".chrono-harness/ci/release.json");
     value.as_object_mut().unwrap().remove("persistent_cache");
@@ -590,6 +628,7 @@ fn release_cache_wraps_only_the_named_original_unit() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cache_adoption_rejects_unknown_jobs_unpinned_actions_and_empty_consumers() {
     let baseline = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     for (pointer, invalid) in [
@@ -633,6 +672,7 @@ fn cache_adoption_rejects_unknown_jobs_unpinned_actions_and_empty_consumers() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_init_and_generation_resolve_cache_consumers_before_writing() {
     let root = tempfile::tempdir().unwrap();
     let input = tempfile::NamedTempFile::new().unwrap();
@@ -670,6 +710,7 @@ fn release_init_and_generation_resolve_cache_consumers_before_writing() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn one_registered_cache_has_at_most_one_saving_job() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");
@@ -732,6 +773,7 @@ fn one_registered_cache_has_at_most_one_saving_job() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn content_sealing_follows_original_work_and_gates_native_saving() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");
@@ -783,6 +825,7 @@ fn content_sealing_follows_original_work_and_gates_native_saving() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retired_remote_activation_options_are_rejected_before_projection() {
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["persistent_cache"] = adoption("unit_example");

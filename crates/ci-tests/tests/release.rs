@@ -387,6 +387,43 @@ fn delivery_binds_landing_source_and_limits_write_permission_to_the_publisher() 
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn automatic_preview_gates_roots_and_preserves_registered_artifact_dependencies() {
+    let mut c = units_config();
+    c["push_branches"] = json!([]);
+    c["jobs"][1]["always"] = json!(false);
+    c["delivery"] = json!({
+        "workflow":"landing CI","branch":"dev","publisher":"consumer",
+        "landing_selection":{"runs_on":"ubuntu-24.04","timeout_minutes":5,"context_path":"collection/context.json"}
+    });
+    let rendered = release::render(&serde_json::from_value(c.clone()).unwrap()).unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&rendered).unwrap();
+    let jobs = &yaml["jobs"];
+    assert_eq!(
+        jobs["select_preview"]["permissions"],
+        json!({"actions":"read"})
+    );
+    assert_eq!(jobs["native"]["needs"], "select_preview");
+    assert!(
+        jobs["native"]["if"]
+            .as_str()
+            .unwrap()
+            .contains("needs.select_preview.outputs.selected == 'true'")
+    );
+    assert_eq!(jobs["consumer"]["needs"], json!(["native"]));
+    let step = jobs["native"]["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "Run registered release command")
+        .unwrap();
+    assert_eq!(step["env"]["CHRONO_RELEASE_DEPENDENCIES"], "{}");
+
+    c["delivery"]["landing_selection"]["context_path"] = json!("../context.json");
+    assert!(release::render(&serde_json::from_value(c).unwrap()).is_err());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn delivery_rejects_unregistered_publishers_push_bypasses_and_unsuccessful_dependencies() {
     for case in 0..5 {
         let mut c = units_config();
