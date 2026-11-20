@@ -43,16 +43,37 @@ mod runtime {
     }
 
     pub fn retired(root: &Path) -> Result<bool, String> {
-        chrono_worktree::TemporaryHost::retired_registered_fixture_stores(
-            root,
-            ".chrono-harness/worktree.json",
-            &[
-                "ci-test-host",
-                "projects-test-host",
-                "workflow-test-tools",
-                "worktree-test-host",
-            ],
-        )
+        let stores_retired = || {
+            chrono_worktree::TemporaryHost::retired_registered_fixture_stores(
+                root,
+                ".chrono-harness/worktree.json",
+                &[
+                    "ci-test-host",
+                    "projects-test-host",
+                    "workflow-test-tools",
+                    "worktree-test-host",
+                ],
+            )
+        };
+        if stores_retired()? {
+            return Ok(true);
+        }
+
+        // This private coordinator has no service to receive its finish notices.
+        let result = chrono_worktree::run(&[
+            "maintain".into(),
+            "--host-root".into(),
+            root.to_str().ok_or("fixture root is not UTF-8")?.into(),
+            "--config".into(),
+            ".chrono-harness/worktree.json".into(),
+        ]);
+        if result.exit_code != 0 {
+            return Err(format!(
+                "fixture maintenance exited {}\n{}\n{}",
+                result.exit_code, result.stderr, result.stdout
+            ));
+        }
+        stores_retired()
     }
 
     pub fn root() -> &'static Path {
