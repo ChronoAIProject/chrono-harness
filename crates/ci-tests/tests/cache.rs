@@ -647,6 +647,10 @@ fn release_cache_wraps_only_the_named_original_unit() {
         chrono_ci::release::render(&serde_json::from_value(value.clone()).unwrap()).unwrap();
     let original: Value = serde_yaml_ng::from_str(&original).unwrap();
     value["persistent_cache"] = adoption("linux_build_runner");
+    value["cache_diagnostic_retention_days"] = json!(0);
+    let invalid = serde_json::from_value(value.clone()).unwrap();
+    assert!(chrono_ci::release::render(&invalid).is_err());
+    value["cache_diagnostic_retention_days"] = json!(1);
     let config = serde_json::from_value(value).unwrap();
     let yaml = chrono_ci::release::render(&config).unwrap();
     let start = yaml.find("  linux_build_runner:\n").unwrap();
@@ -689,6 +693,7 @@ fn release_cache_wraps_only_the_named_original_unit() {
     );
     let diagnostics = steps.last().unwrap();
     assert_eq!(diagnostics["name"], "Preserve failed cache diagnostics");
+    assert_eq!(diagnostics["with"]["retention-days"], 1);
     assert_eq!(diagnostics["if"], "${{ failure() }}");
     assert_eq!(diagnostics["uses"], release_upload["uses"]);
     assert_eq!(diagnostics["with"]["path"], ".chrono-harness/state/");
