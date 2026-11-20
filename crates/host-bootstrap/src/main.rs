@@ -103,6 +103,10 @@ fn run() -> Result<(), BuildFailure> {
                 &mut std::io::stderr(),
             )
         }
+        [command, host, checksum, tar] if command == "extract" => {
+            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
+            download::extract(&root, checksum, Path::new(tar), &environment)
+        }
         [command, host, checksum, curl, headers, url] if command == "download" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             let archive =

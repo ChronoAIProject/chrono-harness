@@ -6,13 +6,13 @@ use std::{
     process::{Command, Output},
 };
 
-const ARCHIVE: &str = ".chrono-harness/cache/bootstrap-owner-tooling/verus/package.zip";
+const ARCHIVE: &str = "package.zip";
 const CHECKSUM: &str = ".chrono-harness/ci/package.sha256";
 const HEADERS: &str = ".chrono-harness/state/download.headers";
 const TEMPORARIES: &str = ".chrono-harness/cache/bootstrap-owner-tooling/tmp";
 const BODY: &[u8] = b"verified archive\x00\xff\n";
 
-struct Fixture(tempfile::TempDir);
+struct Fixture(tempfile::TempDir, tempfile::TempDir);
 impl Drop for Fixture {
     fn drop(&mut self) {
         if std::thread::panicking() {
@@ -23,24 +23,30 @@ impl Drop for Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let fixture = Self(tempfile::tempdir().unwrap());
-        for directory in [
-            ".chrono-harness/ci",
-            ".chrono-harness/state",
-            ".chrono-harness/cache/bootstrap-owner-tooling/verus",
-            TEMPORARIES,
-        ] {
+        let fixture = Self(tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        fs::create_dir_all(fixture.archive().parent().unwrap()).unwrap();
+        for directory in [".chrono-harness/ci", ".chrono-harness/state", TEMPORARIES] {
             fs::create_dir_all(fixture.0.path().join(directory)).unwrap();
         }
         fs::write(fixture.0.path().join("download-body"), BODY).unwrap();
         fixture.checksum(&format!("{}  {ARCHIVE}\n", chrono_harness::sha256(BODY)));
         fixture
     }
+    fn archive(&self) -> std::path::PathBuf {
+        self.1
+            .path()
+            .canonicalize()
+            .unwrap()
+            .join("verus")
+            .join(chrono_harness::sha256(BODY))
+            .join(ARCHIVE)
+    }
     fn checksum(&self, value: &str) {
         fs::write(self.0.path().join(CHECKSUM), value).unwrap();
     }
     fn invoke(&self, curl: &str, url: &str) -> Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
+        command.env("CHRONO_TOOLCHAIN_CACHE", self.1.path());
         command.env("TMPDIR", self.0.path().join(TEMPORARIES));
         command.args([
             "download",
@@ -64,7 +70,7 @@ impl Fixture {
             serde_json::from_slice(&fs::read(self.0.path().join("download-calls.json")).unwrap())
                 .unwrap();
         let output = Path::new(&args[args.iter().position(|arg| arg == "--output").unwrap() + 1]);
-        assert_eq!(output.parent().unwrap(), self.0.path().join(TEMPORARIES));
+        assert_eq!(output.parent(), self.archive().parent());
         assert!(!output.exists());
         assert_eq!(
             fs::read_dir(self.0.path().join(TEMPORARIES))
@@ -88,10 +94,10 @@ fn concurrent_preparation_publishes_only_verified_archives() {
         let report: Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(report["sha256"], chrono_harness::sha256(BODY));
     }
-    assert_eq!(fs::read(fixture.0.path().join(ARCHIVE)).unwrap(), BODY);
+    assert_eq!(fs::read(fixture.archive()).unwrap(), BODY);
     fixture.assert_disposable_download();
     assert_eq!(
-        fs::read_dir(fixture.0.path().join(ARCHIVE).parent().unwrap())
+        fs::read_dir(fixture.archive().parent().unwrap())
             .unwrap()
             .count(),
         1
@@ -101,13 +107,13 @@ fn concurrent_preparation_publishes_only_verified_archives() {
 #[test]
 fn verified_cache_never_starts_the_downloader() {
     let fixture = Fixture::new();
-    fs::write(fixture.0.path().join(ARCHIVE), BODY).unwrap();
+    fs::write(fixture.archive(), BODY).unwrap();
     let output = fixture.invoke("/no/such/downloader", "https://example.invalid/archive.zip");
     assert!(output.status.success(), "{:?}", output);
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(report["status"], "cache-hit");
     assert_eq!(report["sha256"], chrono_harness::sha256(BODY));
-    assert_eq!(fs::read(fixture.0.path().join(ARCHIVE)).unwrap(), BODY);
+    assert_eq!(fs::read(fixture.archive()).unwrap(), BODY);
 }
 
 #[test]
@@ -115,13 +121,13 @@ fn missing_or_corrupt_archive_is_verified_before_replacement_then_reused() {
     for old in [None, Some(b"partial archive".as_slice())] {
         let fixture = Fixture::new();
         if let Some(old) = old {
-            fs::write(fixture.0.path().join(ARCHIVE), old).unwrap();
+            fs::write(fixture.archive(), old).unwrap();
         }
         let output = fixture.run();
         assert!(output.status.success(), "{:?}", output);
         let report: Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(report["status"], "downloaded");
-        assert_eq!(fs::read(fixture.0.path().join(ARCHIVE)).unwrap(), BODY);
+        assert_eq!(fs::read(fixture.archive()).unwrap(), BODY);
         fixture.assert_disposable_download();
         let calls = fs::read(fixture.0.path().join("download-calls.json")).unwrap();
         let second = fixture.run();
@@ -140,7 +146,7 @@ fn missing_or_corrupt_archive_is_verified_before_replacement_then_reused() {
 #[test]
 fn download_failure_keeps_original_exit_headers_and_previous_archive() {
     let fixture = Fixture::new();
-    fs::write(fixture.0.path().join(ARCHIVE), b"previous archive").unwrap();
+    fs::write(fixture.archive(), b"previous archive").unwrap();
     fs::write(fixture.0.path().join("download-exit"), b"56").unwrap();
     let output = fixture.run();
     assert_eq!(output.status.code(), Some(56), "{:?}", output);
@@ -151,10 +157,7 @@ fn download_failure_keeps_original_exit_headers_and_previous_archive() {
             .windows(b"fixture download failed".len())
             .any(|s| s == b"fixture download failed")
     );
-    assert_eq!(
-        fs::read(fixture.0.path().join(ARCHIVE)).unwrap(),
-        b"previous archive"
-    );
+    assert_eq!(fs::read(fixture.archive()).unwrap(), b"previous archive");
     assert_eq!(
         fs::read(fixture.0.path().join(HEADERS)).unwrap(),
         b"fixture response headers\n"
@@ -166,17 +169,14 @@ fn wrong_download_content_is_rejected_without_publishing_or_overwriting() {
     for old in [None, Some(b"previous archive".as_slice())] {
         let fixture = Fixture::new();
         if let Some(old) = old {
-            fs::write(fixture.0.path().join(ARCHIVE), old).unwrap();
+            fs::write(fixture.archive(), old).unwrap();
         }
         fs::write(fixture.0.path().join("download-body"), b"wrong download").unwrap();
         let output = fixture.run();
         assert!(!output.status.success());
         assert!(String::from_utf8_lossy(&output.stderr).contains("checksum mismatch"));
         fixture.assert_disposable_download();
-        assert_eq!(
-            fs::read(fixture.0.path().join(ARCHIVE)).ok().as_deref(),
-            old
-        );
+        assert_eq!(fs::read(fixture.archive()).ok().as_deref(), old);
     }
 }
 
@@ -206,15 +206,52 @@ fn invalid_declarations_and_symlinks_fail_before_download() {
             .success()
     );
     assert!(!fixture.0.path().join("download-calls.json").exists());
-    symlink(
-        fixture.0.path().join("download-body"),
-        fixture.0.path().join(ARCHIVE),
-    )
-    .unwrap();
+    symlink(fixture.0.path().join("download-body"), fixture.archive()).unwrap();
     assert!(!fixture.run().status.success());
     assert!(!fixture.0.path().join("download-calls.json").exists());
     assert_eq!(
         fs::read(fixture.0.path().join("download-body")).unwrap(),
         BODY
     );
+}
+
+#[test]
+fn two_checkouts_use_one_install_after_an_interrupted_extraction() {
+    let first = Fixture::new();
+    let second = Fixture::new();
+    fs::write(first.archive(), BODY).unwrap();
+    let extract = |checkout: &Fixture, program: &str| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
+        command.env("CHRONO_TOOLCHAIN_CACHE", first.1.path());
+        command.args([
+            "extract",
+            checkout.0.path().to_str().unwrap(),
+            CHECKSUM,
+            program,
+        ]);
+        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+        command.output().unwrap()
+    };
+    let tar = env!("CARGO_BIN_EXE_chrono-test-bootstrap-download");
+    fs::write(first.0.path().join("fail-extraction"), b"").unwrap();
+    assert_eq!(extract(&first, tar).status.code(), Some(42));
+    let target = first.archive().parent().unwrap().join("toolchain/verus");
+    assert!(!target.exists());
+    fs::remove_file(first.0.path().join("fail-extraction")).unwrap();
+    assert!(extract(&first, tar).status.success());
+    assert!(extract(&second, "/unused-on-reuse").status.success());
+    assert_eq!(fs::read(&target).unwrap(), BODY);
+    for checkout in [&first, &second] {
+        assert_eq!(
+            fs::read_link(checkout.0.path().join(".chrono-harness/bin/verus-compiler")).unwrap(),
+            target
+        );
+        assert!(
+            !checkout
+                .0
+                .path()
+                .join(".chrono-harness/bin/verus.zip")
+                .exists()
+        );
+    }
 }

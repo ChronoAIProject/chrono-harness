@@ -134,7 +134,11 @@ fn startup_data_requires_installed_output_and_selected_producer_and_consumer() {
     ] {
         let old = host();
         let mut s = host();
+        // 通用数据传输合同使用独立 fixture。现役 Verus 由各 runner 的共享安装提供。
+        s.documents.get_mut(CORE).unwrap()["install"].as_array_mut().unwrap().push(
+            json!({"source":".chrono-harness/cache/package.zip","destination":".chrono-harness/bin/verus.zip"}));
         let chain = &mut s.adoption.as_mut().unwrap()["shared_startup"][0];
+        chain["data_outputs"] = json!({".chrono-harness/bin/verus.zip":{"producer":"host.bootstrap-verus","consumer":"host.bootstrap-verus"}});
         match defect {
             "uninstalled" => {
                 let output = chain["data_outputs"][".chrono-harness/bin/verus.zip"].clone();
