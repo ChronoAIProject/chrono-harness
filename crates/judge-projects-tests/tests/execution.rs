@@ -28,7 +28,10 @@ fn execute_observed_in(
     );
     let result = logger.run(|| execute(plan));
     let trace_status = logger.finish();
-    if !result.as_ref().is_ok_and(|r| r.passed()) || trace_status.is_err() {
+    if failure_batch::keep_scheduler_diagnostics(
+        result.as_ref().is_ok_and(|r| r.passed()),
+        trace_status.is_ok(),
+    ) {
         eprintln!(
             "original execution trace retained at {}",
             trace.keep().display()
