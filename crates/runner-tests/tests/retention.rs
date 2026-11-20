@@ -1105,6 +1105,41 @@ fn exhausted_retirement_budget_reports_the_unattempted_original() {
 }
 
 #[test]
+fn late_addressed_batch_retires_one_member_and_respects_a_live_reader() {
+    if !isolated_capability_test(
+        "late_addressed_batch_retires_one_member_and_respects_a_live_reader",
+    ) {
+        return;
+    }
+    let h = deadline_host();
+    let owner = inventory(h.path());
+    let path = ".chrono-harness/state/fixtures/batch";
+    let root = h.path().join(path);
+    let batch = inventory(h.path())
+        .create_batch("fixture", path, json!({}))
+        .unwrap();
+    let id = batch.id().to_owned();
+    fs::write(root.join("a"), b"a").unwrap();
+    fs::write(root.join("b"), b"b").unwrap();
+    batch.complete_sealed(json!({"status":"passed"})).unwrap();
+    let reader = retained_artifacts::retention::read_guard(h.path(), path)
+        .unwrap()
+        .unwrap();
+    let blocked = owner.maintain_late_original_at(&id, u64::MAX).unwrap();
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 2, "{blocked}");
+    drop(reader);
+    for remaining in [1, 0] {
+        let step = owner.maintain_late_original_at(&id, u64::MAX).unwrap();
+        assert_eq!(step["accounting_errors"], json!([]), "{step}");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), remaining, "{step}");
+        assert_eq!(step["removed_logical_bytes"], 1, "{step}");
+    }
+    let final_step = owner.maintain_late_original_at(&id, u64::MAX).unwrap();
+    assert!(!root.try_exists().unwrap(), "{final_step}");
+    assert_eq!(final_step["disposed"][0]["id"], id, "{final_step}");
+}
+
+#[test]
 fn explicit_quota_observes_more_members_than_one_address_budget() {
     if !isolated_capability_test("explicit_quota_observes_more_members_than_one_address_budget") {
         return;

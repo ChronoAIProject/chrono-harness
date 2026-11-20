@@ -313,18 +313,25 @@ pub fn independent_original(source: &str, survivor: &str) -> (independent: bool)
     !identifiers::equal_text(source, survivor)
 }
 
+/// 已接纳的单个成员可以完成，后续成员须在原时间片内开始。
+pub fn retirement_time_available(admitted: bool, elapsed_millis: u128, max_millis: u64) -> (allowed: bool)
+    ensures allowed == (admitted || elapsed_millis < max_millis as u128),
+{
+    admitted || elapsed_millis < max_millis as u128
+}
+
 /// 退役尚未准入时，只报告预算停止，不声称已尝试或完成处置。
 pub fn retirement_deferral(metadata_room: bool, nodes: usize, node_limit: usize,
-    elapsed_millis: u128, max_millis: u64) -> (reason: Option<&'static str>)
+    elapsed_millis: u128, max_millis: u64, admitted: bool) -> (reason: Option<&'static str>)
     ensures
         reason.is_none() == (metadata_room && nodes < node_limit
-            && elapsed_millis < max_millis as u128),
+            && (admitted || elapsed_millis < max_millis as u128)),
         match reason {
             Some(text) => text@ == "retirement round budget exhausted; original not attempted"@,
             None => true,
         },
 {
-    if !metadata_room || nodes >= node_limit || elapsed_millis >= max_millis as u128 {
+    if !metadata_room || nodes >= node_limit || !retirement_time_available(admitted, elapsed_millis, max_millis) {
         Some("retirement round budget exhausted; original not attempted")
     } else {
         None

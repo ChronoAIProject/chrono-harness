@@ -2054,6 +2054,9 @@ impl Inventory {
                     }),
             ),
         };
+        // The explicit sweep starts one round per declared address. Admission
+        // covers its lookup and the first eligible independent member together.
+        let single_address = matches!(originals, Some([_]));
         for id in addresses {
             let id = id?;
             if processed.contains(&id) {
@@ -2061,7 +2064,11 @@ impl Inventory {
             }
             if nodes >= self.policy.max_nodes_per_round
                 || !self.metadata_room()
-                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
+                || !crate::verified_release::retirement_time_available(
+                    single_address,
+                    began.elapsed().as_millis(),
+                    self.policy.max_millis_per_round,
+                )
             {
                 complete = false;
                 break;
@@ -2100,16 +2107,30 @@ impl Inventory {
                         .filter(|id| !gate.retained_dependencies.contains(*id))
                         .cloned(),
                 );
-                self.maintain_locked(observed, &gate).map(|round| {
-                    let observations = gate.measurements(self.policy.max_output_bytes);
-                    (
-                        round,
-                        owned,
-                        observations,
-                        gate.unvisited_relations.clone(),
-                        declarations,
-                    )
-                })
+                let independent = single_address
+                    && owned.len() == 1
+                    && gate.objects.borrow().get(&id).is_some_and(|record| {
+                        record.roles.is_empty()
+                            && record.incoming.is_empty()
+                            && record.output.as_ref().is_some_and(|output| {
+                                output.references.is_empty()
+                                    && output.manifest.sealed
+                                    && !output.overflow_disposal
+                                    && output.expires <= observed
+                                    && matches!(output.phase.as_str(), "released" | "disposing")
+                            })
+                    });
+                self.maintain_locked(observed, &gate, independent)
+                    .map(|round| {
+                        let observations = gate.measurements(self.policy.max_output_bytes);
+                        (
+                            round,
+                            owned,
+                            observations,
+                            gate.unvisited_relations.clone(),
+                            declarations,
+                        )
+                    })
             })();
             match attempted {
                 Ok((round, owned, observations, unvisited, declarations)) => {
