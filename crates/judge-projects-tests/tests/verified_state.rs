@@ -1,8 +1,11 @@
 //! 独立边界预期消费真实状态函数，并作为普通 Rust 测试运行。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
-#[path = "support/failure_batch.rs"]
-mod failure_batch;
+#[path = "support/host.rs"]
+mod project_host;
+#[cfg(verus_keep_ghost)]
+#[path = "execution.rs"]
+mod scheduler;
 #[path = "../../judge-projects/src/verified_state.rs"]
 mod state;
 #[cfg(not(verus_keep_ghost))]
@@ -21,9 +24,12 @@ verus! {
 
 #[cfg(verus_keep_ghost)]
 fn successful_execution_may_still_need_its_trace() {
-    assert(failure_batch::keep_scheduler_diagnostics(true, false));
-    assert(failure_batch::keep_scheduler_diagnostics(false, true));
-    assert(!failure_batch::keep_scheduler_diagnostics(true, true));
+    assert(scheduler::failure_batch::keep_scheduler_diagnostics(true, false));
+    assert(scheduler::failure_batch::keep_scheduler_diagnostics(false, true));
+    assert(!scheduler::failure_batch::keep_scheduler_diagnostics(true, true));
+    assert(project_host::failed_command(false, Some(7u8)).is_none());
+    assert(project_host::failed_command(true, Some(7u8)) == Some(7u8));
+    assert(project_host::failed_command::<u8>(true, None).is_none());
 }
 
 

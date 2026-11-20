@@ -1,31 +1,57 @@
-#![allow(dead_code)]
+#![allow(dead_code, unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn failed_command<T>(panicked: bool, last_command: Option<T>) -> (evidence: Option<T>)
+    ensures evidence == (if panicked { last_command } else { None }),
+{
+    if panicked { last_command } else { None }
+}
+}
 #[path = "execution_fixture.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod execution_fixture;
 #[path = "failure_batch.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod failure_batch;
 #[path = "temporary.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod temporary;
+#[cfg(not(verus_keep_ghost))]
 use super::support::*;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::sha256;
+#[cfg(not(verus_keep_ghost))]
 pub use execution_fixture::{Product, Step};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{cell::RefCell, fs, path::Path, process::Command};
+#[cfg(not(verus_keep_ghost))]
 pub use temporary::{FixtureDirectory, fixture_directory, tool_directory};
+#[cfg(not(verus_keep_ghost))]
 pub use temporary::{capture_native, copied_fixture_input, retain_diagnostic};
 
+#[cfg(not(verus_keep_ghost))]
 pub fn write_steps(root: &Path, path: &str, steps: &[Step]) {
     fs::write(root.join(path), serde_json::to_vec(steps).unwrap()).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn write_product(root: &Path, path: &str, product: Product) {
     fs::write(root.join(path), serde_json::to_vec(&product).unwrap()).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub enum FixtureProbe {
     Version,
     JudgeEof,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn install_executable(root: &Path, source: &Path, binary: &str, probe: FixtureProbe) -> String {
     assert!(source.is_file(), "build {}", source.display());
     let destination = root.join(format!(".chrono-harness/bin/{binary}"));
@@ -81,11 +107,13 @@ pub fn install_executable(root: &Path, source: &Path, binary: &str, probe: Fixtu
     digest
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct CommandEvidence {
     label: String,
     binding: Value,
     output: std::process::Output,
 }
+#[cfg(not(verus_keep_ghost))]
 impl CommandEvidence {
     fn write(&self, destination: &Path) -> std::io::Result<()> {
         fs::create_dir_all(destination)?;
@@ -97,6 +125,7 @@ impl CommandEvidence {
         )
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub struct Host {
     dir: FixtureDirectory,
     last_result: RefCell<Option<CommandEvidence>>,
@@ -106,6 +135,7 @@ pub struct Host {
     pub external: tempfile::NamedTempFile,
     pub tool: std::path::PathBuf,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Host {
     pub fn new(script: bool) -> Self {
         let dir = fixture_directory("execution host space ");
@@ -422,12 +452,12 @@ impl Host {
         self.dir.capture_input(command, input).unwrap()
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Host {
     fn drop(&mut self) {
-        if !std::thread::panicking() {
-            return;
-        }
-        let Some(evidence) = self.last_result.get_mut().take() else {
+        let Some(evidence) =
+            failed_command(std::thread::panicking(), self.last_result.get_mut().take())
+        else {
             return;
         };
         let retained = (|| -> Result<_, String> {
