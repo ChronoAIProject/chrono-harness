@@ -1,12 +1,38 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub(super) fn timeout_original_count(delayed_admission: bool) -> (count: usize)
+    ensures count == if delayed_admission { 9int } else { 8int },
+{
+    if delayed_admission { 9 } else { 8 }
+}
+}
+
+#[cfg(test)]
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
 mod chrono_git_boundary;
+#[cfg(test)]
+#[path = "../../host-release-tests/tests/support/failure_case.rs"]
+mod failure_case;
+#[cfg(test)]
 use super::*;
+#[cfg(test)]
+use failure_case::FailureCase;
+#[cfg(test)]
 use std::collections::BTreeMap;
+#[cfg(test)]
 use std::io::{BufRead, Read, Write};
+#[cfg(test)]
 use std::sync::{Arc, Mutex};
 
+#[cfg(test)]
 #[derive(Clone, Default)]
 struct Sink(Arc<Mutex<Vec<u8>>>);
+#[cfg(test)]
 impl Write for Sink {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.0.lock().unwrap().extend_from_slice(bytes);
@@ -16,11 +42,33 @@ impl Write for Sink {
         Ok(())
     }
 }
+#[cfg(test)]
 fn child() -> &'static str {
     env!("CARGO_BIN_EXE_chrono-test-ci-diagnostics")
 }
-fn host(address: Option<String>) -> Host {
-    let h = Host::new();
+#[cfg(test)]
+fn diagnostic_host() -> (FailureCase, Host) {
+    let checkout = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let batch = FailureCase::allocate_for(
+        &checkout,
+        ".chrono-harness/state/judge-ci-test-failures",
+        "diagnostic-",
+        "test.judge-ci-tests",
+    )
+    .unwrap();
+    let dir = tempfile::Builder::new()
+        .prefix("judge host ")
+        .tempdir_in(batch.path())
+        .unwrap();
+    (batch, Host::in_directory(dir))
+}
+
+#[cfg(test)]
+fn host(address: Option<String>) -> (FailureCase, Host) {
+    let (batch, h) = diagnostic_host();
     h.change_registry(CONFIG, |v| {
         v["schema"] = json!("chrono-ci-check/v3");
         v["policy"]["execution_diagnostics"] = json!("chrono-log-stderr/v1");
@@ -39,14 +87,16 @@ fn host(address: Option<String>) -> Host {
     });
     explicit_plans(&h);
     h.commit();
-    h
+    (batch, h)
 }
+#[cfg(test)]
 fn request(h: &Host) -> Request {
     let base = h.head();
     h.write("src.txt", "diagnostic consumer\n");
     let candidate = h.commit();
     unit_request(h, &base, &candidate)
 }
+#[cfg(test)]
 fn unit_request(h: &Host, base: &str, candidate: &str) -> Request {
     let mut req = h.request(Some(base), candidate);
     req.protocol = chrono_harness::units::PROTOCOL.into();
@@ -55,6 +105,7 @@ fn unit_request(h: &Host, base: &str, candidate: &str) -> Request {
     });
     req
 }
+#[cfg(test)]
 fn records(bytes: &[u8]) -> Vec<Value> {
     bytes
         .split(|b| *b == b'\n')
@@ -62,6 +113,7 @@ fn records(bytes: &[u8]) -> Vec<Value> {
         .map(|line| serde_json::from_slice(line).unwrap())
         .collect()
 }
+#[cfg(test)]
 fn event<'a>(rows: &'a [Value], name: &str) -> &'a Value {
     rows.iter()
         .find(|row| row["event"] == name)
@@ -73,7 +125,7 @@ fn execution_diagnostics_failed_check_preserves_originals_and_identity() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    let h = host(None);
+    let (_batch, h) = host(None);
     let req = request(&h);
     let assert_result = std::panic::catch_unwind(|| {
         let directory = h.root().join(".chrono-harness/state");
@@ -165,6 +217,7 @@ fn execution_diagnostics_delayed_admission_does_not_consume_interruption_window(
     incomplete_execution(true);
 }
 
+#[cfg(test)]
 struct ReadinessGate {
     log: fs::File,
     listener: Option<std::net::TcpListener>,
@@ -172,6 +225,7 @@ struct ReadinessGate {
     observed: Arc<Mutex<Value>>,
     startup_millis: i32,
 }
+#[cfg(test)]
 impl Write for ReadinessGate {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.log.write_all(bytes)?;
@@ -224,6 +278,7 @@ impl Write for ReadinessGate {
     }
 }
 
+#[cfg(test)]
 fn diagnostic_execution(
     h: &Host,
     req: &Request,
@@ -334,9 +389,10 @@ fn diagnostic_execution(
     result
 }
 
+#[cfg(test)]
 fn incomplete_execution(delayed_admission: bool) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let h = host(Some(listener.local_addr().unwrap().to_string()));
+    let (batch, h) = host(Some(listener.local_addr().unwrap().to_string()));
     // Omit the optional INFO adoption so the child fixture can use the existing
     // caller-scoped DEBUG logger without a new product logging API or policy.
     h.change_registry(CONFIG, |v| {
@@ -530,50 +586,143 @@ fn incomplete_execution(delayed_admission: bool) {
         std::panic::resume_unwind(error);
     }
     if let Some(destination) = std::env::var_os("CHRONO_CI_TEST_RECEIPTS") {
-        // The registered evidence consumer needs the actual timeout originals
-        // even when the assertions pass. This is neither a copied report nor
-        // a completion claim; its caller owns acceptance and subsequent release.
         let original = h.dir.keep();
-        let identity = chrono_harness::sha256(original.to_str().unwrap().as_bytes());
-        let mut files = serde_json::Map::new();
-        for name in [
-            "request.json",
+        export_timeout_originals(
+            batch.path(),
+            &original,
+            Path::new(&destination),
+            delayed_admission,
+        );
+    }
+}
+
+#[cfg(test)]
+fn export_timeout_originals(
+    batch: &Path,
+    original: &Path,
+    destination: &Path,
+    delayed_admission: bool,
+) {
+    let destination = fs::canonicalize(destination).unwrap();
+    assert!(
+        !destination.starts_with(fs::canonicalize(batch).unwrap()),
+        "export must survive diagnostic batch cleanup"
+    );
+    let artifact = tempfile::Builder::new()
+        .prefix("diagnostic-files-")
+        .tempdir_in(&destination)
+        .unwrap();
+    let mut files = serde_json::Map::new();
+    let names = [
+        "request.json",
+        "diagnostics.jsonl",
+        "monitor.jsonl",
+        "producer.stdout",
+        "producer.stderr",
+        "producer.launch.json",
+        "result.json",
+        "readiness.json",
+        "admission.json",
+    ];
+    for &name in &names[..timeout_original_count(delayed_admission)] {
+        let source = original.join(".chrono-harness/state").join(name);
+        let target = artifact.path().join(name);
+        let (digest, size) = chrono_harness::copy_hashed(
+            fs::File::open(source).unwrap(),
+            fs::File::create_new(&target).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            chrono_harness::file_identity(&target).unwrap(),
+            (digest.clone(), size)
+        );
+        files.insert(
+            name.into(),
+            json!({"path":target,"sha256":digest,"size":size}),
+        );
+    }
+    let identity = chrono_harness::sha256(original.as_os_str().as_encoded_bytes());
+    let mut receipt = tempfile::NamedTempFile::new_in(&destination).unwrap();
+    serde_json::to_writer(
+        receipt.as_file_mut(),
+        &json!({
+            "consumer":"finite engineering acceptance",
+            "retention":"until caller debugging/acceptance obligations finish; caller owns release",
+            "originals":files,"delayed_admission":delayed_admission
+        }),
+    )
+    .unwrap();
+    receipt
+        .persist_noclobber(destination.join(format!("diagnostic-{identity}.json")))
+        .unwrap();
+    eprintln!(
+        "diagnostic execution originals: {}",
+        artifact.keep().display()
+    );
+}
+
+#[test]
+fn timeout_receipt_reads_exported_files_after_its_batch_is_gone() {
+    for delayed in [false, true] {
+        let batch = tempfile::tempdir().unwrap();
+        let host = batch.path().join("fixture");
+        let state = host.join(".chrono-harness/state");
+        fs::create_dir_all(&state).unwrap();
+        let destination = tempfile::tempdir().unwrap();
+        let mut names = vec![
             "diagnostics.jsonl",
             "monitor.jsonl",
             "producer.stdout",
             "producer.stderr",
             "producer.launch.json",
-            "result.json",
             "readiness.json",
-        ] {
-            let path = original.join(".chrono-harness/state").join(name);
-            let (digest, size) = chrono_harness::file_identity(&path).unwrap();
-            files.insert(
-                name.into(),
-                json!({"path":path,"sha256":digest,"size":size}),
-            );
+            "request.json",
+            "result.json",
+        ];
+        if delayed {
+            names.push("admission.json");
         }
-        if delayed_admission {
-            let path = original.join(".chrono-harness/state/admission.json");
-            let (digest, size) = chrono_harness::file_identity(&path).unwrap();
-            files.insert(
-                "admission.json".into(),
-                json!({"path":path,"sha256":digest,"size":size}),
-            );
+        for (i, name) in names.iter().enumerate() {
+            fs::write(state.join(name), [255, 0, i as u8]).unwrap();
         }
-        let mut receipt = fs::File::create_new(
-            Path::new(&destination).join(format!("diagnostic-{identity}.json")),
-        )
-        .unwrap();
-        serde_json::to_writer(
-            &mut receipt,
-            &json!({"consumer":"finite engineering acceptance",
-            "retention":"until caller debugging/acceptance obligations finish; caller owns release",
-            "originals":files,"delayed_admission":delayed_admission}),
-        )
-        .unwrap();
-        eprintln!("diagnostic execution originals: {}", original.display());
+        let id = chrono_harness::sha256(host.as_os_str().as_encoded_bytes());
+        let receipt = destination.path().join(format!("diagnostic-{id}.json"));
+        export_timeout_originals(batch.path(), &host, destination.path(), delayed);
+        batch.close().unwrap();
+        let serialized = fs::read(receipt).unwrap();
+        let record: Value = serde_json::from_slice(&serialized).unwrap();
+        let files = record["originals"].as_object().unwrap();
+        assert_eq!(files.len(), names.len());
+        assert_eq!(record["delayed_admission"], delayed);
+        let export_root = destination.path().canonicalize().unwrap();
+        for (i, name) in names.iter().enumerate() {
+            let file = &files[*name];
+            let path = Path::new(file["path"].as_str().unwrap());
+            assert!(path.starts_with(&export_root));
+            let bytes = fs::read(path).unwrap();
+            assert_eq!(bytes, [255, 0, i as u8]);
+            assert_eq!(file["sha256"], chrono_harness::sha256(&bytes));
+            assert_eq!(file["size"], bytes.len());
+        }
     }
+}
+
+#[test]
+fn incomplete_timeout_export_keeps_source_and_publishes_no_receipt() {
+    let batch = tempfile::tempdir().unwrap();
+    let host = batch.path().join("fixture");
+    let state = host.join(".chrono-harness/state");
+    fs::create_dir_all(&state).unwrap();
+    fs::write(state.join("request.json"), b"original").unwrap();
+    let destination = tempfile::tempdir().unwrap();
+    assert!(
+        std::panic::catch_unwind(|| {
+            export_timeout_originals(batch.path(), &host, destination.path(), false)
+        })
+        .is_err()
+    );
+    assert_eq!(fs::read(state.join("request.json")).unwrap(), b"original");
+    assert_eq!(fs::read_dir(destination.path()).unwrap().count(), 0);
 }
 
 #[test]
@@ -582,7 +731,7 @@ fn execution_diagnostics_early_admission_rejection_joins_without_readiness() {
         return;
     }
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let h = host(None);
+    let (_batch, h) = host(None);
     h.change_registry(CONFIG, |v| {
         v["policy"]
             .as_object_mut()
@@ -636,7 +785,7 @@ fn execution_diagnostics_request_matches_real_host_root_before_effects() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    let h = host(Some("success".into()));
+    let (_batch, h) = host(Some("success".into()));
     h.change_registry(CONFIG, |v| {
         v["policy"]["tools"] = json!({"fixture":OPERATION_TOOL});
     });
@@ -688,7 +837,7 @@ fn execution_diagnostics_request_validates_unit_and_uses_registered_execution() 
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    let h = host(Some("success".into()));
+    let (_batch, h) = host(Some("success".into()));
     let req = request(&h);
     let mut invalid = req.clone();
     invalid.scope = Some(chrono_harness::units::Scope::Unit {
@@ -715,7 +864,7 @@ fn execution_diagnostics_debug_process_preserves_context_and_originals() {
     }
     use chrono_diagnostics::logging::{Level, Logger};
     for (argument, exit) in [("success", 0), ("failure", 7)] {
-        let h = Host::new();
+        let (_batch, h) = diagnostic_host();
         let directory = h.root().join(".chrono-harness/state");
         fs::create_dir_all(&directory).unwrap();
         let stdout = directory.join("stdout.bytes");
@@ -851,7 +1000,7 @@ fn execution_diagnostics_success_and_unselected_sink_preserve_verdicts() {
             Ok(())
         }
     }
-    let h = host(Some("success".into()));
+    let (_batch, h) = host(Some("success".into()));
     let req = request(&h);
     let sink = Sink::default();
     let response = chrono_judge_ci::judge_with_diagnostic_sink(&req, sink.clone());
@@ -906,7 +1055,7 @@ fn execution_diagnostics_sink_failure_retains_business_failure() {
             Ok(())
         }
     }
-    let h = host(None);
+    let (_batch, h) = host(None);
     let req = request(&h);
     let r = chrono_judge_ci::judge_with_diagnostic_sink(&req, Reject);
     fail(&r, "operation exit 7");
