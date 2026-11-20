@@ -668,7 +668,7 @@ fn render_unit<'a>(
                     "success()".into()
                 };
                 condition = format!(
-                    "always() && (inputs.channel == 'stable' || ({qualified})) && {condition}"
+                    "always() && (inputs.channel == 'stable' || {qualified}) && {condition}"
                 );
             } else if delivery.promotion_build_jobs.contains(&job.id) {
                 condition.push_str(" && inputs.channel != 'stable'");

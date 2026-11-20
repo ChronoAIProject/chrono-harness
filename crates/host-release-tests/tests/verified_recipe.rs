@@ -53,6 +53,11 @@ fn component_recovery_checks_the_entrypoint_paths_and_copied_bytes() {
         reveal_strlit("--select-preview"); reveal_strlit("--plan-preview");
         reveal_strlit("bin"); reveal_strlit("other"); reveal_strlit("report"); reveal_strlit("old");
         reveal_strlit("executable.tar"); reveal_strlit("other.tar"); reveal_strlit("digest");
+        assert("--plan-preview"@.len() != "--select-preview"@.len());
+        assert("other"@.len() != "bin"@.len());
+        assert("old"@.len() != "report"@.len());
+        assert("other.tar"@.len() != "executable.tar"@.len());
+        assert("other"@.len() != "digest"@.len());
     }
     expect_recipe(command::select_preview_command("--select-preview"));
     expect_recipe(!command::select_preview_command("--plan-preview"));
@@ -67,7 +72,7 @@ fn component_recovery_checks_the_entrypoint_paths_and_copied_bytes() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn preview_reuse_binds_the_original_landing_base() {
-    proof { reveal_strlit("base"); reveal_strlit("earlier"); }
+    proof { reveal_strlit("base"); reveal_strlit("earlier"); assert("base"@.len() != "earlier"@.len()); }
     expect_recipe(policy::recipe::preview::matching_predecessor(true, "base", "base"));
     expect_recipe(!policy::recipe::preview::matching_predecessor(false, "base", "base"));
     expect_recipe(!policy::recipe::preview::matching_predecessor(true, "earlier", "base"));

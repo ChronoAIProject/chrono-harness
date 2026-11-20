@@ -6808,7 +6808,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   publish:
-    if: ${{ always() && (inputs.channel == 'stable' || (needs.linux_release_frontend.result == 'success' && needs.linux_package.result == 'success' && needs.macos_package.result == 'success')) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ always() && (inputs.channel == 'stable' || needs.linux_release_frontend.result == 'success' && needs.linux_package.result == 'success' && needs.macos_package.result == 'success') && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     permissions:
       contents: write
       actions: read
