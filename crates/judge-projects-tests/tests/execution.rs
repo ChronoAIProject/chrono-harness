@@ -1,21 +1,37 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::retained_artifacts::retention::Inventory;
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_projects::execute;
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_registration::execution::{Method, Plan};
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_routes::prepare;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::json;
+#[cfg(not(verus_keep_ghost))]
 use std::collections::BTreeMap;
 #[path = "support/execution_fixture.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod execution_fixture;
+#[path = "support/failure_batch.rs"]
+pub(crate) mod failure_batch;
+#[cfg(not(verus_keep_ghost))]
 use execution_fixture::Step;
 
+#[cfg(not(verus_keep_ghost))]
 fn execute_observed(plan: &chrono_judge_routes::Execution) -> chrono_judge_projects::Results {
-    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../.chrono-harness/state/test-failures");
-    std::fs::create_dir_all(&directory).unwrap();
-    let trace = tempfile::Builder::new()
-        .prefix("scheduler-trace-")
-        .tempdir_in(&directory)
-        .unwrap();
+    let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    execute_observed_in(&checkout, plan)
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn execute_observed_in(
+    checkout: &std::path::Path,
+    plan: &chrono_judge_routes::Execution,
+) -> chrono_judge_projects::Results {
+    let (directory, batch) = failure_batch::allocate(checkout, "scheduler-").unwrap();
+    let trace = tempfile::tempdir_in(&directory).unwrap();
     let logger = chrono_diagnostics::logging::Logger::new(
         "projects-execution-test",
         chrono_diagnostics::logging::Level::DEBUG,
@@ -23,30 +39,36 @@ fn execute_observed(plan: &chrono_judge_routes::Execution) -> chrono_judge_proje
     );
     let result = logger.run(|| execute(plan));
     let trace_status = logger.finish();
-    if !result.as_ref().is_ok_and(|r| r.passed()) || trace_status.is_err() {
+    if failure_batch::keep_scheduler_diagnostics(
+        result.as_ref().is_ok_and(|r| r.passed()),
+        trace_status.is_ok(),
+    ) {
         eprintln!(
             "original execution trace retained at {}",
             trace.keep().display()
         );
-        let retained = (|| -> Result<_, Box<dyn std::error::Error>> {
-            let (file, path) = tempfile::Builder::new()
-                .prefix("scheduler-")
-                .suffix(".json")
-                .tempfile_in(&directory)?
-                .keep()?;
-            // Retain from the worker before returning: the controller may have
-            // already panicked while waiting for a child to reach its socket.
-            let evidence = json!({"schema":"chrono-project-execution-failure/v1", "plan":plan, "result":result});
-            match serde_json::to_writer(file, &evidence) {
-                Ok(()) => Ok(format!("original execution retained at {}", path.display())),
-                Err(error) => Ok(format!(
-                    "original execution retention incomplete at {}: {error}",
-                    path.display()
-                )),
-            }
-        })()
-        .unwrap_or_else(|error| format!("original execution retention failed: {error}"));
-        eprintln!("{retained}");
+        let path = directory.join("execution.json");
+        let evidence =
+            json!({"schema":"chrono-project-execution-failure/v1","plan":plan,"result":result});
+        let written = std::fs::File::create_new(&path)
+            .and_then(|file| serde_json::to_writer(file, &evidence).map_err(std::io::Error::other));
+        match &written {
+            Ok(()) => eprintln!("original execution retained at {}", path.display()),
+            Err(error) => eprintln!(
+                "original execution retention incomplete at {}: {error}",
+                path.display()
+            ),
+        }
+        if let Err(error) = batch.complete_diagnostic(json!({
+            "passed":result.as_ref().is_ok_and(|r| r.passed()),
+            "trace_errors":trace_status.as_ref().err().map(Vec::len),
+            "write_error":written.err().map(|e| e.to_string())
+        })) {
+            eprintln!(
+                "project diagnostic handoff at {}: {error}",
+                directory.display()
+            );
+        }
         match &result {
             Ok(rows) => {
                 for row in rows.executed.iter().chain(&rows.blocked) {
@@ -70,11 +92,15 @@ fn execute_observed(plan: &chrono_judge_routes::Execution) -> chrono_judge_proje
                 error.chars().take(512).collect::<String>()
             ),
         }
+    } else {
+        trace.close().unwrap();
+        batch.complete(json!({"passed":true})).unwrap();
     }
     trace_status.expect("execution trace must preserve its original events");
     result.unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn assert_passed(result: &chrono_judge_projects::Results) {
     assert!(
         result.passed(),
@@ -101,27 +127,32 @@ fn assert_passed(result: &chrono_judge_projects::Results) {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn stdout(bytes: impl AsRef<[u8]>) -> Step {
     Step::Stdout(bytes.as_ref().to_vec())
 }
+#[cfg(not(verus_keep_ghost))]
 fn append(path: &str, bytes: &str) -> Step {
     Step::Append {
         path: path.into(),
         bytes: bytes.as_bytes().to_vec(),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn create(path: &str, bytes: &str) -> Step {
     Step::Create {
         path: path.into(),
         bytes: bytes.as_bytes().to_vec(),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn require(path: &str, bytes: &str) -> Step {
     Step::Require {
         path: path.into(),
         bytes: bytes.as_bytes().to_vec(),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn edit_steps(
     p: &mut chrono_judge_routes::Execution,
     index: usize,
@@ -131,6 +162,7 @@ fn edit_steps(
     edit(&mut steps);
     p.operations[index].method.argv[1] = serde_json::to_string(&steps).unwrap();
 }
+#[cfg(not(verus_keep_ghost))]
 fn plan(
     commands: &[(&str, Vec<Step>)],
     sequences: &[(&str, Vec<&str>)],
@@ -191,6 +223,7 @@ fn plan(
     (dir, plan)
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failing_pass_text_blocks_dependents_and_independent_branch_continues() {
     let (_d, plan) = plan(
         &[
@@ -214,6 +247,7 @@ fn failing_pass_text_blocks_dependents_and_independent_branch_continues() {
     assert_eq!(actual.stdout, "PASS\n");
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn retain_operations(mut plan: chrono_judge_routes::Execution) -> chrono_judge_routes::Execution {
     plan.binding["operation_state"] = json!(".chrono-harness/state/projects-run");
     std::fs::create_dir_all(plan.root.join(".chrono-harness/state")).unwrap();
@@ -222,6 +256,84 @@ fn retain_operations(mut plan: chrono_judge_routes::Execution) -> chrono_judge_r
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
+fn failed_scheduler_report_and_trace_expire_as_one_directory() {
+    let checkout = tempfile::tempdir().unwrap();
+    let root = checkout.path().canonicalize().unwrap();
+    let policy = root.join(chrono_harness::retained_artifacts::retention::POLICY_PATH);
+    std::fs::create_dir_all(policy.parent().unwrap()).unwrap();
+    std::fs::write(
+        policy,
+        json!({
+            "schema":"chrono-output-retention/v2",
+            "producers":{"check-original":[".chrono-harness/state/test-failures/"]},
+            "max_lifetime_seconds":3600,"keep_seconds":0,"diagnostic_keep_seconds":86400,
+            "metadata_keep_seconds":0,"max_related_outputs":32,"max_summaries":16,
+            "max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":100
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let (_fixture, plan) = plan(
+        &[("broken", vec![Step::Exit(7)])],
+        &[("test:broken", vec!["broken"])],
+    );
+    let result = execute_observed_in(&root, &plan);
+    assert!(!result.passed());
+    let owner = Inventory::adopted(&root).unwrap().unwrap();
+    let family = root.join(".chrono-harness/state/test-failures");
+    let entries: Vec<_> = std::fs::read_dir(&family)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(entries.len(), 1);
+    let batch = &entries[0];
+    let relative = batch.strip_prefix(&root).unwrap().to_str().unwrap();
+    let status = owner
+        .producer_status("check-original", Some(relative))
+        .unwrap();
+    let record = &status["records"][0];
+    let created = record["lifetime"]["created_at"].as_u64().unwrap();
+    let deadline = record["lifetime"]["deadline"].as_u64().unwrap();
+    assert_eq!(deadline, created + 3600, "{record}");
+    assert_eq!(record["expires"], deadline, "{record}");
+    owner.maintain_at(deadline - 1).unwrap();
+    let original: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(batch.join("execution.json")).unwrap()).unwrap();
+    assert_eq!(original["plan"]["identity"], plan.identity);
+    assert_eq!(
+        original["result"]["Ok"],
+        serde_json::to_value(&result).unwrap()
+    );
+    let trace = std::fs::read_dir(batch)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.is_dir())
+        .unwrap();
+    let mut members: Vec<_> = std::fs::read_dir(&trace)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert!(
+        members
+            .iter()
+            .any(|file| file.metadata().unwrap().len() > 0)
+    );
+    members.extend([trace, batch.join("execution.json"), batch.clone()]);
+    while !members.is_empty() {
+        let before = members.len();
+        let retirement = owner.maintain_at(deadline).unwrap();
+        assert_eq!(retirement["accounting_errors"], json!([]), "{retirement}");
+        members.retain(|path| path.try_exists().unwrap());
+        assert!(
+            members.len() < before,
+            "still present: {members:?}; {retirement}"
+        );
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn completed_operations_have_independent_durable_originals() {
     let (directory, plan) = plan(
         &[
@@ -315,6 +427,7 @@ fn completed_operations_have_independent_durable_originals() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unavailable_operation_state_rejects_before_dispatch() {
     let (directory, plan) = plan(
         &[("effect", vec![append("effects", "dispatched")])],
@@ -334,6 +447,7 @@ fn unavailable_operation_state_rejects_before_dispatch() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -460,6 +574,7 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn output_bound_preserves_bytes_and_cannot_pass() {
     let (_d, plan) = plan(
         &[("flood", vec![stdout(vec![b'x'; 8000])])],
@@ -472,6 +587,7 @@ fn output_bound_preserves_bytes_and_cannot_pass() {
     assert!(actual.failure.as_ref().unwrap().contains("output limit"));
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn real_effects_shared_prerequisite_runs_once_in_order() {
     let (d, plan) = plan(
         &[
@@ -491,6 +607,7 @@ fn real_effects_shared_prerequisite_runs_once_in_order() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn arbitrary_operation_bytes_remain_evidence_without_protocol_decoding() {
     let (_d, plan) = plan(
         &[("raw", vec![stdout([255]), Step::Stderr(vec![254])])],
@@ -506,6 +623,7 @@ fn arbitrary_operation_bytes_remain_evidence_without_protocol_decoding() {
     assert_eq!(process.stdout, "�");
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn scheduled(
     mut p: chrono_judge_routes::Execution,
     cap: usize,
@@ -517,6 +635,7 @@ fn scheduled(
     p = p.with_scheduling(Some(policy)).unwrap();
     p
 }
+#[cfg(not(verus_keep_ghost))]
 fn prioritized(
     p: chrono_judge_routes::Execution,
     priority: serde_json::Value,
@@ -528,6 +647,7 @@ fn prioritized(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn priority_controls_actual_launches_and_preserves_canonical_results() {
     let (_d, p, listener) = barrier_plan(&["a", "b", "c", "d"]);
     let p = scheduled(
@@ -580,6 +700,7 @@ fn priority_controls_actual_launches_and_preserves_canonical_results() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn priority_waits_for_dependencies_and_conflicts_without_holding_disjoint_work() {
     for outputs in [false, true] {
         let (_d, mut p, listener) = barrier_plan(&["a", "b", "c", "x", "y", "z"]);
@@ -638,6 +759,7 @@ fn priority_waits_for_dependencies_and_conflicts_without_holding_disjoint_work()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn priority_does_not_run_failed_descendants_or_drop_unlisted_work() {
     let (d, p) = plan(
         &[
@@ -676,6 +798,7 @@ fn priority_does_not_run_failed_descendants_or_drop_unlisted_work() {
         "ran"
     );
 }
+#[cfg(not(verus_keep_ghost))]
 fn barrier_plan(
     ids: &[&str],
 ) -> (
@@ -710,6 +833,7 @@ fn barrier_plan(
     let (d, p) = plan(&commands, &sequences);
     (d, p, listener)
 }
+#[cfg(not(verus_keep_ghost))]
 fn arrival(listener: &std::net::TcpListener) -> (String, std::net::TcpStream) {
     use std::io::Read;
     use std::os::fd::AsRawFd;
@@ -744,11 +868,13 @@ fn arrival(listener: &std::net::TcpListener) -> (String, std::net::TcpStream) {
     }
     (id, s)
 }
+#[cfg(not(verus_keep_ghost))]
 fn release(mut s: std::net::TcpStream) {
     use std::io::Write;
     s.write_all(b"!").unwrap();
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rendezvous_proves_overlap_cap_and_canonical_rows() {
     let (_d, mut p, listener) = barrier_plan(&["a", "b", "c"]);
     // A third launch before either held slot finishes fails an independent
@@ -786,6 +912,7 @@ fn rendezvous_proves_overlap_cap_and_canonical_rows() {
     });
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn resource_and_nested_output_exclusion_allow_disjoint_ready_work() {
     for outputs in [false, true] {
         let (_d, mut p, listener) = barrier_plan(&["a", "b", "z"]);
@@ -817,6 +944,7 @@ fn resource_and_nested_output_exclusion_allow_disjoint_ready_work() {
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn diamond_runs_shared_work_once_and_waits_for_both_predecessors() {
     let (d, p) = plan(
         &[
@@ -844,6 +972,7 @@ fn diamond_runs_shared_work_once_and_waits_for_both_predecessors() {
     assert_eq!(std::fs::read_to_string(d.path().join("d")).unwrap(), "d");
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn timeout_and_failed_exit_keep_original_bytes_and_only_block_descendants() {
     for timeout in [true, false] {
         let (_d, mut p) = plan(
@@ -891,6 +1020,7 @@ fn timeout_and_failed_exit_keep_original_bytes_and_only_block_descendants() {
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn prelaunch_digest_failure_does_not_stop_sibling() {
     let (_d, mut p) = plan(
         &[
@@ -914,6 +1044,7 @@ fn prelaunch_digest_failure_does_not_stop_sibling() {
     assert_eq!(r.tests["test:z"], "passed");
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn missing_policy_keeps_serial_process_order_and_legacy_identity_shape() {
     let (d, p) = plan(
         &[
@@ -934,6 +1065,7 @@ fn missing_policy_keeps_serial_process_order_and_legacy_identity_shape() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn spawn_failure_preserves_cause_and_continues_independent_operation() {
     use std::os::unix::fs::PermissionsExt;
     let (d, mut p) = plan(
@@ -968,6 +1100,7 @@ fn spawn_failure_preserves_cause_and_continues_independent_operation() {
     assert_eq!(r.tests["test:z"], "passed");
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn concurrent_output_failure_retains_original_bytes_and_sibling_receipt() {
     let (_d, p) = plan(
         &[
@@ -998,6 +1131,7 @@ fn concurrent_output_failure_retains_original_bytes_and_sibling_receipt() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn receipt_mismatch_keeps_real_processes_and_does_not_stop_independent_work() {
     let (d, mut p) = plan(
         &[
@@ -1042,6 +1176,7 @@ fn receipt_mismatch_keeps_real_processes_and_does_not_stop_independent_work() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn process_side_slot_witness_detects_an_excess_launch() {
     let (d, mut p, listener) = barrier_plan(&["a", "b", "c"]);
     edit_steps(&mut p, 1, |s| s.push(create("b-completed", "done")));

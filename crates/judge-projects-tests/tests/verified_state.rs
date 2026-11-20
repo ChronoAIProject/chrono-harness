@@ -1,5 +1,11 @@
 //! 独立边界预期消费真实状态函数，并作为普通 Rust 测试运行。
 #![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+#[path = "support/host.rs"]
+mod project_host;
+#[cfg(verus_keep_ghost)]
+#[path = "execution.rs"]
+mod scheduler;
 #[path = "../../judge-projects/src/verified_state.rs"]
 mod state;
 #[cfg(not(verus_keep_ghost))]
@@ -15,6 +21,19 @@ mod identifiers;
 mod compiler_fixture;
 
 verus! {
+
+#[cfg(verus_keep_ghost)]
+fn successful_execution_may_still_need_its_trace() {
+    let incomplete_trace = scheduler::failure_batch::keep_scheduler_diagnostics(true, false);
+    let failed_execution = scheduler::failure_batch::keep_scheduler_diagnostics(false, true);
+    let complete = scheduler::failure_batch::keep_scheduler_diagnostics(true, true);
+    assert(incomplete_trace && failed_execution && !complete);
+    let passed = project_host::failed_command(false, Some(7u8));
+    let failed = project_host::failed_command(true, Some(7u8));
+    let missing = project_host::failed_command::<u8>(true, None);
+    assert(passed.is_none() && failed == Some(7u8) && missing.is_none());
+}
+
 
 #[cfg(verus_keep_ghost)]
 fn a_mismatch_between_the_two_compiler_destinations_is_rejected(count: usize, has_flag: bool) {
