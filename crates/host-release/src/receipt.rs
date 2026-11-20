@@ -150,6 +150,18 @@ pub fn select(
     lineage: &Lineage,
     raw: &[u8],
 ) -> Result<Dependencies, String> {
+    select_retained(loaded, scope, lineage, raw, &BTreeMap::new())
+}
+
+/// 当前 needs 明确跳过并且沿用计划点名原生产者时，取原选择。
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn select_retained(
+    loaded: &Loaded,
+    scope: Scope<'_>,
+    lineage: &Lineage,
+    raw: &[u8],
+    retained: &BTreeMap<String, Selection>,
+) -> Result<Dependencies, String> {
     lineage.validate()?;
     let (id, needs) = match scope {
         Scope::Unit(id) => {
@@ -210,7 +222,45 @@ pub fn select(
     let mut selected = BTreeMap::new();
     for id in needs {
         let job = &bindings[id];
-        selected.insert(id.clone(), select_row(job, &rows[job], lineage)?);
+        let row = &rows[job];
+        let producer = match retained.get(job) {
+            Some(origin) => {
+                let outputs = row["outputs"]
+                    .as_object()
+                    .ok_or_else(|| error("missing skipped job outputs"))?;
+                if lineage.kind != Kind::Github
+                    || row["result"] != "skipped"
+                    || !outputs.values().all(|value| value == "")
+                    || origin.job != *job
+                    || origin.run_id == lineage.run_id
+                    || !crate::verified_recipe::delivery::decimal_text(
+                        origin.run_id.as_bytes(),
+                        false,
+                    )
+                    || !crate::verified_recipe::delivery::decimal_text(
+                        origin.artifact_id.as_bytes(),
+                        false,
+                    )
+                    || !crate::verified_recipe::delivery::decimal_text(
+                        origin.attempt.as_bytes(),
+                        false,
+                    )
+                {
+                    return Err(error(format!(
+                        "skipped dependency differs from retained producer: {job}"
+                    )));
+                }
+                origin.clone()
+            }
+            None => select_row(job, row, lineage)?,
+        };
+        selected.insert(id.clone(), producer);
+    }
+    if retained
+        .keys()
+        .any(|job| !selected.values().any(|entry| &entry.job == job))
+    {
+        return Err(error("retained producer is not a registered dependency"));
     }
     Ok(Dependencies {
         units: selected,
@@ -617,6 +667,42 @@ pub fn read(
     unit: &Unit,
     selection: &Selection,
 ) -> Result<Verified, String> {
+    let directory = no_symlink_parents(root, unit.handoff())?;
+    read_at(
+        loaded,
+        directory,
+        context,
+        parent,
+        unit,
+        selection,
+        |directory, declared, source, selected| {
+            crate::frontend::validate_metadata(
+                root,
+                directory,
+                declared,
+                &chrono_host_bootstrap::bindings::native_platform()?,
+                source,
+                selected,
+            )
+        },
+    )
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn read_at(
+    loaded: &Loaded,
+    directory: PathBuf,
+    context: &Value,
+    parent: &Lineage,
+    unit: &Unit,
+    selection: &Selection,
+    validate_frontend: impl FnOnce(
+        &Path,
+        &crate::recipe::NativeFrontend,
+        &chrono_host_bootstrap::source::SourceObservation,
+        &Selection,
+    ) -> Result<Value, String>,
+) -> Result<Verified, String> {
     parent.validate()?;
     if !policy::selected_producer(
         &DependencyResult::Success,
@@ -629,7 +715,6 @@ pub fn read(
     {
         return Err(error("incompatible selected producer"));
     }
-    let directory = no_symlink_parents(root, unit.handoff())?;
     let receipt_path = no_symlink_parents(&directory, "receipt.json")?;
     if !fs::symlink_metadata(&receipt_path)
         .map_err(error)?
@@ -687,7 +772,11 @@ pub fn read(
         }
     }
     let input = fs::read(original(&directory, &receipt["dependency_input"])?).map_err(error)?;
-    let selected = select(loaded, Scope::Unit(unit.id()), &lineage, &input)?;
+    let origins: BTreeMap<String, Selection> = match receipt.get("retained_selections") {
+        None => BTreeMap::new(),
+        Some(origins) => serde_json::from_value(origins.clone()).map_err(error)?,
+    };
+    let selected = select_retained(loaded, Scope::Unit(unit.id()), &lineage, &input, &origins)?;
     if receipt["selected"] != json!(selected.units)
         || receipt["frontend_selection"] != json!(selected.frontend)
     {
@@ -707,14 +796,7 @@ pub fn read(
             dirty: Some(false),
             error: None,
         };
-        let manifest = crate::frontend::validate_metadata(
-            root,
-            &directory.join("frontend"),
-            declared,
-            &chrono_host_bootstrap::bindings::native_platform()?,
-            &source,
-            frontend,
-        )?;
+        let manifest = validate_frontend(&directory.join("frontend"), declared, &source, frontend)?;
         let expected = crate::transport::ExecutableIdentity::from_receipt(&manifest["executable"])?;
         let actual = crate::transport::ExecutableIdentity::from_receipt(&context["producer"])?;
         if !policy::same_executable(
