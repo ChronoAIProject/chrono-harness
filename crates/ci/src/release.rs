@@ -45,6 +45,8 @@ pub struct Config {
     pub delivery: Option<Delivery>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persistent_cache: Option<super::cache::Config>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_diagnostic_retention_days: Option<u16>,
     pub schema: String,
     pub workflow_path: String,
     pub name: String,
@@ -152,6 +154,9 @@ fn literal(value: &str) -> Result<(), String> {
 
 #[cfg(not(verus_keep_ghost))]
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
+    if !super::startup::retention_days_valid(c.cache_diagnostic_retention_days) {
+        return Err("release cache diagnostic retention days must be positive".into());
+    }
     if let Some(delivery) = &c.delivery {
         if !super::verified_literals::delivery_mode(&c.schema, c.push_branches.len()) {
             return Err("delivery requires release v2 and a successful workflow trigger".into());
@@ -450,6 +455,9 @@ pub fn render(c: &Config) -> Result<String, String> {
                     )),
                     super::artifact_hidden_files(true)
                 ));
+                if let Some(days) = c.cache_diagnostic_retention_days {
+                    output.push_str(&format!("          retention-days: {days}\n"));
+                }
             }
             continue;
         }

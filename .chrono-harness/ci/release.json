@@ -1,6 +1,7 @@
 {
   "schema": "chrono-github-release/v2",
   "workflow_path": ".github/workflows/chrono-release.yml",
+  "cache_diagnostic_retention_days": 1,
   "name": "chrono-release-build",
   "push_branches": [],
   "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
