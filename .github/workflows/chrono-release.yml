@@ -232,6 +232,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_instructions:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_instructions') }}
     needs: ["linux_release_frontend"]
@@ -320,6 +321,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_judge_ci:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_ci') }}
     needs: ["linux_release_frontend"]
@@ -408,6 +410,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_ci:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_ci') }}
     needs: ["linux_release_frontend"]
@@ -496,6 +499,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_judge_registration:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_registration') }}
     needs: ["linux_release_frontend"]
@@ -584,6 +588,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_judge_filemap:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_filemap') }}
     needs: ["linux_release_frontend"]
@@ -672,6 +677,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_judge_routes:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_routes') }}
     needs: ["linux_release_frontend"]
@@ -760,6 +766,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_judge_projects:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_projects') }}
     needs: ["linux_release_frontend"]
@@ -848,6 +855,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_judge_cost:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_cost') }}
     needs: ["linux_release_frontend"]
@@ -936,6 +944,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_judge_mixed:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_mixed') }}
     needs: ["linux_release_frontend"]
@@ -1024,6 +1033,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_judge_workflow:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_workflow') }}
     needs: ["linux_release_frontend"]
@@ -1112,6 +1122,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_inputs:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_inputs') }}
     needs: ["linux_release_frontend"]
@@ -1200,6 +1211,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_distribution:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_distribution') }}
     needs: ["linux_release_frontend"]
@@ -1288,6 +1300,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_worktree:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_worktree') }}
     needs: ["linux_release_frontend"]
@@ -1376,6 +1389,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_distribution_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_distribution_tests') }}
     needs: ["linux_release_frontend"]
@@ -1464,6 +1478,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_worktree_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && (needs.linux_build_ci.result == 'success' || (needs.linux_build_ci.result == 'skipped' && contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_ci'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_worktree_tests') }}
     needs: ["linux_release_frontend","linux_build_ci"]
@@ -1567,6 +1582,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_runner_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_runner_tests') }}
     needs: ["linux_release_frontend"]
@@ -1655,6 +1671,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_inputs_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_inputs_tests') }}
     needs: ["linux_release_frontend"]
@@ -1743,6 +1760,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_ci_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_ci_tests') }}
     needs: ["linux_release_frontend"]
@@ -1831,6 +1849,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_judge_ci_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_ci_tests') }}
     needs: ["linux_release_frontend"]
@@ -1919,6 +1938,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_judge_registration_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_registration_tests') }}
     needs: ["linux_release_frontend"]
@@ -2007,6 +2027,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_judge_projects_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_projects_tests') }}
     needs: ["linux_release_frontend"]
@@ -2095,6 +2116,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_judge_workflow_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && (needs.linux_build_ci.result == 'success' || (needs.linux_build_ci.result == 'skipped' && contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_ci'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_workflow_tests') }}
     needs: ["linux_release_frontend","linux_build_ci"]
@@ -2191,6 +2213,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_instructions_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_instructions_tests') }}
     needs: ["linux_release_frontend"]
@@ -2279,6 +2302,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_judge_filemap_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_filemap_tests') }}
     needs: ["linux_release_frontend"]
@@ -2367,6 +2391,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_judge_routes_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_routes_tests') }}
     needs: ["linux_release_frontend"]
@@ -2455,6 +2480,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_judge_cost_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_cost_tests') }}
     needs: ["linux_release_frontend"]
@@ -2543,6 +2569,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_judge_mixed_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_mixed_tests') }}
     needs: ["linux_release_frontend"]
@@ -2631,6 +2658,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_package:
     if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && (github.event_name != 'workflow_run' || needs.linux_release_frontend.result != 'skipped' || needs.linux_build_runner.result != 'skipped' || needs.linux_build_instructions.result != 'skipped' || needs.linux_build_judge_ci.result != 'skipped' || needs.linux_build_ci.result != 'skipped' || needs.linux_build_judge_registration.result != 'skipped' || needs.linux_build_judge_filemap.result != 'skipped' || needs.linux_build_judge_routes.result != 'skipped' || needs.linux_build_judge_projects.result != 'skipped' || needs.linux_build_judge_cost.result != 'skipped' || needs.linux_build_judge_mixed.result != 'skipped' || needs.linux_build_judge_workflow.result != 'skipped' || needs.linux_build_inputs.result != 'skipped' || needs.linux_build_distribution.result != 'skipped' || needs.linux_build_worktree.result != 'skipped' || needs.linux_verify_distribution_tests.result != 'skipped' || needs.linux_verify_worktree_tests.result != 'skipped' || needs.linux_verify_identifiers_tests.result != 'skipped' || needs.linux_verify_runner_tests.result != 'skipped' || needs.linux_verify_inputs_tests.result != 'skipped' || needs.linux_verify_ci_tests.result != 'skipped' || needs.linux_verify_judge_ci_tests.result != 'skipped' || needs.linux_verify_judge_registration_tests.result != 'skipped' || needs.linux_verify_judge_projects_tests.result != 'skipped' || needs.linux_verify_judge_workflow_tests.result != 'skipped' || needs.linux_verify_instructions_tests.result != 'skipped' || needs.linux_verify_judge_filemap_tests.result != 'skipped' || needs.linux_verify_judge_routes_tests.result != 'skipped' || needs.linux_verify_judge_cost_tests.result != 'skipped' || needs.linux_verify_judge_mixed_tests.result != 'skipped' || needs.linux_verify_diagnostics_tests.result != 'skipped' || needs.linux_build_cache.result != 'skipped' || needs.linux_verify_cache_tests.result != 'skipped' || needs.linux_verify_host_bootstrap_native_tests.result != 'skipped' || needs.linux_verify_host_bootstrap_launcher_tests.result != 'skipped' || needs.linux_verify_pr_tests.result != 'skipped' || needs.linux_verify_host_release_native_tests.result != 'skipped' || needs.linux_build_pr.result != 'skipped') && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_package') }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_identifiers_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_diagnostics_tests","linux_build_cache","linux_verify_cache_tests","linux_verify_host_bootstrap_native_tests","linux_verify_host_bootstrap_launcher_tests","linux_verify_pr_tests","linux_verify_host_release_native_tests","linux_build_pr"]
@@ -3030,6 +3058,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_instructions:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_instructions') }}
     needs: ["macos_release_frontend"]
@@ -3118,6 +3147,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_judge_ci:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_ci') }}
     needs: ["macos_release_frontend"]
@@ -3206,6 +3236,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_ci:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_ci') }}
     needs: ["macos_release_frontend"]
@@ -3294,6 +3325,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_judge_registration:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_registration') }}
     needs: ["macos_release_frontend"]
@@ -3382,6 +3414,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_judge_filemap:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_filemap') }}
     needs: ["macos_release_frontend"]
@@ -3470,6 +3503,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_judge_routes:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_routes') }}
     needs: ["macos_release_frontend"]
@@ -3558,6 +3592,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_judge_projects:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_projects') }}
     needs: ["macos_release_frontend"]
@@ -3646,6 +3681,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_judge_cost:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_cost') }}
     needs: ["macos_release_frontend"]
@@ -3734,6 +3770,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_judge_mixed:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_mixed') }}
     needs: ["macos_release_frontend"]
@@ -3822,6 +3859,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_judge_workflow:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_workflow') }}
     needs: ["macos_release_frontend"]
@@ -3910,6 +3948,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_inputs:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_inputs') }}
     needs: ["macos_release_frontend"]
@@ -3998,6 +4037,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_distribution:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_distribution') }}
     needs: ["macos_release_frontend"]
@@ -4086,6 +4126,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_worktree:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_worktree') }}
     needs: ["macos_release_frontend"]
@@ -4174,6 +4215,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_distribution_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_distribution_tests') }}
     needs: ["macos_release_frontend"]
@@ -4262,6 +4304,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_worktree_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && (needs.macos_build_ci.result == 'success' || (needs.macos_build_ci.result == 'skipped' && contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_ci'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_worktree_tests') }}
     needs: ["macos_release_frontend","macos_build_ci"]
@@ -4365,6 +4408,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_runner_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_runner_tests') }}
     needs: ["macos_release_frontend"]
@@ -4453,6 +4497,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_inputs_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_inputs_tests') }}
     needs: ["macos_release_frontend"]
@@ -4541,6 +4586,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_ci_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_ci_tests') }}
     needs: ["macos_release_frontend"]
@@ -4646,6 +4692,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_judge_ci_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_ci_tests') }}
     needs: ["macos_release_frontend"]
@@ -4734,6 +4781,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_judge_registration_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_registration_tests') }}
     needs: ["macos_release_frontend"]
@@ -4822,6 +4870,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_judge_projects_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_projects_tests') }}
     needs: ["macos_release_frontend"]
@@ -4910,6 +4959,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_judge_workflow_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && (needs.macos_build_ci.result == 'success' || (needs.macos_build_ci.result == 'skipped' && contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_ci'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_workflow_tests') }}
     needs: ["macos_release_frontend","macos_build_ci"]
@@ -5006,6 +5056,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_instructions_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_instructions_tests') }}
     needs: ["macos_release_frontend"]
@@ -5094,6 +5145,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_judge_filemap_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_filemap_tests') }}
     needs: ["macos_release_frontend"]
@@ -5182,6 +5234,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_judge_routes_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_routes_tests') }}
     needs: ["macos_release_frontend"]
@@ -5270,6 +5323,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_judge_cost_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_cost_tests') }}
     needs: ["macos_release_frontend"]
@@ -5358,6 +5412,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_judge_mixed_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_mixed_tests') }}
     needs: ["macos_release_frontend"]
@@ -5446,6 +5501,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_package:
     if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && (github.event_name != 'workflow_run' || needs.macos_release_frontend.result != 'skipped' || needs.macos_build_runner.result != 'skipped' || needs.macos_build_instructions.result != 'skipped' || needs.macos_build_judge_ci.result != 'skipped' || needs.macos_build_ci.result != 'skipped' || needs.macos_build_judge_registration.result != 'skipped' || needs.macos_build_judge_filemap.result != 'skipped' || needs.macos_build_judge_routes.result != 'skipped' || needs.macos_build_judge_projects.result != 'skipped' || needs.macos_build_judge_cost.result != 'skipped' || needs.macos_build_judge_mixed.result != 'skipped' || needs.macos_build_judge_workflow.result != 'skipped' || needs.macos_build_inputs.result != 'skipped' || needs.macos_build_distribution.result != 'skipped' || needs.macos_build_worktree.result != 'skipped' || needs.macos_verify_distribution_tests.result != 'skipped' || needs.macos_verify_worktree_tests.result != 'skipped' || needs.macos_verify_identifiers_tests.result != 'skipped' || needs.macos_verify_runner_tests.result != 'skipped' || needs.macos_verify_inputs_tests.result != 'skipped' || needs.macos_verify_ci_tests.result != 'skipped' || needs.macos_verify_judge_ci_tests.result != 'skipped' || needs.macos_verify_judge_registration_tests.result != 'skipped' || needs.macos_verify_judge_projects_tests.result != 'skipped' || needs.macos_verify_judge_workflow_tests.result != 'skipped' || needs.macos_verify_instructions_tests.result != 'skipped' || needs.macos_verify_judge_filemap_tests.result != 'skipped' || needs.macos_verify_judge_routes_tests.result != 'skipped' || needs.macos_verify_judge_cost_tests.result != 'skipped' || needs.macos_verify_judge_mixed_tests.result != 'skipped' || needs.macos_verify_diagnostics_tests.result != 'skipped' || needs.macos_build_cache.result != 'skipped' || needs.macos_verify_cache_tests.result != 'skipped' || needs.macos_verify_host_bootstrap_native_tests.result != 'skipped' || needs.macos_verify_host_bootstrap_launcher_tests.result != 'skipped' || needs.macos_verify_pr_tests.result != 'skipped' || needs.macos_verify_host_release_native_tests.result != 'skipped' || needs.macos_build_pr.result != 'skipped') && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_package') }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_identifiers_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_diagnostics_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_host_bootstrap_native_tests","macos_verify_host_bootstrap_launcher_tests","macos_verify_pr_tests","macos_verify_host_release_native_tests","macos_build_pr"]
@@ -5838,6 +5894,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_diagnostics_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_diagnostics_tests') }}
     needs: ["macos_release_frontend"]
@@ -5926,6 +5983,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_build_cache:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_cache') }}
     needs: ["linux_release_frontend"]
@@ -6014,6 +6072,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_cache_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_cache_tests') }}
     needs: ["linux_release_frontend"]
@@ -6102,6 +6161,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_cache:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_cache') }}
     needs: ["macos_release_frontend"]
@@ -6190,6 +6250,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_verify_cache_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_cache_tests') }}
     needs: ["macos_release_frontend"]
@@ -6278,6 +6339,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   linux_verify_host_bootstrap_native_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_host_bootstrap_native_tests') }}
     needs: ["linux_release_frontend"]
@@ -7047,6 +7109,7 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1
   macos_build_pr:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_pr') }}
     needs: ["macos_release_frontend"]
@@ -7135,3 +7198,4 @@ jobs:
           path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
+          retention-days: 1

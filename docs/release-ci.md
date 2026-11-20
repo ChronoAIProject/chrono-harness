@@ -18,6 +18,9 @@ chrono-ci verify --host-root HOST --config .chrono-harness/ci/release.json
 
 首次 `init` 把源放到宿主 `.chrono-harness/ci/release.json`，后续 init 保留已采用源。generate／verify 的源必须位于宿主 `.chrono-harness/`。输出用独立 `github-release/v1` 标记声明归属，不能覆盖无归属工作流、检查工作流或符号链接。重复生成不写文件，verify 只报漂移、不修文件。写入器逐文件替换，不保证多文件崩溃事务或并发写入；登记改名／删除后，旧工作流须显式退役。
 
+发布配置的 `cache_diagnostic_retention_days` 控制缓存作业失败时上传的诊断工件。宿主选用 1 天。维护者需要继续排查时，在该期限内将原 ZIP 转存到私有诊断存储，按工件摘要读回。平台包和发布回执有各自的晋升使用方。
+
+
 生成的 job 使用登记 runner，检出 `workflow_dispatch` 的 `source` 或 push 提交，再用 Bash 执行原 argv。`source` 是直接交给 checkout 的修订字符串，生成器不保证它是完整 commit OID；构建消费者负责核实际源码身份及验收。参数按字面引用，失败保留原退出码；后续 `always()` 上传尝试保留原产物，产物缺失仍报错。job 独立运行，一个失败不会取消其他 job。未采用 `delivery` 的工作流仅有 `contents: read`，只构建并保留 Actions artifacts。
 
 本仓将 `push_branches` 置空，采用 `delivery` 订阅 dev 的 `chrono / collection` 完成事件；自动测试版读取该次成功 push 的汇总工件。首次清单或非空的 `detection.required_units` 启动发布。普通变更选中零个单元时跳过构建、打包、公开和安装。缺失或不匹配的来源、运行身份及选择记录使选择作业失败。手动通道按调用方选定的固定源码执行。临时 integration 通过 `workflow_dispatch` 的 `source` 和默认 `channel=build` 验证构建，不公开版本。常规变更仍由登记的 PR CI 验收。
