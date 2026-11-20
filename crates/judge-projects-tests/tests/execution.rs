@@ -281,11 +281,6 @@ fn failed_scheduler_report_and_trace_expire_as_one_directory() {
     let result = execute_observed_in(&root, &plan);
     assert!(!result.passed());
     let owner = Inventory::adopted(&root).unwrap().unwrap();
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    owner.maintain_at(now).unwrap();
     let family = root.join(".chrono-harness/state/test-failures");
     let entries: Vec<_> = std::fs::read_dir(&family)
         .unwrap()
@@ -293,6 +288,16 @@ fn failed_scheduler_report_and_trace_expire_as_one_directory() {
         .collect();
     assert_eq!(entries.len(), 1);
     let batch = &entries[0];
+    let relative = batch.strip_prefix(&root).unwrap().to_str().unwrap();
+    let status = owner
+        .producer_status("check-original", Some(relative))
+        .unwrap();
+    let record = &status["records"][0];
+    let created = record["lifetime"]["created_at"].as_u64().unwrap();
+    let deadline = record["lifetime"]["deadline"].as_u64().unwrap();
+    assert_eq!(deadline, created + 3600, "{record}");
+    assert_eq!(record["expires"], deadline, "{record}");
+    owner.maintain_at(deadline - 1).unwrap();
     let original: serde_json::Value =
         serde_json::from_slice(&std::fs::read(batch.join("execution.json")).unwrap()).unwrap();
     assert_eq!(original["plan"]["identity"], plan.identity);
@@ -307,8 +312,8 @@ fn failed_scheduler_report_and_trace_expire_as_one_directory() {
                 .unwrap()
                 .any(|file| file.unwrap().metadata().unwrap().len() > 0)
     }));
-    owner.maintain_at(now + 3601).unwrap();
-    assert!(!batch.exists());
+    let retirement = owner.maintain_at(deadline).unwrap();
+    assert!(!batch.exists(), "{retirement}");
 }
 
 #[test]
