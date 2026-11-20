@@ -140,12 +140,18 @@ struct Host {
 }
 impl Host {
     fn new() -> Self {
-        let h = Self {
-            next_request: AtomicU64::new(0),
-            dir: tempfile::Builder::new()
+        Self::in_directory(
+            tempfile::Builder::new()
                 .prefix("judge host ")
                 .tempdir()
                 .unwrap(),
+        )
+    }
+
+    fn in_directory(dir: TempDir) -> Self {
+        let h = Self {
+            next_request: AtomicU64::new(0),
+            dir,
         };
         h.git(&["init", "-q"]);
         h.git(&["config", "user.email", "test@example.invalid"]);

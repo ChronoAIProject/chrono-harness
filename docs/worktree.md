@@ -728,7 +728,7 @@ Rust `RetainedArtifact` 接纳精确保留对象并发布 intent。采用 wrappe
 
 命令 fixture 使用自己的已提交 receipt owner 政策。CI 命令返回失败时，普通调用把诊断现场交给 `ci-fixture` 的 24 小时批次，原临时目录随调用结束清理。交接失败时输出错误和保全位置。主检出和 linked 检出的失败现场共用该批次。
 
-设置 `CHRONO_CI_TEST_RECEIPTS` 的 CI 命令调用把整份现场转存到调用方给定目录。生产者读回每个复制文件核验 SHA-256 和长度，最后原子发布 `ci-command-*.json`。调用方通过其中的 `artifact`、`originals` 直接读取转存件，并负责转存件的保留期限。诊断引用在交接完成时释放。judge-ci 诊断保留自身的发布协议。
+设置 `CHRONO_CI_TEST_RECEIPTS` 的 CI 命令调用把整份现场转存到调用方给定目录。生产者读回每个复制文件核验 SHA-256 和长度，最后原子发布 `ci-command-*.json`。调用方通过其中的 `artifact`、`originals` 直接读取转存件，并负责转存件的保留期限。诊断引用在交接完成时释放。judge-ci 超时诊断也在同一调用方目录内复制并读回所需的八个文件，延迟准入时另含 `admission.json`。调用方从原子发布的 `diagnostic-*.json` 回执读取转存件。每次测试在 `.chrono-harness/state/judge-ci-test-failures/` 下分配独立目录，期限从分配时起算。
 
 本宿主登记两个复制的 Cargo 输出 `original-state/cargo/producer/target/`、`original-state/cargo/tests/target/`。底层 retained producer 的断言读者验证原始退出状态后显式释放引用，全部释放后可回收已登记的生成目录。封存数据、未知旧对象和仍在使用的原件按各自负责方处理。
 
