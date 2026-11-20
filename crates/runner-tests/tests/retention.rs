@@ -8389,6 +8389,14 @@ fn archived_run_requires_all_members_and_releases_the_exact_expired_slot() {
     ) {
         return;
     }
+    archived_install_run_handoff(None);
+    archived_install_run_handoff(Some(0));
+    archived_install_run_handoff(Some(1));
+    archived_install_run_handoff(Some(86400));
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn archived_install_run_handoff(diagnostic_window: Option<u64>) {
     let host = deadline_host();
     let root = host.path();
     let archive = tempfile::tempdir().unwrap();
@@ -8401,6 +8409,13 @@ fn archived_run_requires_all_members_and_releases_the_exact_expired_slot() {
     let policy_file = root.join(POLICY_PATH);
     let mut policy: Value = serde_json::from_slice(&fs::read(&policy_file).unwrap()).unwrap();
     policy["producers"]["check-original"] = json!([".chrono-harness/state/fixtures/"]);
+    if let Some(seconds) = diagnostic_window {
+        policy
+            .as_object_mut()
+            .unwrap()
+            .remove("max_lifetime_seconds");
+        policy["diagnostic_keep_seconds"] = json!(seconds);
+    }
     fs::write(policy_file, serde_json::to_vec(&policy).unwrap()).unwrap();
     for base in [root, survivor.as_path()] {
         fs::create_dir_all(base.join(run)).unwrap();
@@ -8438,11 +8453,26 @@ fn archived_run_requires_all_members_and_releases_the_exact_expired_slot() {
         .find(|o| o["id"] == id)
         .unwrap()
         .clone();
-    output["lifetime"] = json!({"created_at":1,"deadline":2});
+    if diagnostic_window.is_none() {
+        output["lifetime"] = json!({"created_at":1,"deadline":2});
+    } else {
+        assert!(output["lifetime"].is_null());
+    }
     output["expires"] = json!(2);
     retention_state::replace_output(root, &output);
     reject();
     drop(reader);
+    if diagnostic_window == Some(86400) {
+        reject();
+        return;
+    }
+    if diagnostic_window == Some(1) {
+        let born = fs::metadata(root.join(run)).unwrap().created().unwrap();
+        let due = born + std::time::Duration::from_secs(1);
+        if let Ok(remaining) = due.duration_since(std::time::SystemTime::now()) {
+            std::thread::sleep(remaining);
+        }
+    }
     fs::remove_file(survivor.join(&stream)).unwrap();
     reject();
     fs::write(survivor.join(&stream), b"changed contents!").unwrap();
@@ -8456,6 +8486,26 @@ fn archived_run_requires_all_members_and_releases_the_exact_expired_slot() {
     let result = consumer_call(root, request.clone());
     assert_eq!(result.exit_code, 0, "{}", result.stderr);
     assert!(!root.join(slot).exists());
+    if let Some(seconds) = diagnostic_window {
+        let born = fs::metadata(root.join(run))
+            .unwrap()
+            .created()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let saved = ledger(root);
+        let run = saved["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["id"] == id)
+            .unwrap();
+        assert_eq!(
+            run["lifetime"],
+            json!({"created_at":born,"deadline":born+seconds})
+        );
+    }
     assert!(ledger(root)["roots"].get(&role).is_none());
     assert_eq!(consumer_call(root, request).exit_code, 0);
     assert_eq!(maintain_fixture_to(root, 0), 0);
