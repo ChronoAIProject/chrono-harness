@@ -4,6 +4,9 @@
 #[path = "behavior.rs"]
 mod behavior;
 #[cfg(verus_keep_ghost)]
+#[path = "support/git.rs"]
+mod fixture_git;
+#[cfg(verus_keep_ghost)]
 #[path = "../../judge-ci/src/verified_collection.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]

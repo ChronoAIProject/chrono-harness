@@ -63,6 +63,6 @@ bench = false
 
 [[bin]]
 name = "chrono-test-git-model"
-path = "../runner-tests/tests/support/git_model.rs"
+path = "tests/support/git.rs"
 test = false
 bench = false
