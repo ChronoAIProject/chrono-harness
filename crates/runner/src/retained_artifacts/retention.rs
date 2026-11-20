@@ -218,9 +218,6 @@ impl Lifetime {
         let deadline = created_at
             .checked_add(seconds)
             .ok_or("output deadline overflow")?;
-        if seconds == 0 {
-            return Err("output lifetime must be positive".into());
-        }
         Ok(Self {
             created_at: Some(created_at),
             deadline,
@@ -770,9 +767,11 @@ impl Inventory {
             if !ids.insert(o.id.clone())
                 || o.lifetime.as_ref().is_some_and(|window| {
                     window.deadline == 0
-                        || window
-                            .created_at
-                            .is_some_and(|created_at| window.deadline <= created_at)
+                        || window.created_at.is_some_and(|created_at| {
+                            window.deadline < created_at
+                                || (window.deadline == created_at
+                                    && !matches!(o.phase.as_str(), "released" | "disposing"))
+                        })
                         || (window.created_at.is_none()
                             && !matches!(o.phase.as_str(), "disposing" | "sealing"))
                         || o.expires > window.deadline
@@ -867,10 +866,14 @@ impl Inventory {
         }
         Ok(())
     }
-    fn lifetime_for_existing(&self, output: &Output) -> Result<Option<Lifetime>, String> {
-        if self.policy.max_lifetime_seconds.is_none() {
+    fn lifetime_for_existing(
+        &self,
+        output: &Output,
+        window: Option<u64>,
+    ) -> Result<Option<Lifetime>, String> {
+        let Some(seconds) = window else {
             return Ok(output.lifetime.clone());
-        }
+        };
         // A previously migrated lifetime is authoritative. Re-running policy
         // migration must not erase its birth evidence or change its deadline,
         // including when the physical original has since disappeared.
@@ -914,10 +917,7 @@ impl Inventory {
         if created_at > now()? {
             return Err("original birth time is in the future; preserve before migration".into());
         }
-        Ok(Some(Lifetime::new(
-            created_at,
-            self.policy.max_lifetime_seconds.unwrap(),
-        )?))
+        Ok(Some(Lifetime::new(created_at, seconds)?))
     }
     fn save(&self, l: &Ledger, gate: &Gate) -> Result<(), String> {
         self.stable(gate)?;
@@ -1165,7 +1165,12 @@ impl Inventory {
                 let lifetimes = l
                     .outputs
                     .iter()
-                    .map(|output| Ok((output.id.clone(), self.lifetime_for_existing(output)?)))
+                    .map(|output| {
+                        Ok((
+                            output.id.clone(),
+                            self.lifetime_for_existing(output, self.policy.max_lifetime_seconds)?,
+                        ))
+                    })
                     .collect::<Result<BTreeMap<_, _>, String>>()?;
                 if publish {
                     for owner in &owners {
@@ -2328,11 +2333,24 @@ impl Inventory {
             self.stable(&gate)?;
             return Ok(receipt);
         }
-        let output = ledger
+        let index = ledger
             .outputs
             .iter()
-            .find(|o| o.id == original.id)
+            .position(|o| o.id == original.id)
             .ok_or("preserved original is unavailable")?;
+        let output = &mut ledger.outputs[index];
+        // Older installations recorded a finite diagnostic window in policy
+        // and a terminal expiry on the run, but no creation deadline.
+        if archived_slot.is_some()
+            && output.lifetime.is_none()
+            && self.policy.max_lifetime_seconds.is_none()
+            && output.phase == "released"
+            && output.expires <= now()?
+        {
+            output.lifetime =
+                self.lifetime_for_existing(output, Some(self.policy.diagnostic_keep_seconds))?;
+        }
+        let output = &ledger.outputs[index];
         if output.tree && archived_slot.is_none() {
             return Err("preserved report directory requires its archived slot".into());
         }
@@ -2446,6 +2464,15 @@ impl Inventory {
             fs::File::open(path.parent().ok_or("report slot parent")?)
                 .and_then(|dir| dir.sync_all())
                 .map_err(|e| e.to_string())?;
+            self.expire_archived_slot_address(
+                &slot_owner,
+                &slot.path,
+                output
+                    .lifetime
+                    .as_ref()
+                    .ok_or("archived slot deadline missing")?
+                    .deadline,
+            )?;
         }
         for role in roles {
             let remaining = crate::verified_release::without(&ledger.roots[role], &original.id);
