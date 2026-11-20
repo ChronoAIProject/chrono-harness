@@ -24,11 +24,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// One directory per release test. The release failure collector reads these
-/// batches while their diagnostic window is open.
+/// One test allocation, retained under its business directory on failure.
 #[cfg(not(verus_keep_ghost))]
 pub struct FailureCase {
     path: PathBuf,
+    operation: &'static str,
     publication: Option<Publication>,
 }
 
@@ -43,24 +43,38 @@ impl FailureCase {
     }
 
     pub fn allocate(root: &Path, prefix: &str) -> Result<Self, String> {
-        let directory = root.join(".chrono-harness/state/release-test-failures");
+        Self::allocate_for(
+            root,
+            ".chrono-harness/state/release-test-failures",
+            prefix,
+            "test.host-release-native-tests",
+        )
+    }
+
+    pub fn allocate_for(
+        root: &Path,
+        family: &str,
+        prefix: &str,
+        operation: &'static str,
+    ) -> Result<Self, String> {
+        let directory = chrono_harness::no_symlink_parents(root, family)?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
         let path = retention::unique_path(&directory, prefix, "")?;
         let relative = path
             .strip_prefix(root)
             .map_err(|error| error.to_string())?
             .to_str()
-            .ok_or("release fixture path is not UTF-8")?
+            .ok_or("fixture path is not UTF-8")?
             .to_owned();
-        let owner =
-            Inventory::adopted(root)?.ok_or("missing release verification retention policy")?;
+        let owner = Inventory::adopted(root)?.ok_or("missing test output retention policy")?;
         let publication = owner.create_batch(
             "check-original",
             &relative,
-            json!({"operation":"test.host-release-native-tests","fixture":"started"}),
+            json!({"operation":operation,"fixture":"started"}),
         )?;
         Ok(Self {
             path,
+            operation,
             publication: Some(publication),
         })
     }
@@ -70,11 +84,8 @@ impl FailureCase {
     }
 
     fn finish(&mut self, failed: bool) -> Result<(), String> {
-        let publication = self
-            .publication
-            .take()
-            .expect("release fixture is closed once");
-        let outcome = json!({"operation":"test.host-release-native-tests","panicked":failed});
+        let publication = self.publication.take().expect("fixture is closed once");
+        let outcome = json!({"operation":self.operation,"panicked":failed});
         if failed {
             publication.complete_diagnostic(outcome)
         } else {
@@ -89,7 +100,8 @@ impl Drop for FailureCase {
         let failed = std::thread::panicking();
         if failed {
             eprintln!(
-                "original release test fixture retained: {}",
+                "original {} fixture retained: {}",
+                self.operation,
                 self.path.display()
             );
         }
@@ -98,12 +110,12 @@ impl Drop for FailureCase {
         if let Err(error) = completion {
             if raise {
                 panic!(
-                    "cannot finish release fixture {}: {error}",
+                    "cannot finish test fixture {}: {error}",
                     self.path.display()
                 );
             }
             eprintln!(
-                "cannot finish release fixture {}: {error}",
+                "cannot finish test fixture {}: {error}",
                 self.path.display()
             );
         }

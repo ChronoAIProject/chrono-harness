@@ -62,11 +62,26 @@ use isolated_capability::isolated_capability_test;
 mod retention_state;
 
 #[cfg(not(verus_keep_ghost))]
-fn host(nodes: usize, summaries: usize) -> tempfile::TempDir {
-    let d = tempfile::tempdir().unwrap();
+#[path = "../../../host-release-tests/tests/support/failure_case.rs"]
+mod failure_case;
+
+#[cfg(not(verus_keep_ghost))]
+fn host(nodes: usize, summaries: usize) -> (failure_case::FailureCase, tempfile::TempDir) {
+    let checkout = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let batch = failure_case::FailureCase::allocate_for(
+        &checkout,
+        ".chrono-harness/state/runner-test-failures",
+        "frontier-",
+        "test.runner-tests",
+    )
+    .unwrap();
+    let d = tempfile::tempdir_in(batch.path()).unwrap();
     fs::create_dir_all(d.path().join(".chrono-harness/state/fixtures")).unwrap();
     fs::write(d.path().join(POLICY_PATH), serde_json::to_vec(&json!({"schema":"chrono-output-retention/v2","producers":{"fixture":[".chrono-harness/state/fixtures/"]},"keep_seconds":0,"max_related_outputs":512,"max_summaries":summaries,"max_nodes_per_round":nodes,"max_bytes_per_round":1048576,"max_millis_per_round":25})).unwrap()).unwrap();
-    d
+    (batch, d)
 }
 #[cfg(not(verus_keep_ghost))]
 fn inventory(root: &Path) -> Inventory {
@@ -87,7 +102,7 @@ fn leaf_entry_preserves_rooted_wide_intermediate_with_256_descriptors() {
     ) {
         return;
     }
-    let h = host(256, 16);
+    let (_batch, h) = host(256, 16);
     let mut originals = Vec::new();
     for n in 0..135 {
         let path = format!(".chrono-harness/state/fixtures/required-{n}");
@@ -203,7 +218,7 @@ fn publishing_recovery_root_preserves_326_originals_with_256_descriptors() {
     ) {
         return;
     }
-    let h = host(256, 16);
+    let (_batch, h) = host(256, 16);
     let parent_path = tree(h.path(), "interrupted-parent");
     fs::write(
         h.path().join(&parent_path).join("failure"),
@@ -328,7 +343,7 @@ fn empty_report_finishes_available_path_and_resumes_after_busy_path() {
         return;
     }
     for busy in [false, true] {
-        let h = host(256, 16);
+        let (_batch, h) = host(256, 16);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let original_path = ".chrono-harness/state/fixtures/required-original";
             fs::write(h.path().join(original_path), b"required failure").unwrap();
@@ -487,7 +502,7 @@ fn leaf_entry_preserves_live_unknown_and_replaced_parent_originals() {
     ) {
         return;
     }
-    let h = host(256, 16);
+    let (_batch, h) = host(256, 16);
     let parent_path = ".chrono-harness/state/fixtures/protected-parent";
     let leaf_path = ".chrono-harness/state/fixtures/protected-leaf";
     fs::write(h.path().join(parent_path), b"parent failure").unwrap();
@@ -558,7 +573,7 @@ fn leaf_entry_preserves_live_unknown_and_replaced_parent_originals() {
 
 #[cfg(all(unix, not(verus_keep_ghost)))]
 fn leaf_entry_retires_wide_parent(hops: usize, sealed: bool) {
-    let h = host(2, 16);
+    let (_batch, h) = host(2, 16);
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
     policy["max_related_outputs"] = json!(512);
