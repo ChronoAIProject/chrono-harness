@@ -1,15 +1,38 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub(super) fn timeout_original_count(delayed_admission: bool) -> (count: usize)
+    ensures count == if delayed_admission { 9int } else { 8int },
+{
+    if delayed_admission { 9 } else { 8 }
+}
+}
+
+#[cfg(test)]
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
 mod chrono_git_boundary;
+#[cfg(test)]
 #[path = "../../host-release-tests/tests/support/failure_case.rs"]
 mod failure_case;
+#[cfg(test)]
 use super::*;
+#[cfg(test)]
 use failure_case::FailureCase;
+#[cfg(test)]
 use std::collections::BTreeMap;
+#[cfg(test)]
 use std::io::{BufRead, Read, Write};
+#[cfg(test)]
 use std::sync::{Arc, Mutex};
 
+#[cfg(test)]
 #[derive(Clone, Default)]
 struct Sink(Arc<Mutex<Vec<u8>>>);
+#[cfg(test)]
 impl Write for Sink {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.0.lock().unwrap().extend_from_slice(bytes);
@@ -19,9 +42,11 @@ impl Write for Sink {
         Ok(())
     }
 }
+#[cfg(test)]
 fn child() -> &'static str {
     env!("CARGO_BIN_EXE_chrono-test-ci-diagnostics")
 }
+#[cfg(test)]
 fn diagnostic_host() -> (FailureCase, Host) {
     let checkout = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -41,6 +66,7 @@ fn diagnostic_host() -> (FailureCase, Host) {
     (batch, Host::in_directory(dir))
 }
 
+#[cfg(test)]
 fn host(address: Option<String>) -> (FailureCase, Host) {
     let (batch, h) = diagnostic_host();
     h.change_registry(CONFIG, |v| {
@@ -63,12 +89,14 @@ fn host(address: Option<String>) -> (FailureCase, Host) {
     h.commit();
     (batch, h)
 }
+#[cfg(test)]
 fn request(h: &Host) -> Request {
     let base = h.head();
     h.write("src.txt", "diagnostic consumer\n");
     let candidate = h.commit();
     unit_request(h, &base, &candidate)
 }
+#[cfg(test)]
 fn unit_request(h: &Host, base: &str, candidate: &str) -> Request {
     let mut req = h.request(Some(base), candidate);
     req.protocol = chrono_harness::units::PROTOCOL.into();
@@ -77,6 +105,7 @@ fn unit_request(h: &Host, base: &str, candidate: &str) -> Request {
     });
     req
 }
+#[cfg(test)]
 fn records(bytes: &[u8]) -> Vec<Value> {
     bytes
         .split(|b| *b == b'\n')
@@ -84,6 +113,7 @@ fn records(bytes: &[u8]) -> Vec<Value> {
         .map(|line| serde_json::from_slice(line).unwrap())
         .collect()
 }
+#[cfg(test)]
 fn event<'a>(rows: &'a [Value], name: &str) -> &'a Value {
     rows.iter()
         .find(|row| row["event"] == name)
@@ -187,6 +217,7 @@ fn execution_diagnostics_delayed_admission_does_not_consume_interruption_window(
     incomplete_execution(true);
 }
 
+#[cfg(test)]
 struct ReadinessGate {
     log: fs::File,
     listener: Option<std::net::TcpListener>,
@@ -194,6 +225,7 @@ struct ReadinessGate {
     observed: Arc<Mutex<Value>>,
     startup_millis: i32,
 }
+#[cfg(test)]
 impl Write for ReadinessGate {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.log.write_all(bytes)?;
@@ -246,6 +278,7 @@ impl Write for ReadinessGate {
     }
 }
 
+#[cfg(test)]
 fn diagnostic_execution(
     h: &Host,
     req: &Request,
@@ -356,6 +389,7 @@ fn diagnostic_execution(
     result
 }
 
+#[cfg(test)]
 fn incomplete_execution(delayed_admission: bool) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let (batch, h) = host(Some(listener.local_addr().unwrap().to_string()));
@@ -562,6 +596,7 @@ fn incomplete_execution(delayed_admission: bool) {
     }
 }
 
+#[cfg(test)]
 fn export_timeout_originals(
     batch: &Path,
     original: &Path,
@@ -570,7 +605,7 @@ fn export_timeout_originals(
 ) {
     let destination = fs::canonicalize(destination).unwrap();
     assert!(
-        !destination.starts_with(batch),
+        !destination.starts_with(fs::canonicalize(batch).unwrap()),
         "export must survive diagnostic batch cleanup"
     );
     let artifact = tempfile::Builder::new()
@@ -578,7 +613,7 @@ fn export_timeout_originals(
         .tempdir_in(&destination)
         .unwrap();
     let mut files = serde_json::Map::new();
-    for name in [
+    let names = [
         "request.json",
         "diagnostics.jsonl",
         "monitor.jsonl",
@@ -587,10 +622,9 @@ fn export_timeout_originals(
         "producer.launch.json",
         "result.json",
         "readiness.json",
-    ]
-    .into_iter()
-    .chain(delayed_admission.then_some("admission.json"))
-    {
+        "admission.json",
+    ];
+    for &name in &names[..timeout_original_count(delayed_admission)] {
         let source = original.join(".chrono-harness/state").join(name);
         let target = artifact.path().join(name);
         let (digest, size) = chrono_harness::copy_hashed(
@@ -660,10 +694,11 @@ fn timeout_receipt_reads_exported_files_after_its_batch_is_gone() {
         let files = record["originals"].as_object().unwrap();
         assert_eq!(files.len(), names.len());
         assert_eq!(record["delayed_admission"], delayed);
+        let export_root = destination.path().canonicalize().unwrap();
         for (i, name) in names.iter().enumerate() {
             let file = &files[*name];
             let path = Path::new(file["path"].as_str().unwrap());
-            assert!(path.starts_with(destination.path()));
+            assert!(path.starts_with(&export_root));
             let bytes = fs::read(path).unwrap();
             assert_eq!(bytes, [255, 0, i as u8]);
             assert_eq!(file["sha256"], chrono_harness::sha256(&bytes));

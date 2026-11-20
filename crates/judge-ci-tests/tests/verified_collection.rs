@@ -1,6 +1,9 @@
 //! 独立边界预期直接消费生产集合判断，Cargo 与 Verus 共用源码。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
+#[path = "behavior.rs"]
+mod behavior;
+#[cfg(verus_keep_ghost)]
 #[path = "../../judge-ci/src/verified_collection.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]

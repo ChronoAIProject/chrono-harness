@@ -1,14 +1,41 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn timeout_receipt_uses_all_required_originals() {
+    if diagnostics::timeout_original_count(false) != 8 { panic!(); }
+    if diagnostics::timeout_original_count(true) != 9 { panic!(); }
+}
+}
+
+#[cfg(test)]
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
 mod chrono_git_boundary;
+#[cfg(test)]
 use chrono_harness::{PROTOCOL, Request, Response, Status, sha256};
+#[cfg(test)]
 use chrono_judge_ci::judge;
+#[cfg(test)]
 use serde_json::{Value, json};
+#[cfg(test)]
 use std::fs;
+#[cfg(test)]
 use std::path::Path;
+#[cfg(test)]
 use std::process::Command;
+#[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(test)]
 use tempfile::TempDir;
+#[cfg(test)]
 const CONFIG: &str = ".chrono-harness/ci/check.json";
+#[cfg(test)]
 const OPERATION_TOOL: &str = env!("CARGO_BIN_EXE_chrono-test-ci-diagnostics");
 
 #[test]
@@ -126,18 +153,24 @@ fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_o
         "unknown representation must fail before business effects"
     );
 }
+#[cfg(test)]
 #[path = "checkout.rs"]
 mod checkout;
+#[cfg(test)]
 #[path = "git_facts.rs"]
 mod git_facts;
+#[cfg(test)]
 #[path = "retirement.rs"]
 mod retirement;
+#[cfg(test)]
 #[path = "units.rs"]
 mod units;
+#[cfg(test)]
 struct Host {
     dir: TempDir,
     next_request: AtomicU64,
 }
+#[cfg(test)]
 impl Host {
     fn new() -> Self {
         Self::in_directory(
@@ -245,13 +278,16 @@ impl Host {
             .count()
     }
 }
+#[cfg(test)]
 fn pass(r: &Response) {
     assert_eq!(r.status, Status::Passed, "{r:#?}")
 }
+#[cfg(test)]
 fn fail(r: &Response, needle: &str) {
     assert_eq!(r.status, Status::Failed, "{r:#?}");
     assert!(serde_json::to_string(r).unwrap().contains(needle), "{r:#?}")
 }
+#[cfg(test)]
 fn explicit_plans(h: &Host) {
     let config = h.read(CONFIG);
     let plans: serde_json::Map<String, Value> = config["policy"]["bindings"]
@@ -1015,6 +1051,7 @@ fn filemap_v2_plan_operations_additions_and_removals_keep_obligations() {
 }
 
 // These cases exercise declarations, using the existing external command fixture.
+#[cfg(test)]
 fn language_host(scripts: bool, implementation: &str, testing: &str) -> Host {
     let h = Host::new();
     h.change_registry(".chrono-harness/projects.json", |v| {
