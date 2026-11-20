@@ -123,6 +123,31 @@ pub(crate) fn read_api(commands: &mut impl Commands, endpoint: String) -> Result
     api(commands, "GET", endpoint, None, false)?.ok_or_else(|| error("missing original API result"))
 }
 
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn existing_preview(
+    commands: &mut impl Commands,
+    config: &Config,
+    identity: &Identity,
+) -> Result<Option<Value>, String> {
+    let release = api(
+        commands,
+        "GET",
+        format!(
+            "repos/{}/releases/tags/{}",
+            config.repository, identity.version
+        ),
+        None,
+        true,
+    )?;
+    if let Some(value) = &release {
+        release_header(value, identity)?;
+        if value["draft"] == true {
+            return Ok(None);
+        }
+    }
+    Ok(release)
+}
+
 /// 安装消费者沿用发布 API 的缺失判法，只接受当前仓库、版本的两个 GET 查询。
 #[cfg(not(verus_keep_ghost))]
 pub(crate) fn original_absence(
@@ -186,15 +211,27 @@ pub fn verify_ci(
         false,
     )?
     .ok_or("missing CI run")?;
+    verify_landing_run(config, &run, &identity.source_commit, ci.run_id, ci.attempt)?;
+    Ok(run)
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn verify_landing_run(
+    config: &Config,
+    run: &Value,
+    commit: &str,
+    run_id: u64,
+    attempt: u64,
+) -> Result<(), String> {
     if !policy::number_fields(&[
-        (run["id"].as_u64(), ci.run_id),
-        (run["run_attempt"].as_u64(), ci.attempt),
+        (run["id"].as_u64(), run_id),
+        (run["run_attempt"].as_u64(), attempt),
         (run["workflow_id"].as_u64(), config.workflow_id),
     ]) || !policy::text_fields(&[
         (run["path"].as_str(), &config.workflow_path),
         (run["event"].as_str(), "push"),
         (run["head_branch"].as_str(), &config.branch),
-        (run["head_sha"].as_str(), &identity.source_commit),
+        (run["head_sha"].as_str(), commit),
         (run["status"].as_str(), "completed"),
         (run["conclusion"].as_str(), "success"),
         (run["repository"]["full_name"].as_str(), &config.repository),
@@ -203,7 +240,7 @@ pub fn verify_ci(
             "original landing CI does not qualify this fixed source",
         ));
     }
-    Ok(run)
+    Ok(())
 }
 
 #[cfg(not(verus_keep_ghost))]

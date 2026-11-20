@@ -24,6 +24,10 @@ chrono-ci verify --host-root HOST --config .chrono-harness/ci/release.json
 
 排查自动测试版时，先打开 `select_preview` 日志，核对 `LANDING_SHA`、`LANDING_RUN` 和 `LANDING_ATTEMPT`，再查看该次落地汇总的 `detection.required_units`。工作流页面显示的是运行编排所用的提交。零单元时只有选择作业运行。两平台打包作业逐项读取配方中直接生产者的状态，遇到实际构建失败时仍收集诊断。曾经使用 `needs.*.result` 时，文档变更跳过了两平台前端，打包作业仍试图读取缺失的前端目录。[原始失败](https://github.com/ChronoAIProject/chrono-harness/actions/runs/44557016060)
 
+非空自动测试版由 `delivery.landing_selection.components` 读取本次落地检查的原判定、各平台前后两版的发布配方和原生作业。构建按源码所属项目选择，验证按登记的测试操作及其消费的构建选择。前端或工具链变化也会影响其使用方。中间只有文档改动时，选择器可以沿成功 push 的原汇总连接前一测试版。
+
+选出的作业继续按各自的 Actions 缓存登记执行。其余作业只有在固定公开测试版的资产摘要、平台包和原生产回执核对成功后才跳过。收集器记录每个组件实际的源码、运行、attempt、工件及回执摘要。缺少前次发行或原工件已过期时重新构建；原件内容或身份矛盾会报告失败。
+
 新登记应明确设置 `include_hidden_files: true`。v1／v2 都支持，本仓已采用；它让上传保留登记产物根中的隐藏路径，范围仍取 `artifact_directory`。省略或 false 保留原投影及序列化源身份。
 
 ## 本仓采用

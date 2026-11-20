@@ -1,9 +1,28 @@
 //! 在登记消费路径暂存已验资产；观察记录真实身份与失败，不代填成功。
+#[cfg(verus_keep_ghost)]
+use super::identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_identifiers as identifiers;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn copied_member(digest: &str, expected: &str, size: u64, expected_size: u64) -> (valid: bool)
+    ensures valid == (digest@ == expected@ && size == expected_size),
+{
+    size == expected_size && identifiers::equal_text(digest, expected)
+}
+}
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     recipe::Loaded,
     transport::{self, ExecutableIdentity},
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     fs::{self, File},
@@ -12,10 +31,12 @@ use std::{
     path::Path,
 };
 
+#[cfg(not(verus_keep_ghost))]
 fn error(message: impl std::fmt::Display) -> String {
     format!("E_RELEASE_STAGING: {message}")
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Binding {
     asset: String,
     source: String,
@@ -23,6 +44,7 @@ struct Binding {
     expected: ExecutableIdentity,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Staging {
     release_plan: String,
     host_config: String,
@@ -30,6 +52,7 @@ pub struct Staging {
     observations: Vec<Value>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Staging {
     /// assets 来自所选 build 原件；只取这些资产登记的消费目的地。
     pub fn selected(loaded: &Loaded, assets: &Value) -> Result<Self, String> {
@@ -77,25 +100,7 @@ impl Staging {
                 return Err(error("selected source changed before staging"));
             }
             let source = chrono_harness::no_symlink_parents(root, &binding.source)?;
-            let destination = chrono_harness::prepare_publication(root, &binding.destination)?;
-            let mut temporary = tempfile::NamedTempFile::new_in(
-                destination
-                    .parent()
-                    .ok_or_else(|| error("missing destination parent"))?,
-            )
-            .map_err(error)?;
-            let mut source = File::open(source).map_err(error)?;
-            let (sha256, size) = chrono_harness::copy_hashed(&mut source, temporary.as_file_mut())?;
-            if sha256 != binding.expected.sha256 || size != binding.expected.size {
-                return Err(error("source bytes changed during staging"));
-            }
-            temporary.as_file_mut().flush().map_err(error)?;
-            temporary
-                .as_file()
-                .set_permissions(fs::Permissions::from_mode(binding.expected.mode))
-                .map_err(error)?;
-            chrono_harness::no_symlink_parents(root, &binding.destination)?;
-            temporary.persist(destination).map_err(error)?;
+            copy_member(root, &source, &binding.destination, &binding.expected)?;
         }
         Ok(())
     }
@@ -124,4 +129,33 @@ impl Staging {
         let bindings:Vec<_>=self.bindings.iter().map(|b| json!({"asset":b.asset,"source":b.source,"destination":b.destination,"expected":b.expected.receipt(&b.source)})).collect();
         json!({"release_plan":self.release_plan,"host_config":self.host_config,"bindings":bindings,"observations":self.observations})
     }
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn copy_member(
+    root: &Path,
+    source: &Path,
+    relative: &str,
+    expected: &ExecutableIdentity,
+) -> Result<(), String> {
+    let destination = chrono_harness::prepare_publication(root, relative)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(
+        destination
+            .parent()
+            .ok_or_else(|| error("missing destination parent"))?,
+    )
+    .map_err(error)?;
+    let mut source = File::open(source).map_err(error)?;
+    let (sha256, size) = chrono_harness::copy_hashed(&mut source, temporary.as_file_mut())?;
+    if !copied_member(&sha256, &expected.sha256, size, expected.size) {
+        return Err(error("source bytes changed during staging"));
+    }
+    temporary.as_file_mut().flush().map_err(error)?;
+    temporary
+        .as_file()
+        .set_permissions(fs::Permissions::from_mode(expected.mode))
+        .map_err(error)?;
+    chrono_harness::no_symlink_parents(root, relative)?;
+    temporary.persist(destination).map_err(error)?;
+    Ok(())
 }

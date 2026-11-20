@@ -1,4 +1,22 @@
 //! 发布工具自己的生产与消费证据；复用 bootstrap 原报告及现有单执行物运输。
+#[cfg(verus_keep_ghost)]
+use super::identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_identifiers as identifiers;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn artifact_paths(executable: &str, expected_executable: &str, report: &str, expected_report: &str, archive: &str) -> (valid: bool)
+    ensures valid == (executable@ == expected_executable@ && report@ == expected_report@ && archive@ == "executable.tar"@),
+{
+    identifiers::equal_text(executable, expected_executable) && identifiers::equal_text(report, expected_report)
+        && identifiers::equal_text(archive, "executable.tar")
+}
+}
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     execution::Environment,
     receipt::{self, Kind, Lineage, Selection},
@@ -6,6 +24,7 @@ use crate::{
     transport::{self, ExecutableIdentity},
     verified_recipe as policy,
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::{
     bindings::{NativePlatform, native_platform},
     construction::Report,
@@ -13,21 +32,27 @@ use chrono_host_bootstrap::{
     profile,
     source::{self, SourceObservation},
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{collections::BTreeMap, ffi::OsStr, fs, io::Write, path::Path};
 
+#[cfg(not(verus_keep_ghost))]
 const INSTALLED: &str = ".chrono-harness/bin/chrono-host-release";
 
+#[cfg(not(verus_keep_ghost))]
 fn error(message: impl std::fmt::Display) -> String {
     format!("E_RELEASE_FRONTEND: {message}")
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn text<'a>(value: &'a Value, field: &str) -> Result<&'a str, String> {
     value[field]
         .as_str()
         .ok_or_else(|| error(format!("missing {field}")))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn variable<'a>(environment: &'a Environment, name: &str) -> Result<&'a str, String> {
     environment
         .get(OsStr::new(name))
@@ -36,6 +61,7 @@ fn variable<'a>(environment: &'a Environment, name: &str) -> Result<&'a str, Str
         .ok_or_else(|| error(format!("missing {name}")))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn producer(
     root: &Path,
     declared: &NativeFrontend,
@@ -47,6 +73,7 @@ fn producer(
     .map_err(error)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn qualify(
     producer: &Producer,
     raw: &[u8],
@@ -72,6 +99,7 @@ fn qualify(
     Ok(report)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn write(directory: &Path, relative: &str, raw: &[u8]) -> Result<Value, String> {
     let path = chrono_harness::no_symlink_parents(directory, relative)?;
     fs::create_dir_all(path.parent().ok_or("missing original parent")?).map_err(error)?;
@@ -86,6 +114,7 @@ fn write(directory: &Path, relative: &str, raw: &[u8]) -> Result<Value, String> 
     Ok(json!({"path":relative,"size":raw.len(),"sha256":chrono_harness::sha256(raw)}))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn actual(path: &Path) -> Result<ExecutableIdentity, String> {
     let parent = path.parent().ok_or("missing frontend parent")?;
     let name = path
@@ -95,10 +124,12 @@ fn actual(path: &Path) -> Result<ExecutableIdentity, String> {
     transport::observe(parent, name)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn same_content(actual: &ExecutableIdentity, expected: &ExecutableIdentity) -> bool {
     policy::same_content(&actual.sha256, actual.size, &expected.sha256, expected.size)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn same(actual: &ExecutableIdentity, expected: &ExecutableIdentity) -> bool {
     policy::same_executable(
         &actual.sha256,
@@ -111,6 +142,7 @@ fn same(actual: &ExecutableIdentity, expected: &ExecutableIdentity) -> bool {
 }
 
 /// 只导出已经成功构建并安装、且实际正在执行的工具；最后才发布清单。
+#[cfg(not(verus_keep_ghost))]
 pub fn export(root: &Path, output: &Path, environment: &Environment) -> Result<(), String> {
     let root = fs::canonicalize(root).map_err(error)?;
     let loaded = Loaded::load(&root)?;
@@ -204,6 +236,7 @@ pub fn export(root: &Path, output: &Path, environment: &Environment) -> Result<(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn declaration<'a>(
     loaded: &'a Loaded,
     selected: &Selection,
@@ -217,6 +250,7 @@ pub fn declaration<'a>(
 }
 
 /// 单元保留自己的原工具生产者元数据；汇总不要求它来自当前 attempt。
+#[cfg(not(verus_keep_ghost))]
 pub fn validate_metadata(
     root: &Path,
     directory: &Path,
@@ -224,6 +258,19 @@ pub fn validate_metadata(
     native: &NativePlatform,
     source: &SourceObservation,
     selected: &Selection,
+) -> Result<Value, String> {
+    let producer = producer(root, declared, native)?;
+    validate_producer_metadata(directory, declared, native, source, selected, &producer)
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn validate_producer_metadata(
+    directory: &Path,
+    declared: &NativeFrontend,
+    native: &NativePlatform,
+    source: &SourceObservation,
+    selected: &Selection,
+    producer: &Producer,
 ) -> Result<Value, String> {
     let manifest = crate::recipe::read_json(directory, "frontend.json")?;
     let lineage: Lineage = serde_json::from_value(manifest["lineage"].clone()).map_err(error)?;
@@ -258,17 +305,19 @@ pub fn validate_metadata(
             "frontend source, platform or original production differs",
         ));
     }
-    if text(&manifest["executable"], "path")? != declared.executable
-        || text(&manifest["bootstrap"], "path")? != declared.bootstrap_report
-        || text(&manifest["archive"], "path")? != "executable.tar"
-    {
+    if !artifact_paths(
+        text(&manifest["executable"], "path")?,
+        &declared.executable,
+        text(&manifest["bootstrap"], "path")?,
+        &declared.bootstrap_report,
+        text(&manifest["archive"], "path")?,
+    ) {
         return Err(error("frontend declared artifact paths differ"));
     }
     let identity = ExecutableIdentity::from_receipt(&manifest["executable"])?;
     let raw = fs::read(receipt::original(directory, &manifest["bootstrap"])?).map_err(error)?;
-    let producer = producer(root, declared, native)?;
     qualify(
-        &producer,
+        producer,
         &raw,
         source,
         &|path| {
@@ -282,6 +331,7 @@ pub fn validate_metadata(
 
 /// needs 已选出原生产者；本边界另核原构建、工具字节和实际执行物。
 /// collector 不执行依赖工具，传 None；真正消费者传当前执行物路径。
+#[cfg(not(verus_keep_ghost))]
 pub fn validate(
     root: &Path,
     directory: &Path,
@@ -318,6 +368,7 @@ pub fn validate(
 }
 
 /// 逐个列出原元数据；不扫描目录，也不复制二进制或其归档。
+#[cfg(not(verus_keep_ghost))]
 pub fn metadata_files(directory: &Path) -> Result<BTreeMap<String, Value>, String> {
     let path = chrono_harness::no_symlink_parents(directory, "frontend.json")?;
     let (sha256, size) = chrono_harness::file_identity(&path)?;
@@ -344,6 +395,7 @@ pub fn metadata_files(directory: &Path) -> Result<BTreeMap<String, Value>, Strin
     Ok(files)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn retain_metadata(directory: &Path, output: &Path) -> Result<BTreeMap<String, Value>, String> {
     let files = metadata_files(directory)?;
     fs::create_dir(output).map_err(error)?;
