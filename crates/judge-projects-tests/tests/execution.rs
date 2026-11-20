@@ -6,16 +6,21 @@ use serde_json::json;
 use std::collections::BTreeMap;
 #[path = "support/execution_fixture.rs"]
 mod execution_fixture;
+#[path = "support/failure_batch.rs"]
+mod failure_batch;
 use execution_fixture::Step;
 
 fn execute_observed(plan: &chrono_judge_routes::Execution) -> chrono_judge_projects::Results {
-    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../.chrono-harness/state/test-failures");
-    std::fs::create_dir_all(&directory).unwrap();
-    let trace = tempfile::Builder::new()
-        .prefix("scheduler-trace-")
-        .tempdir_in(&directory)
-        .unwrap();
+    let checkout = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    execute_observed_in(&checkout, plan)
+}
+
+fn execute_observed_in(
+    checkout: &std::path::Path,
+    plan: &chrono_judge_routes::Execution,
+) -> chrono_judge_projects::Results {
+    let (directory, batch) = failure_batch::allocate(checkout, "scheduler-").unwrap();
+    let trace = tempfile::tempdir_in(&directory).unwrap();
     let logger = chrono_diagnostics::logging::Logger::new(
         "projects-execution-test",
         chrono_diagnostics::logging::Level::DEBUG,
@@ -28,25 +33,28 @@ fn execute_observed(plan: &chrono_judge_routes::Execution) -> chrono_judge_proje
             "original execution trace retained at {}",
             trace.keep().display()
         );
-        let retained = (|| -> Result<_, Box<dyn std::error::Error>> {
-            let (file, path) = tempfile::Builder::new()
-                .prefix("scheduler-")
-                .suffix(".json")
-                .tempfile_in(&directory)?
-                .keep()?;
-            // Retain from the worker before returning: the controller may have
-            // already panicked while waiting for a child to reach its socket.
-            let evidence = json!({"schema":"chrono-project-execution-failure/v1", "plan":plan, "result":result});
-            match serde_json::to_writer(file, &evidence) {
-                Ok(()) => Ok(format!("original execution retained at {}", path.display())),
-                Err(error) => Ok(format!(
-                    "original execution retention incomplete at {}: {error}",
-                    path.display()
-                )),
-            }
-        })()
-        .unwrap_or_else(|error| format!("original execution retention failed: {error}"));
-        eprintln!("{retained}");
+        let path = directory.join("execution.json");
+        let evidence =
+            json!({"schema":"chrono-project-execution-failure/v1","plan":plan,"result":result});
+        let written = std::fs::File::create_new(&path)
+            .and_then(|file| serde_json::to_writer(file, &evidence).map_err(std::io::Error::other));
+        match &written {
+            Ok(()) => eprintln!("original execution retained at {}", path.display()),
+            Err(error) => eprintln!(
+                "original execution retention incomplete at {}: {error}",
+                path.display()
+            ),
+        }
+        if let Err(error) = batch.complete_diagnostic(json!({
+            "passed":result.as_ref().is_ok_and(|r| r.passed()),
+            "trace_errors":trace_status.as_ref().err().map(Vec::len),
+            "write_error":written.err().map(|e| e.to_string())
+        })) {
+            eprintln!(
+                "project diagnostic handoff at {}: {error}",
+                directory.display()
+            );
+        }
         match &result {
             Ok(rows) => {
                 for row in rows.executed.iter().chain(&rows.blocked) {
@@ -70,6 +78,9 @@ fn execute_observed(plan: &chrono_judge_routes::Execution) -> chrono_judge_proje
                 error.chars().take(512).collect::<String>()
             ),
         }
+    } else {
+        trace.close().unwrap();
+        batch.complete(json!({"passed":true})).unwrap();
     }
     trace_status.expect("execution trace must preserve its original events");
     result.unwrap()
@@ -219,6 +230,61 @@ fn retain_operations(mut plan: chrono_judge_routes::Execution) -> chrono_judge_r
     std::fs::create_dir_all(plan.root.join(".chrono-harness/state")).unwrap();
     let scheduling = plan.scheduling.clone();
     plan.with_scheduling(scheduling).unwrap()
+}
+
+#[test]
+fn failed_scheduler_report_and_trace_expire_as_one_directory() {
+    let checkout = tempfile::tempdir().unwrap();
+    let root = checkout.path().canonicalize().unwrap();
+    let policy = root.join(chrono_harness::retained_artifacts::retention::POLICY_PATH);
+    std::fs::create_dir_all(policy.parent().unwrap()).unwrap();
+    std::fs::write(
+        policy,
+        json!({
+            "schema":"chrono-output-retention/v2",
+            "producers":{"check-original":[".chrono-harness/state/test-failures/"]},
+            "max_lifetime_seconds":3600,"keep_seconds":0,"diagnostic_keep_seconds":86400,
+            "metadata_keep_seconds":0,"max_related_outputs":32,"max_summaries":16,
+            "max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":100
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let (_fixture, plan) = plan(
+        &[("broken", vec![Step::Exit(7)])],
+        &[("test:broken", vec!["broken"])],
+    );
+    let result = execute_observed_in(&root, &plan);
+    assert!(!result.passed());
+    let owner = Inventory::adopted(&root).unwrap().unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    owner.maintain_at(now).unwrap();
+    let family = root.join(".chrono-harness/state/test-failures");
+    let entries: Vec<_> = std::fs::read_dir(&family)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(entries.len(), 1);
+    let batch = &entries[0];
+    let original: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(batch.join("execution.json")).unwrap()).unwrap();
+    assert_eq!(original["plan"]["identity"], plan.identity);
+    assert_eq!(
+        original["result"]["Ok"],
+        serde_json::to_value(&result).unwrap()
+    );
+    assert!(std::fs::read_dir(batch).unwrap().any(|entry| {
+        let trace = entry.unwrap().path();
+        trace.is_dir()
+            && std::fs::read_dir(trace)
+                .unwrap()
+                .any(|file| file.unwrap().metadata().unwrap().len() > 0)
+    }));
+    owner.maintain_at(now + 3601).unwrap();
+    assert!(!batch.exists());
 }
 
 #[test]

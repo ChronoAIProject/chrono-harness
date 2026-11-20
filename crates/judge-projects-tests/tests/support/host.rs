@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 #[path = "execution_fixture.rs"]
 mod execution_fixture;
+#[path = "failure_batch.rs"]
+mod failure_batch;
 #[path = "temporary.rs"]
 mod temporary;
 use super::support::*;
@@ -428,14 +430,15 @@ impl Drop for Host {
         let Some(evidence) = self.last_result.get_mut().take() else {
             return;
         };
-        let retained = (|| -> std::io::Result<_> {
-            let parent = source().join(".chrono-harness/state/test-failures");
-            fs::create_dir_all(&parent)?;
-            let destination = tempfile::Builder::new()
-                .prefix(&format!("{}-{}-", std::process::id(), evidence.label))
-                .tempdir_in(parent)?
-                .keep();
-            evidence.write(&destination)?;
+        let retained = (|| -> Result<_, String> {
+            let (destination, batch) = failure_batch::allocate(&source(), "command-")?;
+            let written = evidence.write(&destination);
+            let handoff = batch.complete_diagnostic(json!({
+                "command":evidence.label, "exit_code":evidence.output.status.code(),
+                "write_error":written.as_ref().err().map(ToString::to_string)
+            }));
+            written.map_err(|e| format!("{}: {e}", destination.display()))?;
+            handoff.map_err(|e| format!("{}: {e}", destination.display()))?;
             Ok(destination)
         })();
         use std::io::Write;
