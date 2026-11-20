@@ -1,10 +1,41 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::policy::native_delivery as delivery;
+#[cfg(verus_keep_ghost)]
+use super::policy::publication;
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_release::delivery;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_run_and_attempt_must_both_be_positive_and_canonical() {
+    let valid = publication::publication_attempt(4567, 3);
+    let absent_run = publication::publication_attempt(0, 3);
+    let absent_attempt = publication::publication_attempt(4567, 0);
+    let number = delivery::canonical_positive(3, true);
+    let padded = delivery::canonical_positive(3, false);
+    let zero = delivery::canonical_positive(0, true);
+    if !(valid && !absent_run && !absent_attempt && number && !padded && !zero) { panic!(); }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_release::{
     identity::{Channel, Identity, VerifiedCi},
     publication::{self, Asset, Commands, Config, Reply},
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::collections::BTreeMap;
 
+#[cfg(not(verus_keep_ghost))]
 fn config() -> Config {
     Config {
         repository: "example/product".into(),
@@ -14,6 +45,7 @@ fn config() -> Config {
         stable_branch: "main".into(),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn identity() -> Identity {
     Identity {
         channel: Channel::Preview,
@@ -26,6 +58,7 @@ fn identity() -> Identity {
         }),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn assets() -> BTreeMap<String, Asset> {
     BTreeMap::from([(
         "install.sh".into(),
@@ -36,6 +69,7 @@ fn assets() -> BTreeMap<String, Asset> {
         },
     )])
 }
+#[cfg(not(verus_keep_ghost))]
 struct Mock {
     identity: Identity,
     stable_branch: Value,
@@ -48,6 +82,7 @@ struct Mock {
     upload_exit: i32,
     omit_upload: bool,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Mock {
     fn new() -> Self {
         Self {
@@ -86,6 +121,7 @@ impl Mock {
         })
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Commands for Mock {
     fn body(&mut self, value: &Value) -> Result<String, String> {
         let i = self.bodies.len();
@@ -173,7 +209,9 @@ impl Commands for Mock {
             assert_eq!(self.uploaded.len(), 1);
             assert_eq!(
                 self.bodies.last().unwrap(),
-                &json!({"draft":false,"make_latest":if self.identity.channel == Channel::Stable {"true"} else {"false"}})
+                &json!({"draft":false,
+                    "body":format!("Source: {}\nLanding CI: 1234 attempt 2\nRelease run: https://github.com/example/product/actions/runs/4567/attempts/3", self.identity.source_commit),
+                    "make_latest":if self.identity.channel == Channel::Stable {"true"} else {"false"}})
             );
             self.release.as_mut().unwrap()["draft"] = json!(false);
             self.tag = Some(self.identity.source_commit.clone());
@@ -183,10 +221,12 @@ impl Commands for Mock {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn creates_a_draft_uploads_without_clobber_and_verifies_the_public_result() {
     let mut mock = Mock::new();
-    let result = publication::publish(&config(), &identity(), &assets(), &mut mock).unwrap();
+    let result =
+        publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).unwrap();
     assert_eq!(result["release"]["draft"], false);
     assert_eq!(result["verified_ci"]["run_attempt"], 2);
     assert!(
@@ -195,17 +235,26 @@ fn creates_a_draft_uploads_without_clobber_and_verifies_the_public_result() {
             .all(|args| !args.contains(&"--clobber".into()))
     );
     assert_eq!(mock.bodies.len(), 2);
+    assert_eq!(
+        mock.bodies[1]["body"],
+        format!(
+            "Source: {}\nLanding CI: 1234 attempt 2\nRelease run: https://github.com/example/product/actions/runs/4567/attempts/3",
+            "a".repeat(40)
+        )
+    );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn ordinary_build_cannot_call_the_publication_api() {
     let mut mock = Mock::new();
     let mut identity = identity();
     identity.channel = Channel::Build;
     identity.verified_ci = None;
-    assert!(publication::publish(&config(), &identity, &assets(), &mut mock).is_err());
+    assert!(publication::publish(&config(), &identity, &assets(), 4567, 3, &mut mock).is_err());
     assert!(mock.calls.is_empty());
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn resumes_identical_drafts_and_reuses_identical_public_versions() {
     for public in [false, true] {
@@ -214,7 +263,7 @@ fn resumes_identical_drafts_and_reuses_identical_public_versions() {
         if !public {
             mock.release.as_mut().unwrap()["draft"] = json!(true);
         }
-        publication::publish(&config(), &identity(), &assets(), &mut mock).unwrap();
+        publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).unwrap();
         assert!(
             mock.calls
                 .iter()
@@ -223,6 +272,7 @@ fn resumes_identical_drafts_and_reuses_identical_public_versions() {
         assert_eq!(mock.mutated(), !public);
     }
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn rejects_wrong_or_unsuccessful_ci_before_any_release_mutation() {
     for (key, value) in [
@@ -240,13 +290,14 @@ fn rejects_wrong_or_unsuccessful_ci_before_any_release_mutation() {
         let mut mock = Mock::new();
         mock.ci[key] = value;
         assert!(
-            publication::publish(&config(), &identity(), &assets(), &mut mock).is_err(),
+            publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).is_err(),
             "{key}"
         );
         assert_eq!(mock.calls.len(), 1);
         assert!(!mock.mutated());
     }
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn refuses_conflicting_public_or_draft_assets_sources_and_tags() {
     for case in 0..7 {
@@ -266,19 +317,22 @@ fn refuses_conflicting_public_or_draft_assets_sources_and_tags() {
             _ => unreachable!(),
         }
         assert!(
-            publication::publish(&config(), &identity(), &assets(), &mut mock).is_err(),
+            publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).is_err(),
             "{case}"
         );
         assert!(!mock.mutated());
     }
 }
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn failed_or_incomplete_upload_never_publishes_the_draft() {
     for incomplete in [false, true] {
         let mut mock = Mock::new();
         mock.omit_upload = incomplete;
         mock.upload_exit = if incomplete { 0 } else { 17 };
-        assert!(publication::publish(&config(), &identity(), &assets(), &mut mock).is_err());
+        assert!(
+            publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).is_err()
+        );
         assert_eq!(mock.release.unwrap()["draft"], true);
         assert!(
             mock.calls
@@ -288,6 +342,7 @@ fn failed_or_incomplete_upload_never_publishes_the_draft() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn stable_mock() -> Mock {
     let mut mock = Mock::new();
     mock.identity.channel = Channel::Stable;
@@ -299,16 +354,18 @@ fn stable_mock() -> Mock {
     mock
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn stable_publication_requires_the_fixed_source_on_main() {
     let mut mock = stable_mock();
     let identity = mock.identity.clone();
-    let result = publication::publish(&config(), &identity, &assets(), &mut mock).unwrap();
+    let result = publication::publish(&config(), &identity, &assets(), 4567, 3, &mut mock).unwrap();
     assert_eq!(result["release"]["prerelease"], false);
     assert_eq!(result["release_branch"], mock.stable_branch);
     assert_eq!(mock.bodies.last().unwrap()["make_latest"], "true");
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn stable_rejects_missing_different_or_invalid_main_before_mutating_a_release() {
     for branch in [
@@ -321,7 +378,7 @@ fn stable_rejects_missing_different_or_invalid_main_before_mutating_a_release() 
         let mut mock = stable_mock();
         mock.stable_branch = branch;
         let identity = mock.identity.clone();
-        let result = publication::publish(&config(), &identity, &assets(), &mut mock);
+        let result = publication::publish(&config(), &identity, &assets(), 4567, 3, &mut mock);
         assert!(
             result.is_err(),
             "branch={:?}, result={result:?}",
@@ -331,10 +388,12 @@ fn stable_rejects_missing_different_or_invalid_main_before_mutating_a_release() 
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn preview_publication_uses_dev_ci_without_requiring_main() {
     let mut mock = Mock::new();
-    let result = publication::publish(&config(), &identity(), &assets(), &mut mock).unwrap();
+    let result =
+        publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).unwrap();
     assert_eq!(result["release"]["prerelease"], true);
     assert!(
         mock.calls
@@ -343,6 +402,7 @@ fn preview_publication_uses_dev_ci_without_requiring_main() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn stable_branch_declaration_is_required_distinct_and_literal() {
     for branch in ["", "dev", "../main", "main?x=1"] {
@@ -351,7 +411,7 @@ fn stable_branch_declaration_is_required_distinct_and_literal() {
         let mut mock = stable_mock();
         let identity = mock.identity.clone();
         assert!(
-            publication::publish(&config, &identity, &assets(), &mut mock).is_err(),
+            publication::publish(&config, &identity, &assets(), 4567, 3, &mut mock).is_err(),
             "branch={branch:?}"
         );
         assert!(mock.calls.is_empty());
