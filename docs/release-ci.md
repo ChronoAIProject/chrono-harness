@@ -172,6 +172,8 @@ GitHub 原生 frontend 在导出前读取 `GITHUB_REPOSITORY`、`GITHUB_WORKFLOW
 
 preview 版本由计划版本核心、原 CI run／attempt 和完整源码提交组成，例如 `v0.1.0-dev.1234.2.g<40位SHA>`。相同原 CI 身份重试得到同一版本；不同源码或 CI attempt 得到不同版本。单元、验证、collector 与 publisher 核同一身份。普通 build 使用计划版本，走完平台原件核验及组合打包后保留 Actions artifacts，不调用公开 Release API。
 
+公开 Release 的说明链接到实际公开它的 Actions run 和 attempt。落地 CI 的编号另列；读取上一版原件时可按该链接取得发布记录和平台包。续传草稿在公开时写入本次链接。
+
 发布者核对当前依赖选择的平台原报告、完整原件摘要和全部资产；公开前另核原 CI 的工作流 ID、路径、push 事件、dev 分支、完整源码、attempt 和真实成功状态。它复用受验的 `chrono-distribution assemble`，输出固定版本的 release.json、install.sh 及平台二进制；随后创建 draft，上传缺少的资产，核 GitHub 返回的 size／sha256 后公开，并重新读取 Release、资产与实际标签源码。
 
 恢复只继续同一版本、源码和资产身份：已有相同 draft 可以续传，已公开且完全一致的版本可核验复用；冲突、公开版缺资产、原 CI 不合格或上传失败均停止，不使用 clobber，也不把失败 draft 当公开交付。过程原流、请求正文与结果保留在发布作业 artifact，沿用已有有限产物保留与清理所有者。
