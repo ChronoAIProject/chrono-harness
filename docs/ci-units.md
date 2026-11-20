@@ -138,11 +138,11 @@ provider 的必需 `job_gating` 字段登记 detector 的平台、时限、boots
 
 ### 共享 startup
 
-本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 构建并安装四项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-worktree`，并安装已校验的 Verus 原压缩包 `.chrono-harness/bin/verus.zip`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。单元从该包解压 Verus，不再各自下载、校验和构建 bootstrap 前端；本地 core 和共享启动的单元都把工具链解包到 `.chrono-harness/cache/bootstrap-owner-tooling/verus/toolchain/`。证明编译与判官从这里读取，工作树交接后由已有的工具缓存清理入口回收。
+detector 为单元和汇总提供四个核心启动工具 `chrono-harness`、`chrono-judge-ci`、`chrono-ci` 和 `chrono-worktree`。缓存 profile 单独准备 `chrono-cache`。使用 Verus 的单元先验证共享 core，再按同一摘要选择 runner 上的共享工具链。[Verus 下载与安装](ci-cache.md#verus-archive)
 
 当前宿主没有启用调用 `chrono-inputs` 的 `native_adoption`，登记 action 也不调用它，因此 core 不预先获取、构建、安装或传递这个程序。inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，不再单独构建生产 inputs 项目；workflow 的三个测试组也在自己的 target 编译 inputs 测试 CLI，原五处 capture 调用及断言保留，删除重复构建和已无使用方的 `check.inputs` 缓存；公开发布资产保留。宿主工具表及专属依赖边同步移除这项闲置安装的声明，避免把产物的存在当作使用理由。
 
-**实现与宿主政策同时变更：**共享文件允许普通非零权限 `0001`–`0777`，包含无执行位的压缩包；不把数据文件改成可执行文件。现役 Rust 共享入口及其证明采用此范围。安装仍核全部来源、摘要、大小和原权限，使用时拒绝字节或权限漂移；特殊权限、零权限、损坏或缺失仍失败。压缩包随现有 startup 产物传输并沿用保留期限。逐单元外部下载已删除，传输、存储和完整 CI 总成本仍未测。
+**实现与宿主政策同时变更：**共享文件允许普通非零权限 `0001`–`0777`，包含无执行位的压缩包；不把数据文件改成可执行文件。现役 Rust 共享入口及其证明采用此范围。安装仍核全部来源、摘要、大小和原权限，使用时拒绝字节或权限漂移；特殊权限、零权限、损坏或缺失仍失败。
 
 worktree 两个测试组由 Cargo 从唯一 runner 生产 `main.rs` 编译测试 CLI，不再另行构建生产 runner，也不恢复其缓存。测试根保留当前锁定依赖和开发配置，原测试、分组、线程及限制不变；测试锁与生产锁的部分构建依赖版本不同，不据此声称执行物字节相同。完整成本收益未测。
 

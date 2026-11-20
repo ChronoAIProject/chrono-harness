@@ -656,22 +656,19 @@
           "detect.ci",
           "detect.judge-ci",
           "detect.runner",
-          "detect.worktree",
-          "verus.archive"
+          "detect.worktree"
         ],
         "save_after_bootstrap": [
           "detect.ci",
           "detect.judge-ci",
           "detect.runner",
-          "detect.worktree",
-          "verus.archive"
+          "detect.worktree"
         ],
         "save_caches": [
           "detect.ci",
           "detect.judge-ci",
           "detect.runner",
-          "detect.worktree",
-          "verus.archive"
+          "detect.worktree"
         ]
       },
       "unit_runner": {

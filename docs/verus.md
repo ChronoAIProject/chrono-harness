@@ -3492,14 +3492,7 @@ Rust 测试另外验证真实消费者，不替代证明。
 `host.verus-download` 委托当前 Rust 启动程序，先按 `verus-macos-arm64.sha256`
 核对本地包；匹配时输出 `cache-hit`，不启动 curl。包缺失或内容不符时才从 projects.json
 登记的固定 GitHub release 地址下载，请求采用 `Accept: application/octet-stream`。
-下载使用 tempfile 的私有临时文件；core 和独立 Verus profile 都把 `TMPDIR`
-选为已登记可回收的 `bootstrap-owner-tooling/tmp`，不把临时字节放进保留归档目录。
-校验通过后原子替换归档并输出 `downloaded`；下载失败保留原退出和响应头，
-校验失败不覆盖原包。正常返回或报错时由 tempfile 回收；强制中断后的残留归现有工作树清理所有者。
-临时目录与归档须在同一文件系统；跨文件系统的原子发布失败，不另复制或覆盖旧包。
-下载回执的实际 argv 给出原响应头路径。登记参数 `{operation-output}` 指向本次构建报告目录内的 `<操作序号>.output`，与该操作的 stdout 和 stderr 同属一代。失败工件上传该目录，供下载故障排查。命中归档缓存时直接返回。
-CI 由 detector 恢复归档并在启动成功后保存，检查单元复用已有共享原包；
-包身份及成本边界见[缓存说明](ci-cache.md#verus-archive)。
+下载的临时文件与发布的 ZIP 同处共享卷。校验通过后原子发布。失败保留原退出和当次构建目录内的响应头。解包时持有该版本的排他锁，完整工具链就绪后才发布目录。证明编译读取共享目录内的 `cargo-verus`、验证器和库。判官通过工作树内的 `.chrono-harness/bin/verus-compiler` 链接调用共享执行文件。下载位置与 CI 采用见[缓存说明](ci-cache.md#verus-archive)。
 含证明操作的单元先核共享 core，再安装工具；无证明操作的消费单元只核共享 core。
 启动参数由 units.json 维护，工作流由登记的 ci.generate 产生。
 共享 core 的校验不代表 Verus 已安装。

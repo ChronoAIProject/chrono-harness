@@ -80,14 +80,15 @@ fn observed(raw: &[u8]) -> SourceObservation {
 #[test]
 fn download_headers_belong_to_the_recorded_operation_directory() {
     let mut fixture = Fixture::new();
+    let storage = tempfile::tempdir().unwrap();
+    fixture
+        .environment
+        .insert("CHRONO_TOOLCHAIN_CACHE".into(), storage.path().into());
     let body = b"fixture archive";
     fs::write(fixture.root.join("download-body"), body).unwrap();
     fs::write(
         fixture.root.join(".chrono-harness/ci/archive.sha256"),
-        format!(
-            "{}  .chrono-harness/cache/package.zip\n",
-            chrono_harness::sha256(body)
-        ),
+        format!("{}  package.zip\n", chrono_harness::sha256(body)),
     )
     .unwrap();
     fixture.config["tools"]["native"] = json!(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));

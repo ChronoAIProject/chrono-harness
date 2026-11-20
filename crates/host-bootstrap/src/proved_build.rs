@@ -42,8 +42,7 @@ pub struct Config {
     pub recovery_operation: String,
     pub manifest: String,
     pub target: String,
-    pub cargo_verus: String,
-    pub verus_directory: String,
+    pub verus_checksum: String,
     pub rust_toolchain: String,
     pub output_contract: OutputContract,
     pub library: Library,
@@ -344,13 +343,9 @@ fn run_attempt(
     verifier::validate_contract(&Some(config.output_contract.clone()))?;
     let manifest = profile::path(root, &config.manifest, b"")?;
     let target = profile::path(root, &config.target, b"")?;
-    let tool_root: &[u8] = if config.verus_directory.starts_with(".chrono-harness/cache/") {
-        b".chrono-harness/cache/"
-    } else {
-        b".chrono-harness/bin/"
-    };
-    let verus = profile::path(root, &config.verus_directory, tool_root)?;
-    let executable = profile::path(root, &config.cargo_verus, tool_root)?;
+    let (installation, _) = crate::download::installation(root, &config.verus_checksum, inherited)?;
+    let verus = chrono_harness::no_symlink_parents(&installation, "toolchain")?;
+    let executable = chrono_harness::no_symlink_parents(&verus, "cargo-verus")?;
     let projects = profile::read(root, &config.projects, b".chrono-harness/")?;
     let mut methods = execution::methods(&chrono_harness::json(&projects)?)?;
     let mut recovery = methods

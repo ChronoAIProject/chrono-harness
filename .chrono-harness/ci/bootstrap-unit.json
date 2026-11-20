@@ -3,14 +3,13 @@
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.95.0",
   "tools": {
-    "bash": "/bin/bash",
-    "tar": "/usr/bin/tar"
+    "bash": "/bin/bash"
   },
   "prerequisites": [
     "host.bootstrap-shared-verify-core"
   ],
   "operations": [
-    "host.verus-extract-shared"
+    "host.bootstrap-verus"
   ],
   "install": [],
   "participation": {

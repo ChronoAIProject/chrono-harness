@@ -33,10 +33,6 @@
     {
       "source": "crates/worktree/target/debug/chrono-worktree",
       "destination": ".chrono-harness/bin/chrono-worktree"
-    },
-    {
-      "source": ".chrono-harness/cache/bootstrap-owner-tooling/verus/package.zip",
-      "destination": ".chrono-harness/bin/verus.zip"
     }
   ],
   "participation": {

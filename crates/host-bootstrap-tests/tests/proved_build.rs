@@ -55,11 +55,18 @@ impl Fixture {
             .prefix("proof fixture ")
             .tempdir()
             .unwrap();
-        let root = fs::canonicalize(temp.path()).unwrap();
+        let base = fs::canonicalize(temp.path()).unwrap();
+        let root = base.join("checkout");
+        let storage = base.join("toolchains");
+        let digest = chrono_harness::sha256(b"fixture");
+        write(
+            &root.join(".chrono-harness/ci/verus.sha256"),
+            format!("{digest}  package.zip\n").as_bytes(),
+        );
         let config = json!({"schema":"chrono-proved-build/v1","owner":"app","operation":"build.app",
             "projects":".chrono-harness/projects.json","recovery_operation":"recover.fixture-proof",
-            "manifest":"app/Cargo.toml","target":"app/target","cargo_verus":".chrono-harness/cache/bootstrap-owner-tooling/verus/toolchain/cargo-verus",
-            "verus_directory":".chrono-harness/cache/bootstrap-owner-tooling/verus/toolchain","rust_toolchain":"1.95.0",
+            "manifest":"app/Cargo.toml","target":"app/target",
+            "verus_checksum":".chrono-harness/ci/verus.sha256","rust_toolchain":"1.95.0",
             "output_contract":{"version":"v","commit":"c"},
             "library":{"manifest":"library/Cargo.toml","source":"library/src/lib.rs","target":"identity","sources":["library/src/lib.rs"]},
             "binary":{"source":"app/src/main.rs","target":"app","published":"app/target/debug/app","dependency_prefix":"app-"}});
@@ -77,7 +84,11 @@ impl Fixture {
             "libvstd.rlib",
             "vstd.vir",
         ] {
-            let destination = root.join(".chrono-harness/cache/bootstrap-owner-tooling/verus/toolchain").join(name);
+            let destination = storage
+                .join("verus")
+                .join(&digest)
+                .join("toolchain")
+                .join(name);
             fs::create_dir_all(destination.parent().unwrap()).unwrap();
             fs::copy(env!("CARGO_BIN_EXE_chrono-test-proved-cargo"), destination).unwrap();
         }
@@ -108,6 +119,7 @@ impl Fixture {
         inputs.extend(library);
         dependency(&deps.join("app-01.d"), &[binary], &inputs);
         let mut environment: Environment = std::env::vars_os().collect();
+        environment.insert("CHRONO_TOOLCHAIN_CACHE".into(), storage.into_os_string());
         environment.insert(
             "CHRONO_PROOF_FIXTURE".into(),
             root.join("mock.json").into_os_string(),
@@ -135,7 +147,13 @@ impl Fixture {
         }
     }
     fn argv(&self) -> Vec<String> {
-        let verus = self.root.join(".chrono-harness/cache/bootstrap-owner-tooling/verus/toolchain");
+        let verus = self
+            .root
+            .parent()
+            .unwrap()
+            .join("toolchains/verus")
+            .join(chrono_harness::sha256(b"fixture"))
+            .join("toolchain");
         let flags = json!([
             "-Zbinary-dep-depinfo",
             "-Zchecksum-hash-algorithm=sha256",

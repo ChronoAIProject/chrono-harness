@@ -3,6 +3,7 @@
 set -eu
 test "$#" -ge 2 || { echo 'usage: bootstrap-native.sh HOST CONFIG [ARGUMENTS]' >&2; exit 2; }
 task_root=$(CDPATH= cd -- "$1" && pwd -P)
+export CHRONO_TOOLCHAIN_CACHE="${CHRONO_TOOLCHAIN_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/chrono-harness/toolchains}"
 export CARGO_HOME="$task_root/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
 export RUSTUP_HOME="${RUSTUP_HOME-$HOME/.rustup}"
 if [ "${CHRONO_WORKTREE_BOOTSTRAP+x}" = x ]; then
