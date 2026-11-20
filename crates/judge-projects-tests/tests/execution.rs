@@ -305,15 +305,31 @@ fn failed_scheduler_report_and_trace_expire_as_one_directory() {
         original["result"]["Ok"],
         serde_json::to_value(&result).unwrap()
     );
-    assert!(std::fs::read_dir(batch).unwrap().any(|entry| {
-        let trace = entry.unwrap().path();
-        trace.is_dir()
-            && std::fs::read_dir(trace)
-                .unwrap()
-                .any(|file| file.unwrap().metadata().unwrap().len() > 0)
-    }));
-    let retirement = owner.maintain_at(deadline).unwrap();
-    assert!(!batch.exists(), "{retirement}");
+    let trace = std::fs::read_dir(batch)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.is_dir())
+        .unwrap();
+    let mut members: Vec<_> = std::fs::read_dir(&trace)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert!(
+        members
+            .iter()
+            .any(|file| file.metadata().unwrap().len() > 0)
+    );
+    members.extend([trace, batch.join("execution.json"), batch.clone()]);
+    while !members.is_empty() {
+        let before = members.len();
+        let retirement = owner.maintain_at(deadline).unwrap();
+        assert_eq!(retirement["accounting_errors"], json!([]), "{retirement}");
+        members.retain(|path| path.try_exists().unwrap());
+        assert!(
+            members.len() < before,
+            "still present: {members:?}; {retirement}"
+        );
+    }
 }
 
 #[test]
