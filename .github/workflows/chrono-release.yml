@@ -40,8 +40,14 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: read
+      contents: read
     outputs:
       selected: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.selection.outputs.selected }}
+      skipped: ${{ steps.components.outputs.skipped }}
+      linux_id: ${{ steps.upload_linux.outputs.artifact-id }}
+      linux_sha: ${{ steps.components.outputs.linux_sha }}
+      macos_id: ${{ steps.upload_macos.outputs.artifact-id }}
+      macos_sha: ${{ steps.components.outputs.macos_sha }}
     steps:
       - name: Download original landing collection
         if: ${{ github.event_name == 'workflow_run' }}
@@ -79,8 +85,51 @@ jobs:
             else error("invalid landing selection identity or units") end
           ' "landing/$LANDING_CONTEXT")
           printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
+      - name: Check out fixed preview planner
+        if: steps.selection.outputs.selected == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: source
+          fetch-depth: 0
+      - name: Select and verify previous release components
+        if: steps.selection.outputs.selected == 'true'
+        id: components
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHRONO_RELEASE_CHANNEL: preview
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          mkdir -p "$(dirname '.chrono-harness/cache/preview-landing')"
+          mv ../landing '.chrono-harness/cache/preview-landing'
+          '/bin/bash' '.chrono-harness/release/native.sh' '.' '.chrono-harness/ci/bootstrap-release-frontend.json' '.chrono-harness/cache/preview-selection' '--select-preview' '.chrono-harness/release/delivery.json' '.chrono-harness/cache/preview-landing'
+          printf 'skipped=%s\n' "$(jq -c . '.chrono-harness/cache/preview-selection'/skipped.json)" >> "$GITHUB_OUTPUT"
+          if [[ -f '.chrono-harness/cache/preview-selection'/origin/platforms/linux/preview.json ]]; then printf 'linux_sha=%s\n' "$(sha256sum '.chrono-harness/cache/preview-selection'/origin/platforms/linux/preview.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"; fi
+          if [[ -f '.chrono-harness/cache/preview-selection'/origin/platforms/macos/preview.json ]]; then printf 'macos_sha=%s\n' "$(sha256sum '.chrono-harness/cache/preview-selection'/origin/platforms/macos/preview.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"; fi
+      - name: Preserve verified linux release components
+        if: steps.components.outputs.linux_sha != ''
+        id: upload_linux
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-linux-${{ github.run_id }}-${{ github.run_attempt }}
+          path: "source/.chrono-harness/cache/preview-selection/origin/platforms/linux/"
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Preserve verified macos release components
+        if: steps.components.outputs.macos_sha != ''
+        id: upload_macos
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-macos-${{ github.run_id }}-${{ github.run_attempt }}
+          path: "source/.chrono-harness/cache/preview-selection/origin/platforms/macos/"
+          include-hidden-files: true
+          if-no-files-found: error
   linux_build_runner:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_runner') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -94,7 +143,8 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
+      - &chrono_release_identity
+        name: Bind original producing attempt
         id: release_identity
         if: ${{ always() }}
         shell: bash
@@ -183,7 +233,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_instructions:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_instructions') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -197,15 +247,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -279,7 +321,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_ci:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_ci') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -293,15 +335,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -375,7 +409,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_ci:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_ci') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -389,15 +423,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -471,7 +497,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_registration:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_registration') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -485,15 +511,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -567,7 +585,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_filemap:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_filemap') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -581,15 +599,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -663,7 +673,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_routes:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_routes') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -677,15 +687,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -759,7 +761,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_projects:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_projects') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -773,15 +775,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -855,7 +849,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_cost:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_cost') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -869,15 +863,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -951,7 +937,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_mixed:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_mixed') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -965,15 +951,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1047,7 +1025,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_workflow:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_judge_workflow') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1061,15 +1039,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1143,7 +1113,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_inputs:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_inputs') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1157,15 +1127,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1239,7 +1201,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_distribution:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_distribution') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1253,15 +1215,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1335,7 +1289,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_worktree:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_worktree') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1349,15 +1303,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1431,7 +1377,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_distribution_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_distribution_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1445,15 +1391,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1527,7 +1465,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_worktree_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && (needs.linux_build_ci.result == 'success' || (needs.linux_build_ci.result == 'skipped' && contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_ci'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_worktree_tests') }}
     needs: ["linux_release_frontend","linux_build_ci"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1541,15 +1479,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
+      - name: Restore selected previous platform package
+        if: ${{ always() && needs.linux_release_frontend.outputs.preview_id != '' && (needs.linux_build_ci.result == 'skipped') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_release_frontend.outputs.preview_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/linux"
       - *chrono_release_download_2
       - &chrono_release_download_1
         name: Download selected original artifact from linux_build_ci
@@ -1631,7 +1568,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_runner_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_runner_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1645,15 +1582,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1727,7 +1656,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_inputs_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_inputs_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1741,15 +1670,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1823,7 +1744,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_ci_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_ci_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1837,15 +1758,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1919,7 +1832,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_ci_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_ci_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1933,15 +1846,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -2015,7 +1920,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_registration_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_registration_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2029,15 +1934,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -2111,7 +2008,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_projects_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_projects_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2125,15 +2022,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -2207,7 +2096,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_workflow_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && (needs.linux_build_ci.result == 'success' || (needs.linux_build_ci.result == 'skipped' && contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_ci'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_workflow_tests') }}
     needs: ["linux_release_frontend","linux_build_ci"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2221,15 +2110,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
+      - name: Restore selected previous platform package
+        if: ${{ always() && needs.linux_release_frontend.outputs.preview_id != '' && (needs.linux_build_ci.result == 'skipped') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_release_frontend.outputs.preview_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/linux"
       - *chrono_release_download_2
       - *chrono_release_download_1
       - name: Prepare registered caches
@@ -2304,7 +2192,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_instructions_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_instructions_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2318,15 +2206,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -2400,7 +2280,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_filemap_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_filemap_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2414,15 +2294,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -2496,7 +2368,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_routes_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_routes_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2510,15 +2382,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -2592,7 +2456,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_cost_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_cost_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2606,15 +2470,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -2688,7 +2544,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_mixed_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_judge_mixed_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2702,15 +2558,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -2784,7 +2632,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_package:
-    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && (github.event_name != 'workflow_run' || needs.linux_release_frontend.result != 'skipped' || needs.linux_build_runner.result != 'skipped' || needs.linux_build_instructions.result != 'skipped' || needs.linux_build_judge_ci.result != 'skipped' || needs.linux_build_ci.result != 'skipped' || needs.linux_build_judge_registration.result != 'skipped' || needs.linux_build_judge_filemap.result != 'skipped' || needs.linux_build_judge_routes.result != 'skipped' || needs.linux_build_judge_projects.result != 'skipped' || needs.linux_build_judge_cost.result != 'skipped' || needs.linux_build_judge_mixed.result != 'skipped' || needs.linux_build_judge_workflow.result != 'skipped' || needs.linux_build_inputs.result != 'skipped' || needs.linux_build_distribution.result != 'skipped' || needs.linux_build_worktree.result != 'skipped' || needs.linux_verify_distribution_tests.result != 'skipped' || needs.linux_verify_worktree_tests.result != 'skipped' || needs.linux_verify_identifiers_tests.result != 'skipped' || needs.linux_verify_runner_tests.result != 'skipped' || needs.linux_verify_inputs_tests.result != 'skipped' || needs.linux_verify_ci_tests.result != 'skipped' || needs.linux_verify_judge_ci_tests.result != 'skipped' || needs.linux_verify_judge_registration_tests.result != 'skipped' || needs.linux_verify_judge_projects_tests.result != 'skipped' || needs.linux_verify_judge_workflow_tests.result != 'skipped' || needs.linux_verify_instructions_tests.result != 'skipped' || needs.linux_verify_judge_filemap_tests.result != 'skipped' || needs.linux_verify_judge_routes_tests.result != 'skipped' || needs.linux_verify_judge_cost_tests.result != 'skipped' || needs.linux_verify_judge_mixed_tests.result != 'skipped' || needs.linux_verify_diagnostics_tests.result != 'skipped' || needs.linux_build_cache.result != 'skipped' || needs.linux_verify_cache_tests.result != 'skipped' || needs.linux_verify_host_bootstrap_native_tests.result != 'skipped' || needs.linux_verify_host_bootstrap_launcher_tests.result != 'skipped' || needs.linux_verify_pr_tests.result != 'skipped' || needs.linux_verify_host_release_native_tests.result != 'skipped' || needs.linux_build_pr.result != 'skipped') }}
+    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && (github.event_name != 'workflow_run' || needs.linux_release_frontend.result != 'skipped' || needs.linux_build_runner.result != 'skipped' || needs.linux_build_instructions.result != 'skipped' || needs.linux_build_judge_ci.result != 'skipped' || needs.linux_build_ci.result != 'skipped' || needs.linux_build_judge_registration.result != 'skipped' || needs.linux_build_judge_filemap.result != 'skipped' || needs.linux_build_judge_routes.result != 'skipped' || needs.linux_build_judge_projects.result != 'skipped' || needs.linux_build_judge_cost.result != 'skipped' || needs.linux_build_judge_mixed.result != 'skipped' || needs.linux_build_judge_workflow.result != 'skipped' || needs.linux_build_inputs.result != 'skipped' || needs.linux_build_distribution.result != 'skipped' || needs.linux_build_worktree.result != 'skipped' || needs.linux_verify_distribution_tests.result != 'skipped' || needs.linux_verify_worktree_tests.result != 'skipped' || needs.linux_verify_identifiers_tests.result != 'skipped' || needs.linux_verify_runner_tests.result != 'skipped' || needs.linux_verify_inputs_tests.result != 'skipped' || needs.linux_verify_ci_tests.result != 'skipped' || needs.linux_verify_judge_ci_tests.result != 'skipped' || needs.linux_verify_judge_registration_tests.result != 'skipped' || needs.linux_verify_judge_projects_tests.result != 'skipped' || needs.linux_verify_judge_workflow_tests.result != 'skipped' || needs.linux_verify_instructions_tests.result != 'skipped' || needs.linux_verify_judge_filemap_tests.result != 'skipped' || needs.linux_verify_judge_routes_tests.result != 'skipped' || needs.linux_verify_judge_cost_tests.result != 'skipped' || needs.linux_verify_judge_mixed_tests.result != 'skipped' || needs.linux_verify_diagnostics_tests.result != 'skipped' || needs.linux_build_cache.result != 'skipped' || needs.linux_verify_cache_tests.result != 'skipped' || needs.linux_verify_host_bootstrap_native_tests.result != 'skipped' || needs.linux_verify_host_bootstrap_launcher_tests.result != 'skipped' || needs.linux_verify_pr_tests.result != 'skipped' || needs.linux_verify_host_release_native_tests.result != 'skipped' || needs.linux_build_pr.result != 'skipped') && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_package') }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_identifiers_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_diagnostics_tests","linux_build_cache","linux_verify_cache_tests","linux_verify_host_bootstrap_native_tests","linux_verify_host_bootstrap_launcher_tests","linux_verify_pr_tests","linux_verify_host_release_native_tests","linux_build_pr"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2798,15 +2646,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
+      - name: Restore selected previous platform package
+        if: ${{ always() && needs.linux_release_frontend.outputs.preview_id != '' && (needs.linux_build_runner.result == 'skipped' || needs.linux_build_instructions.result == 'skipped' || needs.linux_build_judge_ci.result == 'skipped' || needs.linux_build_ci.result == 'skipped' || needs.linux_build_judge_registration.result == 'skipped' || needs.linux_build_judge_filemap.result == 'skipped' || needs.linux_build_judge_routes.result == 'skipped' || needs.linux_build_judge_projects.result == 'skipped' || needs.linux_build_judge_cost.result == 'skipped' || needs.linux_build_judge_mixed.result == 'skipped' || needs.linux_build_judge_workflow.result == 'skipped' || needs.linux_build_inputs.result == 'skipped' || needs.linux_build_distribution.result == 'skipped' || needs.linux_build_worktree.result == 'skipped' || needs.linux_verify_distribution_tests.result == 'skipped' || needs.linux_verify_worktree_tests.result == 'skipped' || needs.linux_verify_identifiers_tests.result == 'skipped' || needs.linux_verify_runner_tests.result == 'skipped' || needs.linux_verify_inputs_tests.result == 'skipped' || needs.linux_verify_ci_tests.result == 'skipped' || needs.linux_verify_judge_ci_tests.result == 'skipped' || needs.linux_verify_judge_registration_tests.result == 'skipped' || needs.linux_verify_judge_projects_tests.result == 'skipped' || needs.linux_verify_judge_workflow_tests.result == 'skipped' || needs.linux_verify_instructions_tests.result == 'skipped' || needs.linux_verify_judge_filemap_tests.result == 'skipped' || needs.linux_verify_judge_routes_tests.result == 'skipped' || needs.linux_verify_judge_cost_tests.result == 'skipped' || needs.linux_verify_judge_mixed_tests.result == 'skipped' || needs.linux_verify_diagnostics_tests.result == 'skipped' || needs.linux_build_cache.result == 'skipped' || needs.linux_verify_cache_tests.result == 'skipped' || needs.linux_verify_host_bootstrap_native_tests.result == 'skipped' || needs.linux_verify_host_bootstrap_launcher_tests.result == 'skipped' || needs.linux_verify_pr_tests.result == 'skipped' || needs.linux_verify_host_release_native_tests.result == 'skipped' || needs.linux_build_pr.result == 'skipped') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_release_frontend.outputs.preview_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/linux"
       - *chrono_release_download_2
       - name: Download selected original artifact from linux_build_runner
         if: ${{ always() && needs.linux_build_runner.outputs.artifact_id != '' }}
@@ -3089,7 +2936,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_runner:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_runner') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3103,15 +2950,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - &chrono_release_download_5
         name: Download selected original artifact from macos_release_frontend
         if: ${{ always() && needs.macos_release_frontend.outputs.artifact_id != '' }}
@@ -3192,7 +3031,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_instructions:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_instructions') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3206,15 +3045,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -3288,7 +3119,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_ci:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_ci') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3302,15 +3133,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -3384,7 +3207,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_ci:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_ci') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3398,15 +3221,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -3480,7 +3295,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_registration:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_registration') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3494,15 +3309,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -3576,7 +3383,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_filemap:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_filemap') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3590,15 +3397,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -3672,7 +3471,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_routes:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_routes') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3686,15 +3485,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -3768,7 +3559,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_projects:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_projects') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3782,15 +3573,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -3864,7 +3647,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_cost:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_cost') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3878,15 +3661,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -3960,7 +3735,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_mixed:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_mixed') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3974,15 +3749,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -4056,7 +3823,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_workflow:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_judge_workflow') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4070,15 +3837,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -4152,7 +3911,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_inputs:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_inputs') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4166,15 +3925,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -4248,7 +3999,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_distribution:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_distribution') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4262,15 +4013,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -4344,7 +4087,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_worktree:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_worktree') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4358,15 +4101,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -4440,7 +4175,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_distribution_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_distribution_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4454,15 +4189,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -4536,7 +4263,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_worktree_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && (needs.macos_build_ci.result == 'success' || (needs.macos_build_ci.result == 'skipped' && contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_ci'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_worktree_tests') }}
     needs: ["macos_release_frontend","macos_build_ci"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4550,15 +4277,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
+      - name: Restore selected previous platform package
+        if: ${{ always() && needs.macos_release_frontend.outputs.preview_id != '' && (needs.macos_build_ci.result == 'skipped') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_release_frontend.outputs.preview_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/macos"
       - *chrono_release_download_5
       - &chrono_release_download_4
         name: Download selected original artifact from macos_build_ci
@@ -4640,7 +4366,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_runner_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_runner_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4654,15 +4380,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -4736,7 +4454,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_inputs_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_inputs_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4750,15 +4468,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -4832,7 +4542,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_ci_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_ci_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4863,15 +4573,7 @@ jobs:
           restore-keys: |
             chrono-download-v1-chrono-harness-cargo.ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
           fail-on-cache-miss: false
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -4945,7 +4647,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_ci_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_ci_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4959,15 +4661,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -5041,7 +4735,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_registration_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_registration_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5055,15 +4749,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -5137,7 +4823,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_projects_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_projects_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5151,15 +4837,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -5233,7 +4911,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_workflow_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && (needs.macos_build_ci.result == 'success' || (needs.macos_build_ci.result == 'skipped' && contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_ci'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_workflow_tests') }}
     needs: ["macos_release_frontend","macos_build_ci"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5247,15 +4925,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
+      - name: Restore selected previous platform package
+        if: ${{ always() && needs.macos_release_frontend.outputs.preview_id != '' && (needs.macos_build_ci.result == 'skipped') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_release_frontend.outputs.preview_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/macos"
       - *chrono_release_download_5
       - *chrono_release_download_4
       - name: Prepare registered caches
@@ -5330,7 +5007,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_instructions_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_instructions_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5344,15 +5021,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -5426,7 +5095,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_filemap_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_filemap_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5440,15 +5109,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -5522,7 +5183,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_routes_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_routes_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5536,15 +5197,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -5618,7 +5271,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_cost_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_cost_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5632,15 +5285,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -5714,7 +5359,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_mixed_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_judge_mixed_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5728,15 +5373,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -5810,7 +5447,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_package:
-    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && (github.event_name != 'workflow_run' || needs.macos_release_frontend.result != 'skipped' || needs.macos_build_runner.result != 'skipped' || needs.macos_build_instructions.result != 'skipped' || needs.macos_build_judge_ci.result != 'skipped' || needs.macos_build_ci.result != 'skipped' || needs.macos_build_judge_registration.result != 'skipped' || needs.macos_build_judge_filemap.result != 'skipped' || needs.macos_build_judge_routes.result != 'skipped' || needs.macos_build_judge_projects.result != 'skipped' || needs.macos_build_judge_cost.result != 'skipped' || needs.macos_build_judge_mixed.result != 'skipped' || needs.macos_build_judge_workflow.result != 'skipped' || needs.macos_build_inputs.result != 'skipped' || needs.macos_build_distribution.result != 'skipped' || needs.macos_build_worktree.result != 'skipped' || needs.macos_verify_distribution_tests.result != 'skipped' || needs.macos_verify_worktree_tests.result != 'skipped' || needs.macos_verify_identifiers_tests.result != 'skipped' || needs.macos_verify_runner_tests.result != 'skipped' || needs.macos_verify_inputs_tests.result != 'skipped' || needs.macos_verify_ci_tests.result != 'skipped' || needs.macos_verify_judge_ci_tests.result != 'skipped' || needs.macos_verify_judge_registration_tests.result != 'skipped' || needs.macos_verify_judge_projects_tests.result != 'skipped' || needs.macos_verify_judge_workflow_tests.result != 'skipped' || needs.macos_verify_instructions_tests.result != 'skipped' || needs.macos_verify_judge_filemap_tests.result != 'skipped' || needs.macos_verify_judge_routes_tests.result != 'skipped' || needs.macos_verify_judge_cost_tests.result != 'skipped' || needs.macos_verify_judge_mixed_tests.result != 'skipped' || needs.macos_verify_diagnostics_tests.result != 'skipped' || needs.macos_build_cache.result != 'skipped' || needs.macos_verify_cache_tests.result != 'skipped' || needs.macos_verify_host_bootstrap_native_tests.result != 'skipped' || needs.macos_verify_host_bootstrap_launcher_tests.result != 'skipped' || needs.macos_verify_pr_tests.result != 'skipped' || needs.macos_verify_host_release_native_tests.result != 'skipped' || needs.macos_build_pr.result != 'skipped') }}
+    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && (github.event_name != 'workflow_run' || needs.macos_release_frontend.result != 'skipped' || needs.macos_build_runner.result != 'skipped' || needs.macos_build_instructions.result != 'skipped' || needs.macos_build_judge_ci.result != 'skipped' || needs.macos_build_ci.result != 'skipped' || needs.macos_build_judge_registration.result != 'skipped' || needs.macos_build_judge_filemap.result != 'skipped' || needs.macos_build_judge_routes.result != 'skipped' || needs.macos_build_judge_projects.result != 'skipped' || needs.macos_build_judge_cost.result != 'skipped' || needs.macos_build_judge_mixed.result != 'skipped' || needs.macos_build_judge_workflow.result != 'skipped' || needs.macos_build_inputs.result != 'skipped' || needs.macos_build_distribution.result != 'skipped' || needs.macos_build_worktree.result != 'skipped' || needs.macos_verify_distribution_tests.result != 'skipped' || needs.macos_verify_worktree_tests.result != 'skipped' || needs.macos_verify_identifiers_tests.result != 'skipped' || needs.macos_verify_runner_tests.result != 'skipped' || needs.macos_verify_inputs_tests.result != 'skipped' || needs.macos_verify_ci_tests.result != 'skipped' || needs.macos_verify_judge_ci_tests.result != 'skipped' || needs.macos_verify_judge_registration_tests.result != 'skipped' || needs.macos_verify_judge_projects_tests.result != 'skipped' || needs.macos_verify_judge_workflow_tests.result != 'skipped' || needs.macos_verify_instructions_tests.result != 'skipped' || needs.macos_verify_judge_filemap_tests.result != 'skipped' || needs.macos_verify_judge_routes_tests.result != 'skipped' || needs.macos_verify_judge_cost_tests.result != 'skipped' || needs.macos_verify_judge_mixed_tests.result != 'skipped' || needs.macos_verify_diagnostics_tests.result != 'skipped' || needs.macos_build_cache.result != 'skipped' || needs.macos_verify_cache_tests.result != 'skipped' || needs.macos_verify_host_bootstrap_native_tests.result != 'skipped' || needs.macos_verify_host_bootstrap_launcher_tests.result != 'skipped' || needs.macos_verify_pr_tests.result != 'skipped' || needs.macos_verify_host_release_native_tests.result != 'skipped' || needs.macos_build_pr.result != 'skipped') && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_package') }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_identifiers_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_diagnostics_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_host_bootstrap_native_tests","macos_verify_host_bootstrap_launcher_tests","macos_verify_pr_tests","macos_verify_host_release_native_tests","macos_build_pr"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5824,15 +5461,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
+      - name: Restore selected previous platform package
+        if: ${{ always() && needs.macos_release_frontend.outputs.preview_id != '' && (needs.macos_build_runner.result == 'skipped' || needs.macos_build_instructions.result == 'skipped' || needs.macos_build_judge_ci.result == 'skipped' || needs.macos_build_ci.result == 'skipped' || needs.macos_build_judge_registration.result == 'skipped' || needs.macos_build_judge_filemap.result == 'skipped' || needs.macos_build_judge_routes.result == 'skipped' || needs.macos_build_judge_projects.result == 'skipped' || needs.macos_build_judge_cost.result == 'skipped' || needs.macos_build_judge_mixed.result == 'skipped' || needs.macos_build_judge_workflow.result == 'skipped' || needs.macos_build_inputs.result == 'skipped' || needs.macos_build_distribution.result == 'skipped' || needs.macos_build_worktree.result == 'skipped' || needs.macos_verify_distribution_tests.result == 'skipped' || needs.macos_verify_worktree_tests.result == 'skipped' || needs.macos_verify_identifiers_tests.result == 'skipped' || needs.macos_verify_runner_tests.result == 'skipped' || needs.macos_verify_inputs_tests.result == 'skipped' || needs.macos_verify_ci_tests.result == 'skipped' || needs.macos_verify_judge_ci_tests.result == 'skipped' || needs.macos_verify_judge_registration_tests.result == 'skipped' || needs.macos_verify_judge_projects_tests.result == 'skipped' || needs.macos_verify_judge_workflow_tests.result == 'skipped' || needs.macos_verify_instructions_tests.result == 'skipped' || needs.macos_verify_judge_filemap_tests.result == 'skipped' || needs.macos_verify_judge_routes_tests.result == 'skipped' || needs.macos_verify_judge_cost_tests.result == 'skipped' || needs.macos_verify_judge_mixed_tests.result == 'skipped' || needs.macos_verify_diagnostics_tests.result == 'skipped' || needs.macos_build_cache.result == 'skipped' || needs.macos_verify_cache_tests.result == 'skipped' || needs.macos_verify_host_bootstrap_native_tests.result == 'skipped' || needs.macos_verify_host_bootstrap_launcher_tests.result == 'skipped' || needs.macos_verify_pr_tests.result == 'skipped' || needs.macos_verify_host_release_native_tests.result == 'skipped' || needs.macos_build_pr.result == 'skipped') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_release_frontend.outputs.preview_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/macos"
       - *chrono_release_download_5
       - name: Download selected original artifact from macos_build_runner
         if: ${{ always() && needs.macos_build_runner.outputs.artifact_id != '' }}
@@ -6115,7 +5751,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_diagnostics_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_diagnostics_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6129,15 +5765,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -6211,7 +5839,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_diagnostics_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_diagnostics_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6225,15 +5853,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -6307,7 +5927,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_cache:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_cache') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6321,15 +5941,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -6403,7 +6015,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_cache_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_cache_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6417,15 +6029,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -6499,7 +6103,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_cache:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_cache') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6513,15 +6117,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -6595,7 +6191,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_cache_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_cache_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6609,15 +6205,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -6691,7 +6279,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_bootstrap_native_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_host_bootstrap_native_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6705,15 +6293,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Run registered release command
         if: ${{ always() }}
@@ -6740,7 +6320,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_host_bootstrap_native_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_host_bootstrap_native_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6754,15 +6334,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Run registered release command
         if: ${{ always() }}
@@ -6789,7 +6361,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_bootstrap_launcher_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_host_bootstrap_launcher_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6803,15 +6375,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Run registered release command
         if: ${{ always() }}
@@ -6838,7 +6402,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_host_bootstrap_launcher_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_host_bootstrap_launcher_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6852,15 +6416,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Run registered release command
         if: ${{ always() }}
@@ -6887,7 +6443,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_pr_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_pr_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6901,15 +6457,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Run registered release command
         if: ${{ always() }}
@@ -6936,7 +6484,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_pr_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_pr_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6950,15 +6498,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Run registered release command
         if: ${{ always() }}
@@ -6985,7 +6525,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_identifiers_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_identifiers_tests') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6999,15 +6539,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Run registered release command
         if: ${{ always() }}
@@ -7034,7 +6566,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_identifiers_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_identifiers_tests') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -7048,15 +6580,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Run registered release command
         if: ${{ always() }}
@@ -7091,21 +6615,16 @@ jobs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
       run_id: ${{ steps.release_identity.outputs.run_id }}
       attempt: ${{ steps.release_identity.outputs.attempt }}
+      skipped: ${{ needs.select_preview.outputs.skipped }}
+      preview_sha256: ${{ needs.select_preview.outputs.linux_sha }}
+      preview_id: ${{ needs.select_preview.outputs.linux_id }}
     steps:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -7131,7 +6650,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_release_native_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && (needs.linux_build_cache.result == 'success' || (needs.linux_build_cache.result == 'skipped' && contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_cache'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_host_release_native_tests') }}
     needs: ["linux_release_frontend","linux_build_cache"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -7145,15 +6664,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
+      - name: Restore selected previous platform package
+        if: ${{ always() && needs.linux_release_frontend.outputs.preview_id != '' && (needs.linux_build_cache.result == 'skipped') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_release_frontend.outputs.preview_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/linux"
       - *chrono_release_download_2
       - *chrono_release_download_0
       - name: Run registered release command
@@ -7189,6 +6707,9 @@ jobs:
       artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
       run_id: ${{ steps.release_identity.outputs.run_id }}
       attempt: ${{ steps.release_identity.outputs.attempt }}
+      skipped: ${{ needs.select_preview.outputs.skipped }}
+      preview_sha256: ${{ needs.select_preview.outputs.macos_sha }}
+      preview_id: ${{ needs.select_preview.outputs.macos_id }}
     env:
       CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
     steps:
@@ -7212,15 +6733,7 @@ jobs:
           restore-keys: |
             chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
           fail-on-cache-miss: false
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -7246,7 +6759,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_host_release_native_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && (needs.macos_build_cache.result == 'success' || (needs.macos_build_cache.result == 'skipped' && contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_cache'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_host_release_native_tests') }}
     needs: ["macos_release_frontend","macos_build_cache"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -7260,15 +6773,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
+      - name: Restore selected previous platform package
+        if: ${{ always() && needs.macos_release_frontend.outputs.preview_id != '' && (needs.macos_build_cache.result == 'skipped') }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_release_frontend.outputs.preview_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/macos"
       - *chrono_release_download_5
       - *chrono_release_download_3
       - name: Run registered release command
@@ -7296,7 +6808,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   publish:
-    if: ${{ always() && (inputs.channel == 'stable' || success()) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ always() && (inputs.channel == 'stable' || needs.linux_release_frontend.result == 'success' && needs.linux_package.result == 'success' && needs.macos_package.result == 'success') && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     permissions:
       contents: write
       actions: read
@@ -7313,15 +6825,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Download selected original artifact from linux_package
         if: ${{ always() && needs.linux_package.outputs.artifact_id != '' }}
@@ -7379,15 +6883,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - &chrono_release_download_6
         name: Download selected original artifact from publish
         if: ${{ always() && needs.publish.outputs.artifact_id != '' }}
@@ -7436,15 +6932,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_6
       - *chrono_release_download_5
       - name: Run registered release command
@@ -7472,7 +6960,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_pr:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_pr') }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -7486,15 +6974,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_2
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -7568,7 +7048,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_pr:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
+    if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_pr') }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -7582,15 +7062,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_identity
       - *chrono_release_download_5
       - name: Prepare registered caches
         id: chrono_cache_plan

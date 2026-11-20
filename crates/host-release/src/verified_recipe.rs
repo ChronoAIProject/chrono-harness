@@ -11,16 +11,25 @@ pub(crate) mod identifiers;
 use chrono_identifiers as identifiers;
 
 #[cfg(verus_keep_ghost)]
+#[path = "main.rs"]
+pub mod command;
+#[cfg(verus_keep_ghost)]
 #[path = "execution.rs"]
 pub mod execution;
+#[cfg(verus_keep_ghost)]
+#[path = "frontend.rs"]
+pub mod frontend;
 #[cfg(verus_keep_ghost)]
 #[path = "receipt.rs"]
 pub mod receipt;
 #[cfg(verus_keep_ghost)]
 #[path = "recipe.rs"]
 pub mod recipe;
+#[cfg(verus_keep_ghost)]
+#[path = "staging.rs"]
+pub mod staging;
 #[cfg(not(verus_keep_ghost))]
-pub use crate::{execution, receipt, recipe};
+pub use crate::{execution, frontend, receipt, recipe, staging};
 
 #[cfg(verus_keep_ghost)]
 #[path = "delivery.rs"]

@@ -589,8 +589,38 @@ fn actual_host_projections_fit_native_workflow_size() {
                     .is_some_and(|v| v.starts_with("actions/download-artifact@"))
             })
             .collect();
-        assert_eq!(downloads.len(), job.downloads.len(), "{}", job.id);
-        for (step, download) in downloads.into_iter().zip(&job.downloads) {
+        let mut steps = downloads.into_iter();
+        let delivery = release.delivery.as_ref();
+        let recovery = delivery
+            .and_then(|d| d.landing_selection.as_ref()?.components.as_ref())
+            .and_then(|parts| {
+                parts
+                    .platforms
+                    .values()
+                    .find(|p| job.needs.contains(&p.job))
+            })
+            .filter(|_| {
+                job.needs.len() > 1 && delivery.unwrap().promotion_build_jobs.contains(&job.id)
+            });
+        if let Some(frontend) = recovery {
+            let step = steps.next().expect("missing previous platform package");
+            assert_eq!(
+                step["with"]["artifact-ids"],
+                format!("${{{{ needs.{}.outputs.preview_id }}}}", frontend.job)
+            );
+            assert_eq!(step["with"]["path"], frontend.directory);
+            assert_eq!(step["with"]["merge-multiple"], true);
+            for dependency in job.needs.iter().filter(|id| **id != frontend.job) {
+                assert!(
+                    step["if"]
+                        .as_str()
+                        .unwrap()
+                        .contains(&format!("needs.{dependency}.result == 'skipped'"))
+                );
+            }
+        }
+        assert_eq!(steps.len(), job.downloads.len(), "{}", job.id);
+        for (step, download) in steps.zip(&job.downloads) {
             assert_eq!(step["with"]["path"], download.directory);
             assert_eq!(
                 step["with"]["artifact-ids"],

@@ -574,6 +574,71 @@ fn perform(
 }
 
 #[cfg(not(verus_keep_ghost))]
+/// 自动预发布从固定落地集合选择组件。读取远端所用的 Git、gh 和原流沿用发布执行器。
+pub fn select_preview(
+    root: &Path,
+    output: &Path,
+    config_path: &str,
+    collection: &str,
+    environment: &Environment,
+) -> Result<i32, String> {
+    let root = fs::canonicalize(root).map_err(error)?;
+    let loaded = Loaded::load(&root)?;
+    let config: Config =
+        serde_json::from_value(recipe::read_json(&root, config_path)?).map_err(error)?;
+    config.publication.validate()?;
+    let output = chrono_harness::no_symlink_parents(
+        &root,
+        output.to_str().ok_or("invalid selection output path")?,
+    )?;
+    fs::create_dir_all(output.parent().ok_or("missing selection parent")?).map_err(error)?;
+    fs::create_dir(&output).map_err(error)?;
+    let tools = config
+        .tools
+        .iter()
+        .map(|(key, program)| {
+            Ok((
+                key.clone(),
+                chrono_harness::resolve_program(&root, program, Some(env(environment, "PATH")?))?,
+            ))
+        })
+        .collect::<Result<_, String>>()?;
+    let mut executor = Executor {
+        root: &root,
+        output: &output,
+        environment,
+        tools,
+        started: Instant::now(),
+        seconds: loaded.recipe.limits.unit_seconds,
+        report: json!({"schema":"chrono-preview-selection/v1","status":"failed","processes":[]}),
+        bodies: 0,
+    };
+    let result = (|| {
+        let (commit, tree) = source(&mut executor)?;
+        let current = identity::resolve(&loaded.plan.version, &commit, &tree, environment)?;
+        recipe::preview::select_landing(
+            &root,
+            &output,
+            &config,
+            collection,
+            &current,
+            environment,
+            &mut executor,
+        )
+    })();
+    match &result {
+        Ok(_) => executor.report["status"] = json!("passed"),
+        Err(failure) => executor.report["failure"] = json!(failure),
+    }
+    fs::write(
+        output.join("receipt.json"),
+        serde_json::to_vec_pretty(&executor.report).map_err(error)?,
+    )
+    .map_err(error)?;
+    result.map(|_| 0)
+}
+
+#[cfg(not(verus_keep_ghost))]
 pub fn run(
     root: &Path,
     output: &Path,
@@ -1026,7 +1091,7 @@ pub mod promotion {
     }
 
     /// 固定 attempt 的成功终态包括原发布及两平台安装；不能只核 source SHA。
-    fn verify_run(
+    pub(crate) fn verify_run(
         run: &Value,
         repository: &str,
         workflow_id: u64,
@@ -1090,14 +1155,14 @@ pub mod promotion {
         Ok(artifact.clone())
     }
 
-    fn download(
+    pub(crate) fn download(
         repository: &str,
         run: &Value,
         name: &str,
         destination: &Path,
         expected: Option<&str>,
         commands: &mut impl Commands,
-    ) -> Result<Value, String> {
+    ) -> Result<Option<Value>, String> {
         if destination.exists() {
             return Err(error("original download destination already exists"));
         }
@@ -1106,6 +1171,19 @@ pub mod promotion {
             commands,
             format!("repos/{repository}/actions/runs/{id}/artifacts?name={name}&per_page=100"),
         )?;
+        let rows = list["artifacts"]
+            .as_array()
+            .ok_or_else(|| error("missing artifacts"))?;
+        if (list["total_count"] == 0 && rows.is_empty())
+            || (list["total_count"] == 1
+                && rows.len() == 1
+                && rows[0]["expired"] == true
+                && rows[0]["name"] == name
+                && rows[0]["workflow_run"]["id"] == id
+                && rows[0]["workflow_run"]["head_sha"] == run["head_sha"])
+        {
+            return Ok(None);
+        }
         let artifact = select_artifact(
             &list,
             name,
@@ -1157,7 +1235,7 @@ pub mod promotion {
         if confirmed != artifact {
             return Err(error("original artifact metadata changed during download"));
         }
-        Ok(artifact)
+        Ok(Some(artifact))
     }
 
     fn job<'a>(workflow: &'a Value, id: &str) -> Result<&'a Value, String> {
@@ -1173,7 +1251,7 @@ pub mod promotion {
         }
         Ok(found[0])
     }
-    fn artifact_name(
+    pub(crate) fn artifact_name(
         workflow: &Value,
         job_id: &str,
         run: &str,
@@ -1212,18 +1290,49 @@ pub mod promotion {
             return Err(error("missing release workflow identity"));
         }
         let workflow = recipe::read_json(root, &promotion.workflow_config)?;
+        let run_id = env(environment, "CHRONO_RELEASE_PREVIEW_RUN")?;
+        let attempt = env(environment, "CHRONO_RELEASE_PREVIEW_ATTEMPT")?;
+        if run_id == env(environment, "CHRONO_RELEASE_RUN")? {
+            return Err(error("preview must be a completed earlier run"));
+        }
+        let mut preview_environment = environment.clone();
+        preview_environment.insert("CHRONO_RELEASE_CHANNEL".into(), "preview".into());
+        preview_environment.remove(OsStr::new("CHRONO_RELEASE_VERSION"));
+        let preview = identity::resolve(
+            &loaded.plan.version,
+            &stable.source_commit,
+            &stable.source_tree,
+            &preview_environment,
+        )?;
+        read_preview_origin(
+            root, output, config, loaded, &preview, &workflow, run_id, attempt, commands,
+        )?
+        .ok_or_else(|| error("required original preview run or artifact is unavailable"))
+    }
+
+    /// 晋升和增量预发布均从同一公开测试版的原发布记录中选平台包。
+    pub(crate) fn read_preview_origin(
+        root: &Path,
+        output: &Path,
+        config: &delivery::Config,
+        loaded: &Loaded,
+        preview: &Identity,
+        workflow: &Value,
+        run_id: &str,
+        attempt: &str,
+        commands: &mut impl Commands,
+    ) -> Result<Option<Prepared>, String> {
+        let promotion = config
+            .promotion
+            .as_ref()
+            .ok_or("missing original workflow registration")?;
+        let (run_number, attempt_number) = (positive(run_id)?, positive(attempt)?);
         let path = workflow["workflow_path"]
             .as_str()
             .ok_or_else(|| error("missing workflow path"))?;
         let publisher = workflow["delivery"]["publisher"]
             .as_str()
             .ok_or_else(|| error("missing publisher"))?;
-        let run_id = env(environment, "CHRONO_RELEASE_PREVIEW_RUN")?;
-        let attempt = env(environment, "CHRONO_RELEASE_PREVIEW_ATTEMPT")?;
-        let (run_number, attempt_number) = (positive(run_id)?, positive(attempt)?);
-        if run_id == env(environment, "CHRONO_RELEASE_RUN")? {
-            return Err(error("preview must be a completed earlier run"));
-        }
         let run = publication::read_api(
             commands,
             format!(
@@ -1231,6 +1340,14 @@ pub mod promotion {
                 config.publication.repository
             ),
         )?;
+        if run["id"] == run_number
+            && run["run_attempt"] == attempt_number
+            && run["workflow_id"] == promotion.workflow_id
+            && run["repository"]["full_name"] == config.publication.repository
+            && (run["status"] != "completed" || run["conclusion"] != "success")
+        {
+            return Ok(None);
+        }
         verify_run(
             &run,
             &config.publication.repository,
@@ -1241,31 +1358,25 @@ pub mod promotion {
         )?;
         let workflow_identity = identity::verify_workflow_commits(
             path,
-            &stable.source_commit,
+            &preview.source_commit,
             run["head_sha"].as_str().unwrap(),
             commands,
-        )?;
-        let mut preview_environment = environment.clone();
-        preview_environment.insert("CHRONO_RELEASE_CHANNEL".into(), "preview".into());
-        preview_environment.remove(OsStr::new("CHRONO_RELEASE_VERSION"));
-        let preview = identity::resolve(
-            &loaded.plan.version,
-            &stable.source_commit,
-            &stable.source_tree,
-            &preview_environment,
         )?;
         let origin = output.join("origin");
         fs::create_dir(&origin).map_err(error)?;
         let original_publication = origin.join("publication");
         let name = artifact_name(&workflow, publisher, run_id, attempt)?;
-        let publication_artifact = download(
+        let Some(publication_artifact) = download(
             &config.publication.repository,
             &run,
             &name,
             &original_publication,
             None,
             commands,
-        )?;
+        )?
+        else {
+            return Ok(None);
+        };
         let published = recipe::read_json(&original_publication, "receipt.json")?;
         if published["schema"] != "chrono-release-publication/v1"
             || published["status"] != "passed"
@@ -1295,14 +1406,17 @@ pub mod promotion {
             let selection = delivery::select(job_id, &published["dependencies"], run_id, attempt)?;
             let name = artifact_name(&workflow, job_id, run_id, &selection.attempt)?;
             let destination = origin.join("platforms").join(native);
-            let artifact = download(
+            let Some(artifact) = download(
                 &config.publication.repository,
                 &run,
                 &name,
                 &destination,
                 Some(&selection.artifact_id),
                 commands,
-            )?;
+            )?
+            else {
+                return Ok(None);
+            };
             packages.insert(
                 native.clone(),
                 Package {
@@ -1385,7 +1499,7 @@ pub mod promotion {
         }
         let (receipt_sha256, receipt_size) =
             file_identity(&original_publication.join("receipt.json"))?;
-        Ok(Prepared {
+        Ok(Some(Prepared {
             identity: preview.clone(),
             packages,
             selections,
@@ -1395,6 +1509,6 @@ pub mod promotion {
                 "publication_receipt":{"path":"origin/publication/receipt.json","sha256":receipt_sha256,"size":receipt_size},
                 "verified_publication":public,
             }),
-        })
+        }))
     }
 }

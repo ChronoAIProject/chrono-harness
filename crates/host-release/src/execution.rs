@@ -108,6 +108,7 @@ struct Execution<'a> {
     tools: BTreeMap<String, PathBuf>,
     environment: Environment,
     report: Value,
+    recovery: Option<recipe::preview::Recovery>,
     phase: String,
     child_failure: Option<(String, i32, String)>,
     started: Instant,
@@ -217,6 +218,7 @@ impl<'a> Execution<'a> {
             tools,
             environment,
             report,
+            recovery: None,
             phase: "source-identity".into(),
             child_failure: None,
             started,
@@ -445,7 +447,27 @@ impl<'a> Execution<'a> {
         let raw = env(&self.environment, "CHRONO_RELEASE_DEPENDENCIES")?
             .as_bytes()
             .to_vec();
-        let selected = receipt::select(self.loaded, self.scope, &lineage, &raw)?;
+        self.recovery = recipe::preview::Recovery::from_needs(
+            &self.root,
+            self.loaded,
+            &lineage,
+            &raw,
+            &self.report["context"],
+        )?;
+        let selected = if let Some(recovery) = &self.recovery {
+            let retained = recovery
+                .origins
+                .iter()
+                .map(|(job, origin)| (job.clone(), origin.selection.clone()))
+                .collect();
+            let selected =
+                receipt::select_retained(self.loaded, self.scope, &lineage, &raw, &retained)?;
+            self.report["retained_selections"] = json!(retained);
+            self.report["retained_origins"] = json!(recovery.origins);
+            selected
+        } else {
+            receipt::select(self.loaded, self.scope, &lineage, &raw)?
+        };
         fs::create_dir_all(&self.output).map_err(error)?;
         let path = self.output.join("dependency-context.json");
         let mut file = OpenOptions::new()
@@ -841,14 +863,22 @@ fn units(execution: &mut Execution<'_>, lineage: &Lineage) -> Result<(), String>
             continue;
         }
         execution.phase = format!("selected-build:{}", unit.id());
-        let imported = receipt::import_build(
-            loaded,
-            &execution.root,
-            &execution.report["context"],
-            lineage,
-            unit,
-            &selected[unit.id()],
-        )?;
+        let selection = &selected[unit.id()];
+        let imported = match execution
+            .recovery
+            .as_ref()
+            .and_then(|r| r.origins.get(&selection.job).map(|origin| (r, origin)))
+        {
+            Some((recovery, origin)) => recovery.import(&execution.root, loaded, unit, origin)?,
+            None => receipt::import_build(
+                loaded,
+                &execution.root,
+                &execution.report["context"],
+                lineage,
+                unit,
+                &selected[unit.id()],
+            )?,
+        };
         let current = imported
             .original
             .compiler_fingerprint()
@@ -935,14 +965,22 @@ fn units(execution: &mut Execution<'_>, lineage: &Lineage) -> Result<(), String>
                     continue;
                 }
                 execution.phase = format!("selected-verification:{}", unit.id());
-                let verified = receipt::read(
-                    loaded,
-                    &execution.root,
-                    &execution.report["context"],
-                    lineage,
-                    unit,
-                    &selected[unit.id()],
-                )?;
+                let selection = &selected[unit.id()];
+                let verified = match execution
+                    .recovery
+                    .as_ref()
+                    .and_then(|r| r.origins.get(&selection.job).map(|origin| (r, origin)))
+                {
+                    Some((recovery, origin)) => recovery.verified(unit, origin)?,
+                    None => receipt::read(
+                        loaded,
+                        &execution.root,
+                        &execution.report["context"],
+                        lineage,
+                        unit,
+                        &selected[unit.id()],
+                    )?,
+                };
                 if policy::requires_rust(&unit.invocation())
                     && verified.compiler_fingerprint() != fingerprint
                 {
@@ -959,13 +997,22 @@ fn units(execution: &mut Execution<'_>, lineage: &Lineage) -> Result<(), String>
                 originals.insert(unit.id().to_owned(), verified);
             }
             let mut retained = BTreeMap::new();
-            let mut started = u64::MAX;
+            let mut started = execution
+                .recovery
+                .as_ref()
+                .map_or(u64::MAX, |r| r.started_ns);
             for (id, original) in &originals {
-                started = started.min(
-                    original.receipt["started_ns"]
-                        .as_u64()
-                        .ok_or_else(|| error("missing original start"))?,
-                );
+                if execution
+                    .recovery
+                    .as_ref()
+                    .is_none_or(|r| !r.origins.contains_key(&selected[id].job))
+                {
+                    started = started.min(
+                        original.receipt["started_ns"]
+                            .as_u64()
+                            .ok_or_else(|| error("missing original start"))?,
+                    );
+                }
                 retained.insert(id, retain_original(&execution.output, id, original)?);
             }
             execution.report["originals"] = json!(retained);
