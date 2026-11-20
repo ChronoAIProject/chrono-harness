@@ -103,7 +103,7 @@ fn expect_retirement_deferral(metadata_room: bool, nodes: usize, node_limit: usi
         || elapsed_millis >= max_millis as u128),
 {
     let reason = policy::retirement_deferral(metadata_room, nodes, node_limit,
-        elapsed_millis, max_millis);
+        elapsed_millis, max_millis, false);
     match reason {
         Some(text) => {
             expect_true(deferred);
@@ -117,6 +117,12 @@ fn expect_retirement_deferral(metadata_room: bool, nodes: usize, node_limit: usi
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn retirement_admission_keeps_each_original_budget_boundary_and_full_reason() {
+    expect_true(policy::retirement_time_available(true, 29, 25));
+    expect_true(!policy::retirement_time_available(false, 29, 25));
+    let admitted = policy::retirement_deferral(true, 0, 2, 29, 25, true);
+    let full = policy::retirement_deferral(true, 2, 2, 29, 25, true);
+    let no_metadata = policy::retirement_deferral(false, 0, 2, 29, 25, true);
+    expect_true(admitted.is_none() && full.is_some() && no_metadata.is_some());
     expect_retirement_deferral(true, 0, 1, 0, 1, false);
     expect_retirement_deferral(true, 31, 32, 24, 25, false);
     expect_retirement_deferral(false, 0, 1, 0, 1, true);

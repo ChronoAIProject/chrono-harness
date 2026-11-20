@@ -2901,6 +2901,22 @@ impl Inventory {
         self.validate_originals(originals)?;
         self.maintain_round(observed, Some(originals))
     }
+    /// Exercise the same addressed round after its preparation time has elapsed.
+    #[cfg(feature = "retention-test")]
+    #[doc(hidden)]
+    pub fn maintain_late_original_at(&self, id: &str, observed: u64) -> Result<Value, String> {
+        let originals = [id.to_owned()];
+        self.validate_originals(&originals)?;
+        self.with_round_budget(|| {
+            let deadline = Duration::from_millis(self.policy.max_millis_per_round);
+            self.round_began.set(Some(
+                Instant::now()
+                    .checked_sub(deadline)
+                    .ok_or("test clock range")?,
+            ));
+            self.partition_round(observed, Some(&originals))
+        })
+    }
     fn maintain_round(&self, observed: u64, originals: Option<&[String]>) -> Result<Value, String> {
         self.with_round_budget(|| self.partition_round(observed, originals))
     }
@@ -3022,7 +3038,12 @@ impl Inventory {
             .map(|()| true)
             .map_err(|e| e.to_string())
     }
-    fn maintain_locked(&self, observed: u64, gate: &Gate) -> Result<Value, String> {
+    fn maintain_locked(
+        &self,
+        observed: u64,
+        gate: &Gate,
+        admitted_member: bool,
+    ) -> Result<Value, String> {
         let began = self.round_began.get().unwrap_or_else(Instant::now);
         let entered_micros = began.elapsed().as_micros() as u64;
         let mut l = self.load(&gate)?;
@@ -3259,6 +3280,9 @@ impl Inventory {
             .round_node_limit
             .get()
             .unwrap_or(self.policy.max_nodes_per_round);
+        // One node selects the object and another processes its sealed member.
+        // An already-spent node or byte allowance cannot authorize the step.
+        let admitted_member = admitted_member && node_limit.saturating_sub(nodes) >= 2;
         for (id, _) in order {
             let metadata_room = self.metadata_room();
             let elapsed = began.elapsed();
@@ -3268,6 +3292,7 @@ impl Inventory {
                 node_limit,
                 elapsed.as_millis(),
                 self.policy.max_millis_per_round,
+                admitted_member,
             ) {
                 protected.push(json!({
                     "id": id,
@@ -3500,6 +3525,7 @@ impl Inventory {
                     .manifest
                     .bytes
                     .saturating_sub(l.outputs[i].removed_logical_bytes);
+                let mut first_member = admitted_member;
                 let mut entered_disposal = l.outputs[i].phase != "disposing";
                 l.outputs[i].phase = "disposing".into();
                 while self.metadata_room()
@@ -3508,8 +3534,13 @@ impl Inventory {
                             .round_node_limit
                             .get()
                             .unwrap_or(self.policy.max_nodes_per_round)
-                    && began.elapsed().as_millis() < self.policy.max_millis_per_round as u128
+                    && crate::verified_release::retirement_time_available(
+                        first_member,
+                        began.elapsed().as_millis(),
+                        self.policy.max_millis_per_round,
+                    )
                 {
+                    first_member = false;
                     let Some(entry) = l.outputs[i].manifest.entries.last().cloned() else {
                         return Ok(true);
                     };
