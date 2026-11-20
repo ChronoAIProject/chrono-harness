@@ -1,6 +1,25 @@
+#[cfg(verus_keep_ghost)]
+use super::identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_identifiers as identifiers;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn select_preview_command(flag: &str) -> (selected: bool)
+    ensures selected == (flag@ == "--select-preview"@),
+{
+    identifiers::equal_text(flag, "--select-preview")
+}
+}
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_release::{delivery, execution, frontend, local, recipe::Scope};
+#[cfg(not(verus_keep_ghost))]
 use std::{path::Path, process::ExitCode};
 
+#[cfg(not(verus_keep_ghost))]
 fn run() -> Result<i32, String> {
     let args = std::env::args_os()
         .skip(1)
@@ -10,7 +29,7 @@ fn run() -> Result<i32, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     match args.as_slice() {
-        [root, output, flag, config, collection] if flag == "--select-preview" => delivery::select_preview(
+        [root, output, flag, config, collection] if select_preview_command(flag) => delivery::select_preview(
             Path::new(root), Path::new(output), config, collection, &std::env::vars_os().collect(),
         ),
         [root, output, flag, config, request] if flag == "--plan-preview" => {
@@ -50,6 +69,7 @@ fn run() -> Result<i32, String> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn main() -> ExitCode {
     let code = match run() {
         Ok(code) => code,

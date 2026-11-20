@@ -5,6 +5,11 @@
 mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_host_release::verified_recipe as policy;
+#[cfg(not(verus_keep_ghost))]
+#[path = "../../host-release/src/main.rs"]
+mod command;
+#[cfg(verus_keep_ghost)]
+use policy::command;
 use policy::delivery;
 use policy::{DependencyResult, Invocation};
 #[cfg(not(verus_keep_ghost))]
@@ -41,6 +46,19 @@ mod receipt_fixture;
 mod tool_fixture;
 
 verus! {
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn component_recovery_checks_the_entrypoint_paths_and_copied_bytes() {
+    expect_recipe(command::select_preview_command("--select-preview"));
+    expect_recipe(!command::select_preview_command("--plan-preview"));
+    expect_recipe(policy::frontend::artifact_paths("bin", "bin", "report", "report", "executable.tar"));
+    expect_recipe(!policy::frontend::artifact_paths("other", "bin", "report", "report", "executable.tar"));
+    expect_recipe(!policy::frontend::artifact_paths("bin", "bin", "old", "report", "executable.tar"));
+    expect_recipe(!policy::frontend::artifact_paths("bin", "bin", "report", "report", "other.tar"));
+    expect_recipe(policy::staging::copied_member("digest", "digest", 8, 8));
+    expect_recipe(!policy::staging::copied_member("other", "digest", 8, 8));
+    expect_recipe(!policy::staging::copied_member("digest", "digest", 7, 8));
+}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn preview_reuse_binds_the_original_landing_base() {
