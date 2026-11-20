@@ -6,8 +6,8 @@
   "recovery_operation": "recover.identifiers-proof",
   "manifest": "crates/runner/Cargo.toml",
   "target": "crates/runner/target",
-  "cargo_verus": ".chrono-harness/bin/verus/cargo-verus",
-  "verus_directory": ".chrono-harness/bin/verus",
+  "cargo_verus": ".chrono-harness/cache/bootstrap-owner-tooling/verus/toolchain/cargo-verus",
+  "verus_directory": ".chrono-harness/cache/bootstrap-owner-tooling/verus/toolchain",
   "rust_toolchain": "1.95.0",
   "output_contract": {
     "version": "0.2026.04.24.f8e1704",

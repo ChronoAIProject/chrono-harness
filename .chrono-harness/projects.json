@@ -4822,7 +4822,7 @@
             "-f",
             ".chrono-harness/bin/verus.zip",
             "-s",
-            "|^verus-arm64-macos|.chrono-harness/bin/verus|",
+            "|^verus-arm64-macos|.chrono-harness/cache/bootstrap-owner-tooling/verus/toolchain|",
             "--no-same-owner"
           ]
         },
@@ -4834,7 +4834,7 @@
             "-f",
             ".chrono-harness/cache/bootstrap-owner-tooling/verus/package.zip",
             "-s",
-            "|^verus-arm64-macos|.chrono-harness/bin/verus|",
+            "|^verus-arm64-macos|.chrono-harness/cache/bootstrap-owner-tooling/verus/toolchain|",
             "--no-same-owner"
           ]
         }

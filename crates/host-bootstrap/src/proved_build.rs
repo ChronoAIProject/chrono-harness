@@ -344,8 +344,13 @@ fn run_attempt(
     verifier::validate_contract(&Some(config.output_contract.clone()))?;
     let manifest = profile::path(root, &config.manifest, b"")?;
     let target = profile::path(root, &config.target, b"")?;
-    let verus = profile::path(root, &config.verus_directory, b".chrono-harness/bin/")?;
-    let executable = profile::path(root, &config.cargo_verus, b".chrono-harness/bin/")?;
+    let tool_root: &[u8] = if config.verus_directory.starts_with(".chrono-harness/cache/") {
+        b".chrono-harness/cache/"
+    } else {
+        b".chrono-harness/bin/"
+    };
+    let verus = profile::path(root, &config.verus_directory, tool_root)?;
+    let executable = profile::path(root, &config.cargo_verus, tool_root)?;
     let projects = profile::read(root, &config.projects, b".chrono-harness/")?;
     let mut methods = execution::methods(&chrono_harness::json(&projects)?)?;
     let mut recovery = methods
