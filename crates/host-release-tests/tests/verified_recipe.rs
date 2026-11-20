@@ -38,6 +38,13 @@ mod tool_fixture;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn preview_reuse_binds_the_original_landing_base() {
+    expect_recipe(policy::recipe::preview::matching_predecessor(true, "base", "base"));
+    expect_recipe(!policy::recipe::preview::matching_predecessor(false, "base", "base"));
+    expect_recipe(!policy::recipe::preview::matching_predecessor(true, "earlier", "base"));
+}
+
 // 同一预期在 Verus 中证明，在普通 Rust 中实际执行。
 fn expect_recipe(actual: bool)
     requires actual,

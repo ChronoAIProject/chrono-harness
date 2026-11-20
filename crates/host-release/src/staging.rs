@@ -77,25 +77,7 @@ impl Staging {
                 return Err(error("selected source changed before staging"));
             }
             let source = chrono_harness::no_symlink_parents(root, &binding.source)?;
-            let destination = chrono_harness::prepare_publication(root, &binding.destination)?;
-            let mut temporary = tempfile::NamedTempFile::new_in(
-                destination
-                    .parent()
-                    .ok_or_else(|| error("missing destination parent"))?,
-            )
-            .map_err(error)?;
-            let mut source = File::open(source).map_err(error)?;
-            let (sha256, size) = chrono_harness::copy_hashed(&mut source, temporary.as_file_mut())?;
-            if sha256 != binding.expected.sha256 || size != binding.expected.size {
-                return Err(error("source bytes changed during staging"));
-            }
-            temporary.as_file_mut().flush().map_err(error)?;
-            temporary
-                .as_file()
-                .set_permissions(fs::Permissions::from_mode(binding.expected.mode))
-                .map_err(error)?;
-            chrono_harness::no_symlink_parents(root, &binding.destination)?;
-            temporary.persist(destination).map_err(error)?;
+            copy_member(root, &source, &binding.destination, &binding.expected)?;
         }
         Ok(())
     }
@@ -124,4 +106,32 @@ impl Staging {
         let bindings:Vec<_>=self.bindings.iter().map(|b| json!({"asset":b.asset,"source":b.source,"destination":b.destination,"expected":b.expected.receipt(&b.source)})).collect();
         json!({"release_plan":self.release_plan,"host_config":self.host_config,"bindings":bindings,"observations":self.observations})
     }
+}
+
+pub(crate) fn copy_member(
+    root: &Path,
+    source: &Path,
+    relative: &str,
+    expected: &ExecutableIdentity,
+) -> Result<(), String> {
+    let destination = chrono_harness::prepare_publication(root, relative)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(
+        destination
+            .parent()
+            .ok_or_else(|| error("missing destination parent"))?,
+    )
+    .map_err(error)?;
+    let mut source = File::open(source).map_err(error)?;
+    let (sha256, size) = chrono_harness::copy_hashed(&mut source, temporary.as_file_mut())?;
+    if sha256 != expected.sha256 || size != expected.size {
+        return Err(error("source bytes changed during staging"));
+    }
+    temporary.as_file_mut().flush().map_err(error)?;
+    temporary
+        .as_file()
+        .set_permissions(fs::Permissions::from_mode(expected.mode))
+        .map_err(error)?;
+    chrono_harness::no_symlink_parents(root, relative)?;
+    temporary.persist(destination).map_err(error)?;
+    Ok(())
 }

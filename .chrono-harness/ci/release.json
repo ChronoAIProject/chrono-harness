@@ -3545,7 +3545,16 @@
     "landing_selection": {
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 5,
-      "context_path": "collection/context.json"
+      "context_path": "collection/context.json",
+      "components": {
+        "collection": ".chrono-harness/cache/preview-landing",
+        "output": ".chrono-harness/cache/preview-selection",
+        "command": ["/bin/bash", ".chrono-harness/release/native.sh", ".", ".chrono-harness/ci/bootstrap-release-frontend.json", ".chrono-harness/cache/preview-selection", "--select-preview", ".chrono-harness/release/delivery.json", ".chrono-harness/cache/preview-landing"],
+        "platforms": {
+          "linux": {"job": "linux_release_frontend", "directory": ".chrono-harness/cache/release-platforms/linux"},
+          "macos": {"job": "macos_release_frontend", "directory": ".chrono-harness/cache/release-platforms/macos"}
+        }
+      }
     },
     "workflow": "chrono / collection",
     "branch": "dev",

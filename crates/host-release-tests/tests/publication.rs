@@ -173,7 +173,9 @@ impl Commands for Mock {
             assert_eq!(self.uploaded.len(), 1);
             assert_eq!(
                 self.bodies.last().unwrap(),
-                &json!({"draft":false,"make_latest":if self.identity.channel == Channel::Stable {"true"} else {"false"}})
+                &json!({"draft":false,
+                    "body":format!("Source: {}\nLanding CI: 1234 attempt 2\nRelease run: https://github.com/example/product/actions/runs/4567/attempts/3", self.identity.source_commit),
+                    "make_latest":if self.identity.channel == Channel::Stable {"true"} else {"false"}})
             );
             self.release.as_mut().unwrap()["draft"] = json!(false);
             self.tag = Some(self.identity.source_commit.clone());
@@ -186,7 +188,8 @@ impl Commands for Mock {
 #[test]
 fn creates_a_draft_uploads_without_clobber_and_verifies_the_public_result() {
     let mut mock = Mock::new();
-    let result = publication::publish(&config(), &identity(), &assets(), &mut mock).unwrap();
+    let result =
+        publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).unwrap();
     assert_eq!(result["release"]["draft"], false);
     assert_eq!(result["verified_ci"]["run_attempt"], 2);
     assert!(
@@ -195,6 +198,13 @@ fn creates_a_draft_uploads_without_clobber_and_verifies_the_public_result() {
             .all(|args| !args.contains(&"--clobber".into()))
     );
     assert_eq!(mock.bodies.len(), 2);
+    assert_eq!(
+        mock.bodies[1]["body"],
+        format!(
+            "Source: {}\nLanding CI: 1234 attempt 2\nRelease run: https://github.com/example/product/actions/runs/4567/attempts/3",
+            "a".repeat(40)
+        )
+    );
 }
 
 #[test]
@@ -203,7 +213,7 @@ fn ordinary_build_cannot_call_the_publication_api() {
     let mut identity = identity();
     identity.channel = Channel::Build;
     identity.verified_ci = None;
-    assert!(publication::publish(&config(), &identity, &assets(), &mut mock).is_err());
+    assert!(publication::publish(&config(), &identity, &assets(), 4567, 3, &mut mock).is_err());
     assert!(mock.calls.is_empty());
 }
 #[test]
@@ -214,7 +224,7 @@ fn resumes_identical_drafts_and_reuses_identical_public_versions() {
         if !public {
             mock.release.as_mut().unwrap()["draft"] = json!(true);
         }
-        publication::publish(&config(), &identity(), &assets(), &mut mock).unwrap();
+        publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).unwrap();
         assert!(
             mock.calls
                 .iter()
@@ -240,7 +250,7 @@ fn rejects_wrong_or_unsuccessful_ci_before_any_release_mutation() {
         let mut mock = Mock::new();
         mock.ci[key] = value;
         assert!(
-            publication::publish(&config(), &identity(), &assets(), &mut mock).is_err(),
+            publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).is_err(),
             "{key}"
         );
         assert_eq!(mock.calls.len(), 1);
@@ -266,7 +276,7 @@ fn refuses_conflicting_public_or_draft_assets_sources_and_tags() {
             _ => unreachable!(),
         }
         assert!(
-            publication::publish(&config(), &identity(), &assets(), &mut mock).is_err(),
+            publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).is_err(),
             "{case}"
         );
         assert!(!mock.mutated());
@@ -278,7 +288,9 @@ fn failed_or_incomplete_upload_never_publishes_the_draft() {
         let mut mock = Mock::new();
         mock.omit_upload = incomplete;
         mock.upload_exit = if incomplete { 0 } else { 17 };
-        assert!(publication::publish(&config(), &identity(), &assets(), &mut mock).is_err());
+        assert!(
+            publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).is_err()
+        );
         assert_eq!(mock.release.unwrap()["draft"], true);
         assert!(
             mock.calls
@@ -303,7 +315,7 @@ fn stable_mock() -> Mock {
 fn stable_publication_requires_the_fixed_source_on_main() {
     let mut mock = stable_mock();
     let identity = mock.identity.clone();
-    let result = publication::publish(&config(), &identity, &assets(), &mut mock).unwrap();
+    let result = publication::publish(&config(), &identity, &assets(), 4567, 3, &mut mock).unwrap();
     assert_eq!(result["release"]["prerelease"], false);
     assert_eq!(result["release_branch"], mock.stable_branch);
     assert_eq!(mock.bodies.last().unwrap()["make_latest"], "true");
@@ -321,7 +333,7 @@ fn stable_rejects_missing_different_or_invalid_main_before_mutating_a_release() 
         let mut mock = stable_mock();
         mock.stable_branch = branch;
         let identity = mock.identity.clone();
-        let result = publication::publish(&config(), &identity, &assets(), &mut mock);
+        let result = publication::publish(&config(), &identity, &assets(), 4567, 3, &mut mock);
         assert!(
             result.is_err(),
             "branch={:?}, result={result:?}",
@@ -334,7 +346,8 @@ fn stable_rejects_missing_different_or_invalid_main_before_mutating_a_release() 
 #[test]
 fn preview_publication_uses_dev_ci_without_requiring_main() {
     let mut mock = Mock::new();
-    let result = publication::publish(&config(), &identity(), &assets(), &mut mock).unwrap();
+    let result =
+        publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).unwrap();
     assert_eq!(result["release"]["prerelease"], true);
     assert!(
         mock.calls
@@ -351,7 +364,7 @@ fn stable_branch_declaration_is_required_distinct_and_literal() {
         let mut mock = stable_mock();
         let identity = mock.identity.clone();
         assert!(
-            publication::publish(&config, &identity, &assets(), &mut mock).is_err(),
+            publication::publish(&config, &identity, &assets(), 4567, 3, &mut mock).is_err(),
             "branch={branch:?}"
         );
         assert!(mock.calls.is_empty());

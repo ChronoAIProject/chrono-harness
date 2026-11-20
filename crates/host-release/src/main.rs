@@ -10,6 +10,15 @@ fn run() -> Result<i32, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     match args.as_slice() {
+        [root, output, flag, config, collection] if flag == "--select-preview" => delivery::select_preview(
+            Path::new(root), Path::new(output), config, collection, &std::env::vars_os().collect(),
+        ),
+        [root, output, flag, config, request] if flag == "--plan-preview" => {
+            chrono_host_release::recipe::preview::write_plan(
+                Path::new(root), Path::new(output), config, request, &std::env::vars_os().collect()
+            )?;
+            Ok(0)
+        },
         [root, output, flag, config, native] if flag == "--install" => delivery::install(
             Path::new(root), Path::new(output), config, native, &std::env::vars_os().collect()
         ),
@@ -37,7 +46,7 @@ fn run() -> Result<i32, String> {
             frontend::export(Path::new(root), Path::new(output), &std::env::vars_os().collect())?;
             Ok(0)
         },
-        _ => Err("usage: chrono-host-release ROOT ABSENT_OUTPUT [--unit ID | --collect | --export-frontend | --deliver CONFIG | --install CONFIG NATIVE]".into()),
+        _ => Err("usage: chrono-host-release ROOT ABSENT_OUTPUT [--unit ID | --collect | --export-frontend | --deliver CONFIG | --install CONFIG NATIVE | --plan-preview CONFIG REQUEST | --select-preview CONFIG COLLECTION]".into()),
     }
 }
 

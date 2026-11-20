@@ -1,4 +1,6 @@
 //! 当前 v5 发布登记；先核完整关系，再为所选单元解析实际工具。
+#[path = "preview.rs"]
+pub mod preview;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -258,7 +260,14 @@ pub enum Scope<'a> {
 #[cfg(not(verus_keep_ghost))]
 impl Loaded {
     pub fn load(root: &Path) -> Result<Self, String> {
-        let recipe: Recipe = serde_json::from_value(read_json(root, CONFIG)?).map_err(error)?;
+        Self::load_from(root, |path| read_json(root, path))
+    }
+
+    pub(crate) fn load_from(
+        root: &Path,
+        read: impl Fn(&str) -> Result<Value, String>,
+    ) -> Result<Self, String> {
+        let recipe: Recipe = serde_json::from_value(read(CONFIG)?).map_err(error)?;
         if recipe.schema != "chrono-release-build/v5" {
             return Err(error("unsupported release build schema"));
         }
@@ -278,7 +287,7 @@ impl Loaded {
         }
         let staging = &recipe.consumer_staging;
         let plan: ReleasePlan =
-            serde_json::from_value(read_json(root, &staging.release_plan)?).map_err(error)?;
+            serde_json::from_value(read(&staging.release_plan)?).map_err(error)?;
         if plan.schema != "chrono-release-plan/v1"
             || plan.assets.is_empty()
             || plan.version.is_empty()
@@ -289,7 +298,7 @@ impl Loaded {
         for source in &sources {
             no_symlink_parents(root, source)?;
         }
-        let host = read_json(root, &staging.host_config)?;
+        let host = read(&staging.host_config)?;
         let artifacts = host["artifacts"]
             .as_array()
             .ok_or_else(|| error("missing host artifacts"))?;
@@ -343,7 +352,7 @@ impl Loaded {
         if bound_assets != plan.assets.keys().map(String::as_str).collect() {
             return Err(error("release staging must cover every asset"));
         }
-        let registered = methods(&read_json(root, &recipe.projects)?)?;
+        let registered = methods(&read(&recipe.projects)?)?;
         if registered.values().any(|v| v.len() != 1) {
             return Err(error("ambiguous registered operation"));
         }

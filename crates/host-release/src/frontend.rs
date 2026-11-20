@@ -225,6 +225,18 @@ pub fn validate_metadata(
     source: &SourceObservation,
     selected: &Selection,
 ) -> Result<Value, String> {
+    let producer = producer(root, declared, native)?;
+    validate_producer_metadata(directory, declared, native, source, selected, &producer)
+}
+
+pub(crate) fn validate_producer_metadata(
+    directory: &Path,
+    declared: &NativeFrontend,
+    native: &NativePlatform,
+    source: &SourceObservation,
+    selected: &Selection,
+    producer: &Producer,
+) -> Result<Value, String> {
     let manifest = crate::recipe::read_json(directory, "frontend.json")?;
     let lineage: Lineage = serde_json::from_value(manifest["lineage"].clone()).map_err(error)?;
     let declared_source: SourceObservation =
@@ -266,9 +278,8 @@ pub fn validate_metadata(
     }
     let identity = ExecutableIdentity::from_receipt(&manifest["executable"])?;
     let raw = fs::read(receipt::original(directory, &manifest["bootstrap"])?).map_err(error)?;
-    let producer = producer(root, declared, native)?;
     qualify(
-        &producer,
+        producer,
         &raw,
         source,
         &|path| {

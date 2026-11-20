@@ -67,6 +67,18 @@ pub struct LandingSelection {
     pub timeout_minutes: u32,
     /// Path relative to the original aggregate artifact root.
     pub context_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub components: Option<ComponentSelection>,
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentSelection {
+    pub command: Vec<String>,
+    pub collection: String,
+    pub output: String,
+    pub platforms: BTreeMap<String, Download>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -155,6 +167,38 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
             literal(&selection.runs_on)?;
             literal(&selection.context_path)?;
             relative_path(&selection.context_path)?;
+            if let Some(parts) = &selection.components {
+                for path in [&parts.output, &parts.collection] {
+                    literal(path)?;
+                    relative_path(path)?;
+                }
+                if parts.command.is_empty()
+                    || parts.platforms.is_empty()
+                    || parts.output == parts.collection
+                {
+                    return Err("missing or overlapping component selection inputs".into());
+                }
+                for arg in &parts.command {
+                    literal(arg)?;
+                }
+                let mut frontends = BTreeSet::new();
+                for (platform, data) in &parts.platforms {
+                    if !platform
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+                        || platform.is_empty()
+                        || !c
+                            .jobs
+                            .iter()
+                            .any(|j| j.id == data.job && j.needs.is_empty())
+                        || !frontends.insert(&data.job)
+                    {
+                        return Err("invalid component platform or frontend".into());
+                    }
+                    literal(&data.directory)?;
+                    relative_path(&data.directory)?;
+                }
+            }
             if selection.runs_on.is_empty()
                 || !(1..=360).contains(&selection.timeout_minutes)
                 || ids
@@ -378,10 +422,10 @@ pub fn render(c: &Config) -> Result<String, String> {
     {
         output.push_str(&render_landing_selection(c, selection));
     }
-    for job in &c.jobs {
+    for (index, job) in c.jobs.iter().enumerate() {
         if c.schema == UNITS_SCHEMA {
             let mut body = String::new();
-            render_unit(&mut body, c, job, &mut shared_downloads)?;
+            render_unit(&mut body, c, job, index == 0, &mut shared_downloads)?;
             output.push_str(&super::cache::project(
                 c.persistent_cache.as_ref(),
                 &job.id,
@@ -453,7 +497,7 @@ pub fn render(c: &Config) -> Result<String, String> {
 
 #[cfg(not(verus_keep_ghost))]
 fn render_landing_selection(c: &Config, selection: &LandingSelection) -> String {
-    format!(
+    let mut workflow = format!(
         r#"  select_preview:
     if: ${{{{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}}}
     runs-on: {runner}
@@ -504,7 +548,78 @@ fn render_landing_selection(c: &Config, selection: &LandingSelection) -> String 
         timeout = selection.timeout_minutes,
         action = c.download_artifact_action.as_deref().unwrap(),
         context = scalar(&selection.context_path),
-    )
+    );
+    let Some(parts) = &selection.components else {
+        return workflow;
+    };
+    workflow = workflow.replacen(
+        "      actions: read\n",
+        "      actions: read\n      contents: read\n",
+        1,
+    );
+    let mut outputs = String::from("      skipped: ${{ steps.components.outputs.skipped }}\n");
+    for platform in parts.platforms.keys() {
+        outputs.push_str(&format!("      {platform}_id: ${{{{ steps.upload_{platform}.outputs.artifact-id }}}}\n      {platform}_sha: ${{{{ steps.components.outputs.{platform}_sha }}}}\n"));
+    }
+    workflow = workflow.replacen("    steps:\n", &format!("{outputs}    steps:\n"), 1);
+    workflow.push_str(&format!(
+        r#"      - name: Check out fixed preview planner
+        if: steps.selection.outputs.selected == 'true'
+        uses: {checkout}
+        with:
+          ref: ${{{{ github.event.workflow_run.head_sha }}}}
+          path: source
+          fetch-depth: 0
+      - name: Select and verify previous release components
+        if: steps.selection.outputs.selected == 'true'
+        id: components
+        shell: bash
+        working-directory: source
+        env:
+          GH_TOKEN: ${{{{ github.token }}}}
+          CHRONO_RELEASE_CHANNEL: preview
+          CHRONO_RELEASE_SOURCE: ${{{{ github.event.workflow_run.head_sha }}}}
+          CHRONO_RELEASE_CI_RUN_ID: ${{{{ github.event.workflow_run.id }}}}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{{{ github.event.workflow_run.run_attempt }}}}
+        run: |
+          mkdir -p "$(dirname {collection})"
+          mv ../landing {collection}
+          {command}
+          printf 'skipped=%s\n' "$(jq -c . {output}/skipped.json)" >> "$GITHUB_OUTPUT"
+"#,
+        checkout = c.checkout_action,
+        collection = shell(&parts.collection),
+        output = shell(&parts.output),
+        command = parts
+            .command
+            .iter()
+            .map(|v| shell(v))
+            .collect::<Vec<_>>()
+            .join(" ")
+    ));
+    for platform in parts.platforms.keys() {
+        workflow.push_str(&format!("          if [[ -f {}/origin/platforms/{platform}/preview.json ]]; then printf '{platform}_sha=%s\\n' \"$(sha256sum {}/origin/platforms/{platform}/preview.json | cut -d' ' -f1)\" >> \"$GITHUB_OUTPUT\"; fi\n",shell(&parts.output),shell(&parts.output)));
+    }
+    for platform in parts.platforms.keys() {
+        workflow.push_str(&format!(
+            r#"      - name: Preserve verified {platform} release components
+        if: steps.components.outputs.{platform}_sha != ''
+        id: upload_{platform}
+        uses: {upload}
+        with:
+          name: preview-{platform}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
+          path: {directory}
+          include-hidden-files: true
+          if-no-files-found: error
+"#,
+            upload = c.upload_artifact_action,
+            directory = scalar(&format!(
+                "source/{}/origin/platforms/{platform}/",
+                parts.output
+            ))
+        ));
+    }
+    workflow
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -512,8 +627,26 @@ fn render_unit<'a>(
     output: &mut String,
     c: &Config,
     job: &'a Job,
+    first: bool,
     shared_downloads: &mut BTreeMap<(&'a str, &'a str), (String, bool)>,
 ) -> Result<(), String> {
+    let components = c
+        .delivery
+        .as_ref()
+        .and_then(|d| d.landing_selection.as_ref())
+        .and_then(|s| s.components.as_ref());
+    let platform =
+        components.and_then(|parts| parts.platforms.iter().find(|(_, p)| p.job == job.id));
+    let upstream = components.and_then(|parts| {
+        parts
+            .platforms
+            .values()
+            .find(|p| job.needs.contains(&p.job))
+    });
+    let business = c
+        .delivery
+        .as_ref()
+        .is_some_and(|d| d.promotion_build_jobs.contains(&job.id));
     let mut condition = format!(
         "{}github.event.deleted != true",
         if job.always { "always() && " } else { "" }
@@ -525,8 +658,18 @@ fn render_unit<'a>(
         if !delivery.promotion_build_jobs.is_empty() {
             if job.id == delivery.publisher {
                 // stable 的包来自显式原运行；其余渠道仍要求当前依赖成功。
-                condition =
-                    format!("always() && (inputs.channel == 'stable' || success()) && {condition}");
+                let qualified = if components.is_some() {
+                    job.needs
+                        .iter()
+                        .map(|n| format!("needs.{n}.result == 'success'"))
+                        .collect::<Vec<_>>()
+                        .join(" && ")
+                } else {
+                    "success()".into()
+                };
+                condition = format!(
+                    "always() && (inputs.channel == 'stable' || ({qualified})) && {condition}"
+                );
             } else if delivery.promotion_build_jobs.contains(&job.id) {
                 condition.push_str(" && inputs.channel != 'stable'");
             } else if publisher_success_gate(job.always, job.needs.contains(&delivery.publisher)) {
@@ -561,6 +704,17 @@ fn render_unit<'a>(
             " && (github.event_name != 'workflow_run' || {producers})"
         ));
     }
+    if let Some(frontend) = upstream.filter(|_| business) {
+        let skip = format!("fromJSON(needs.{}.outputs.skipped || '[]')", frontend.job);
+        if !job.always {
+            let direct = job.needs.iter().map(|need| {
+                if *need == frontend.job {format!("needs.{need}.result == 'success'")}
+                else {format!("(needs.{need}.result == 'success' || (needs.{need}.result == 'skipped' && contains({skip}, '{need}')))")}
+            }).collect::<Vec<_>>().join(" && ");
+            condition = format!("always() && !cancelled() && {direct} && {condition}");
+        }
+        condition.push_str(&format!(" && !contains({skip}, '{}')", job.id));
+    }
     output.push_str(&format!("  {}:\n    if: ${{{{ {condition} }}}}\n", job.id));
     if super::verified_literals::delivery_publisher(
         c.delivery.as_ref().map(|d| d.publisher.as_str()),
@@ -576,6 +730,21 @@ fn render_unit<'a>(
             serde_json::to_string(&job.needs).map_err(|e| e.to_string())?
         ));
     }
+    let binding = if first {
+        r#"      - &chrono_release_identity
+        name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT""#
+    } else {
+        "      - *chrono_release_identity"
+    };
+    let timing_outputs = platform.map_or(String::new(), |(platform,_)|format!("      skipped: ${{{{ needs.select_preview.outputs.skipped }}}}\n      preview_sha256: ${{{{ needs.select_preview.outputs.{platform}_sha }}}}\n      preview_id: ${{{{ needs.select_preview.outputs.{platform}_id }}}}\n"));
     output.push_str(&format!(
         r#"    runs-on: {runner}
     timeout-minutes: {timeout}
@@ -583,27 +752,41 @@ fn render_unit<'a>(
       artifact_id: ${{{{ steps.release_upload.outputs.artifact-id }}}}
       run_id: ${{{{ steps.release_identity.outputs.run_id }}}}
       attempt: ${{{{ steps.release_identity.outputs.attempt }}}}
-    steps:
+{timing_outputs}    steps:
       - name: Check out requested release source
         uses: {checkout}
         with:
           ref: {source}
           fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{{{ always() }}}}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{{{ github.run_id }}}}
-          RELEASE_ATTEMPT: ${{{{ github.run_attempt }}}}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+{binding}
 "#,
         runner = scalar(&job.runs_on),
         timeout = job.timeout_minutes,
         checkout = c.checkout_action,
         source = super::verified_literals::delivery_source(c.delivery.is_some())
     ));
+    if let Some(frontend) = upstream.filter(|_| business && job.needs.len() > 1) {
+        let needs = job
+            .needs
+            .iter()
+            .filter(|n| **n != frontend.job)
+            .map(|n| format!("needs.{n}.result == 'skipped'"))
+            .collect::<Vec<_>>()
+            .join(" || ");
+        output.push_str(&format!(
+            r#"      - name: Restore selected previous platform package
+        if: ${{{{ always() && needs.{job}.outputs.preview_id != '' && ({needs}) }}}}
+        uses: {action}
+        with:
+          artifact-ids: ${{{{ needs.{job}.outputs.preview_id }}}}
+          merge-multiple: true
+          path: {path}
+"#,
+            job = frontend.job,
+            path = scalar(&frontend.directory),
+            action = c.download_artifact_action.as_deref().unwrap()
+        ));
+    }
     for download in &job.downloads {
         let prefix =
             match shared_downloads.get_mut(&(download.job.as_str(), download.directory.as_str())) {
