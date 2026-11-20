@@ -49,6 +49,11 @@ verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn component_recovery_checks_the_entrypoint_paths_and_copied_bytes() {
+    proof {
+        reveal_strlit("--select-preview"); reveal_strlit("--plan-preview");
+        reveal_strlit("bin"); reveal_strlit("other"); reveal_strlit("report"); reveal_strlit("old");
+        reveal_strlit("executable.tar"); reveal_strlit("other.tar"); reveal_strlit("digest");
+    }
     expect_recipe(command::select_preview_command("--select-preview"));
     expect_recipe(!command::select_preview_command("--plan-preview"));
     expect_recipe(policy::frontend::artifact_paths("bin", "bin", "report", "report", "executable.tar"));
@@ -62,6 +67,7 @@ fn component_recovery_checks_the_entrypoint_paths_and_copied_bytes() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn preview_reuse_binds_the_original_landing_base() {
+    proof { reveal_strlit("base"); reveal_strlit("earlier"); }
     expect_recipe(policy::recipe::preview::matching_predecessor(true, "base", "base"));
     expect_recipe(!policy::recipe::preview::matching_predecessor(false, "base", "base"));
     expect_recipe(!policy::recipe::preview::matching_predecessor(true, "earlier", "base"));
