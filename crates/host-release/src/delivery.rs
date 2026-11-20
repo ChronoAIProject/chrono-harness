@@ -1,4 +1,18 @@
 //! 收齐登记的平台原件后，复用 distribution assemble，再执行公开发布状态机。
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn canonical_positive(value: u64, canonical: bool) -> (valid: bool)
+    ensures valid == (value > 0 && canonical),
+{
+    value > 0 && canonical
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     execution::Environment,
     identity,
@@ -6,9 +20,13 @@ use crate::{
     receipt,
     recipe::{self, Loaded},
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{file_identity, no_symlink_parents};
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsStr,
@@ -18,6 +36,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Package {
@@ -25,6 +44,7 @@ pub struct Package {
     pub directory: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -38,6 +58,7 @@ pub struct Config {
     pub promotion: Option<promotion::Config>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Installation {
@@ -46,14 +67,17 @@ pub struct Installation {
     pub shell: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn error(message: impl std::fmt::Display) -> String {
     format!("E_RELEASE_DELIVERY: {message}")
 }
+#[cfg(not(verus_keep_ghost))]
 fn text<'a>(value: &'a Value, name: &str) -> Result<&'a str, String> {
     value[name]
         .as_str()
         .ok_or_else(|| error(format!("missing {name}")))
 }
+#[cfg(not(verus_keep_ghost))]
 fn env<'a>(environment: &'a Environment, name: &str) -> Result<&'a str, String> {
     environment
         .get(OsStr::new(name))
@@ -61,13 +85,15 @@ fn env<'a>(environment: &'a Environment, name: &str) -> Result<&'a str, String> 
         .filter(|v| !v.is_empty())
         .ok_or_else(|| error(format!("missing {name}")))
 }
+#[cfg(not(verus_keep_ghost))]
 fn positive(s: &str) -> Result<u64, String> {
     s.parse::<u64>()
         .ok()
-        .filter(|v| *v > 0 && v.to_string() == s)
+        .filter(|v| canonical_positive(*v, v.to_string() == s))
         .ok_or_else(|| error("invalid run, attempt or artifact identity"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn select(
     job: &str,
     needs: &Value,
@@ -92,6 +118,7 @@ pub fn select(
     Ok(selected)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn verify_package(
     root: &Path,
     loaded: &Loaded,
@@ -199,6 +226,7 @@ pub fn verify_package(
     Ok(report)
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Executor<'a> {
     root: &'a Path,
     output: &'a Path,
@@ -210,6 +238,7 @@ struct Executor<'a> {
     bodies: usize,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Commands for Executor<'_> {
     fn execute(&mut self, program: &str, args: &[String]) -> Result<Reply, String> {
         let tool = program;
@@ -286,6 +315,7 @@ impl Commands for Executor<'_> {
 }
 
 /// frontend 在导出前使用现有发布执行器观察工作流，失败原流也归该 artifact 保管。
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn workflow_preflight(
     root: &Path,
     output: &Path,
@@ -327,6 +357,7 @@ pub(crate) fn workflow_preflight(
     outcome
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn checked(
     executor: &mut impl Commands,
     program: &str,
@@ -339,6 +370,7 @@ fn checked(
     Ok(reply.stdout)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn source(executor: &mut impl Commands) -> Result<(String, String), String> {
     let mut query = |args: &[&str]| -> Result<String, String> {
         String::from_utf8(checked(
@@ -356,6 +388,7 @@ fn source(executor: &mut impl Commands) -> Result<(String, String), String> {
     Ok((commit, tree))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn perform(
     root: &Path,
     output: &Path,
@@ -540,6 +573,7 @@ fn perform(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 /// 自动预发布从固定落地集合选择组件。读取远端所用的 Git、gh 和原流沿用发布执行器。
 pub fn select_preview(
     root: &Path,
@@ -604,6 +638,7 @@ pub fn select_preview(
     result.map(|_| 0)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn run(
     root: &Path,
     output: &Path,
@@ -662,6 +697,7 @@ pub fn run(
     outcome.map(|_| 0)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn verify_publication_processes(
     publication: &Path,
     published: &Value,
@@ -707,6 +743,7 @@ pub(crate) fn verify_publication_processes(
 }
 
 /// 安装使用原发布产物；命令边界在测试中模拟，安装结果由实际安装器产生。
+#[cfg(not(verus_keep_ghost))]
 pub fn install_release(
     publication: &Path,
     host: &Path,
@@ -865,6 +902,7 @@ pub fn install_release(
     Ok(installed)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn install(
     root: &Path,
     output: &Path,
@@ -1000,6 +1038,7 @@ pub fn install(
 }
 
 /// 晋升沿用本发布者；IO 编排不另建发布入口。
+#[cfg(not(verus_keep_ghost))]
 pub mod promotion {
     use crate::{
         delivery::{self, Package},

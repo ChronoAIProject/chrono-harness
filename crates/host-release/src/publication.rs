@@ -1,12 +1,30 @@
 //! GitHub 发布状态机。命令边界可替换；同一版本只续传相同资产。
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn publication_attempt(run: u64, attempt: u64) -> (valid: bool)
+    ensures valid == (run > 0 && attempt > 0),
+{
+    run > 0 && attempt > 0
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     identity::{Channel, Identity},
     verified_recipe::delivery as policy,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::collections::BTreeMap;
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -17,6 +35,7 @@ pub struct Config {
     pub stable_branch: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Asset {
@@ -25,25 +44,30 @@ pub struct Asset {
     pub size: u64,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Reply {
     pub exit: i32,
     pub stdout: Vec<u8>,
 }
 
 /// 生产实现保留 argv、原流及退出；测试只在这个执行边界模拟 gh。
+#[cfg(not(verus_keep_ghost))]
 pub trait Commands {
     fn execute(&mut self, program: &str, args: &[String]) -> Result<Reply, String>;
     fn body(&mut self, value: &Value) -> Result<String, String>;
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn error(message: impl std::fmt::Display) -> String {
     format!("E_RELEASE_PUBLICATION: {message}")
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn name(s: &str) -> bool {
     policy::name(s.as_bytes())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Config {
     pub fn validate(&self) -> Result<(), String> {
         let parts: Vec<_> = self.repository.split('/').collect();
@@ -63,6 +87,7 @@ impl Config {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn api(
     commands: &mut impl Commands,
     method: &str,
@@ -93,10 +118,12 @@ fn api(
 }
 
 /// 显式原件读取复用发布者的原退出／JSON 判法，不允许写入或接受缺失。
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn read_api(commands: &mut impl Commands, endpoint: String) -> Result<Value, String> {
     api(commands, "GET", endpoint, None, false)?.ok_or_else(|| error("missing original API result"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn existing_preview(
     commands: &mut impl Commands,
     config: &Config,
@@ -122,6 +149,7 @@ pub(crate) fn existing_preview(
 }
 
 /// 安装消费者沿用发布 API 的缺失判法，只接受当前仓库、版本的两个 GET 查询。
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn original_absence(
     process: &Value,
     stdout: &[u8],
@@ -161,6 +189,7 @@ pub(crate) fn original_absence(
     policy::api_outcome(1, value["status"].as_str(), value["message"].as_str(), true) == 1
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn verify_ci(
     config: &Config,
     identity: &Identity,
@@ -186,6 +215,7 @@ pub fn verify_ci(
     Ok(run)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn verify_landing_run(
     config: &Config,
     run: &Value,
@@ -213,6 +243,7 @@ pub(crate) fn verify_landing_run(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn verify_stable_branch(
     config: &Config,
     identity: &Identity,
@@ -242,6 +273,7 @@ fn verify_stable_branch(
     Ok(reference)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn release_header(release: &Value, identity: &Identity) -> Result<u64, String> {
     let preview = identity.channel == Channel::Preview;
     if !policy::text_fields(&[
@@ -261,6 +293,7 @@ fn release_header(release: &Value, identity: &Identity) -> Result<u64, String> {
         .ok_or_else(|| error("missing release ID"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn remote_assets(
     config: &Config,
     id: u64,
@@ -308,6 +341,7 @@ fn remote_assets(
     Ok(remaining.into_iter().collect())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn verify_tag(
     config: &Config,
     identity: &Identity,
@@ -353,6 +387,7 @@ fn verify_tag(
 }
 
 /// 对已公开版本只读复核；晋升不得续传或修补作为来源的测试版。
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn verify_published(
     config: &Config,
     identity: &Identity,
@@ -375,6 +410,7 @@ pub(crate) fn verify_published(
     Ok(json!({"release":release,"verified_ci":ci,"assets":assets}))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn publish(
     config: &Config,
     identity: &Identity,
@@ -384,7 +420,7 @@ pub fn publish(
     commands: &mut impl Commands,
 ) -> Result<Value, String> {
     config.validate()?;
-    if run == 0 || attempt == 0 {
+    if !publication_attempt(run, attempt) {
         return Err(error("missing publication run or attempt"));
     }
     if identity.channel == Channel::Build

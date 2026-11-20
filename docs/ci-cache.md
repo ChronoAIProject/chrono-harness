@@ -182,7 +182,7 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 启用该字段的 GitHub runner 在恢复前使用 Bash、jq 的排序紧凑 JSON 编码和 shasum 的 SHA-256。该步骤要求单个 v1 锁、非空安装映射和非空字符串目标，然后输出布局摘要。命令失败时跳过该条目的恢复与保存，随后运行原安装入口。恢复到同一安装布局的旧版本时，固定发行入口核验本次锁和清单，从本次 Release 补齐实际缺失或内容变化的工具。只有此前步骤成功才保存该工具目录，避免把安装失败后留下的目录写入精确键。命中率、下载量和总耗时以宿主实际运行记录为准。
 
-下载条目省略 `save_job` 时，生成器只投影恢复步骤。本仓 macOS 发布前端从普通 macOS CI 已保存的 `cargo.release-build` 兼容域恢复下载资料。Linux 前端从登记的依赖源获取所需包。两平台的编译缓存由各发布作业的实际操作负责。
+下载条目省略 `save_job` 时，生成器只投影恢复步骤。本仓 macOS 发布前端读取普通 CI 保存的 `cargo.release-build`。macOS 发布作业 `macos_verify_ci_tests` 读取普通 CI 的 `cargo.ci`，使用相同的平台、工具链配置和锁文件计算下载缓存键。Cargo 按本次锁文件补齐缺少的依赖后执行登记操作。Linux 前端从登记的依赖源获取所需包。两平台的编译缓存由各发布作业的实际操作负责。
 
 本仓把初始 launcher、受保护 bootstrap 和业务 Cargo 调用统一到工作树自己的
 `.chrono-harness/cache/bootstrap-owner-tooling/cargo`。缓存只运输包归档、索引、源码及 Git 依赖资料，

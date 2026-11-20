@@ -22,6 +22,13 @@ pub mod recipe;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::{execution, receipt, recipe};
 
+#[cfg(verus_keep_ghost)]
+#[path = "delivery.rs"]
+pub mod native_delivery;
+#[cfg(verus_keep_ghost)]
+#[path = "publication.rs"]
+pub mod publication;
+
 #[path = "verified_delivery.rs"]
 pub mod delivery;
 

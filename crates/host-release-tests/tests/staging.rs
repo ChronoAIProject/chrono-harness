@@ -99,7 +99,7 @@ fn release_case_retains_a_failed_batch_until_its_creation_deadline() {
     drop(case);
     for _ in 0..8 {
         owner.maintain_at(now + 3601).unwrap();
-        if !success.exists() {
+        if !success.exists() && !root.join(interrupted).exists() {
             break;
         }
     }

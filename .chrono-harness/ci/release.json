@@ -2633,6 +2633,32 @@
           "consumers": [
             "macos_release_frontend"
           ]
+        },
+        "cargo.ci": {
+          "owner": "repository",
+          "need": "macOS 发布测试执行 test.ci-tests，普通 CI 的同一操作已保存该平台的 Cargo 依赖。",
+          "output_use": "Cargo 从恢复目录读取依赖，按当前锁文件补齐所需包，然后执行登记的完整测试。",
+          "paths": [
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/",
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/",
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/",
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/",
+            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/"
+          ],
+          "compatibility_files": [
+            ".chrono-harness/ci/bootstrap-toolchains.json"
+          ],
+          "source_files": [
+            "crates/host-bootstrap/Cargo.lock",
+            "crates/ci-tests/Cargo.lock",
+            "crates/judge-ci/Cargo.lock",
+            "crates/judge-registration/Cargo.lock",
+            "crates/runner/Cargo.lock",
+            "crates/worktree/Cargo.lock"
+          ],
+          "consumers": [
+            "macos_verify_ci_tests"
+          ]
         }
       }
     },
