@@ -24,12 +24,14 @@ verus! {
 
 #[cfg(verus_keep_ghost)]
 fn successful_execution_may_still_need_its_trace() {
-    assert(scheduler::failure_batch::keep_scheduler_diagnostics(true, false));
-    assert(scheduler::failure_batch::keep_scheduler_diagnostics(false, true));
-    assert(!scheduler::failure_batch::keep_scheduler_diagnostics(true, true));
-    assert(project_host::failed_command(false, Some(7u8)).is_none());
-    assert(project_host::failed_command(true, Some(7u8)) == Some(7u8));
-    assert(project_host::failed_command::<u8>(true, None).is_none());
+    let incomplete_trace = scheduler::failure_batch::keep_scheduler_diagnostics(true, false);
+    let failed_execution = scheduler::failure_batch::keep_scheduler_diagnostics(false, true);
+    let complete = scheduler::failure_batch::keep_scheduler_diagnostics(true, true);
+    assert(incomplete_trace && failed_execution && !complete);
+    let passed = project_host::failed_command(false, Some(7u8));
+    let failed = project_host::failed_command(true, Some(7u8));
+    let missing = project_host::failed_command::<u8>(true, None);
+    assert(passed.is_none() && failed == Some(7u8) && missing.is_none());
 }
 
 
