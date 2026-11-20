@@ -34,8 +34,10 @@ fn main() {
         "--literal-pathspecs",
         rest @ ..,
     ] = args.as_slice()
-        && Path::new(root) == checkout
     {
+        if Path::new(root) != checkout {
+            return git_model::dispatch(&argv);
+        }
         let Some((relative, command)) = rest.split_last() else {
             panic!("missing diagnostic allocation probe");
         };
