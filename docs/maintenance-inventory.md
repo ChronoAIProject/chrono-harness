@@ -1,6 +1,6 @@
 # 维护轮次的完整清单
 
-使用方是每轮清理后核对磁盘占用、保留原因和真实效果的维护者。唯一轮次实现由 `chrono-worktree maintain` 与统一服务的 event／timer 共用；
+使用方是每轮清理后核对磁盘占用、保留原因和真实效果的维护者。唯一轮次实现由 `chrono-worktree maintain` 与统一服务的 事件 共用；
 普通 use／check／bootstrap 不承担完整清单。
 当前已进入本地联合验证；编译、Rust/mock、证明和 canonical 的结论分别以本轮原始结果为准，未运行真实宿主维护。
 源码阶段未观察修改前的 red。源码提交不代表已接受、已交付或稳定。
@@ -34,7 +34,7 @@
 
 第 2 次 assignment 才能在调用方交接容量后 bootstrap、运行全部适用检查并修正真实失败。
 独立评审、两段真实 PR、落地树核对、实际采用、同范围占用比较、合格对象真实回收、
-报告增量成本、ENOSPC／中断恢复和连续定时稳定性均未验收。
+报告增量成本、ENOSPC／中断恢复和连续事件触发的稳定性均未验收。
 原 EMFILE、139 创建政策恢复、frontier 和 absent-terminal 义务不由本报告代替。
 
 ## 候选原件接口
@@ -122,6 +122,6 @@ flush 失败不执行 sync，sync 失败也拒绝完整发布，原恢复责任�
 JSON、文件系统、流式写入或整个维护事务。后续须核原 stdout／stderr、退出和 owned work
 收束，再由调用方完成其余已批准的独立评审、交付及真实宿主验收。
 
-统一维护增量采用固定 f6ad4ac6cb3fd1f976d9c794a1ad58de9ee7dfe3 的此来源，未重建另一份库存。每个实际后台／定时／显式轮次都调用原 JSONL 生产者；声明在原地址排除下复制，完整 footprint IO 在释放 enrollment metadata 后执行，实际动作重新取得原保护。事件接受不创建虚构轮次或完整报告。源阶段仍未执行原 300 地址、>64 KiB、完整 producer／retention、IO 和父恢复引用验收；原有限保留与增量成本义务不变，见 [统一维护](unified-maintenance.md)。
+统一维护增量采用固定 f6ad4ac6cb3fd1f976d9c794a1ad58de9ee7dfe3 的此来源，未重建另一份库存。每个实际事件／显式轮次都调用原 JSONL 生产者；声明在原地址排除下复制，完整 footprint IO 在释放 enrollment metadata 后执行，实际动作重新取得原保护。事件接受不创建虚构轮次或完整报告。源阶段仍未执行原 300 地址、>64 KiB、完整 producer／retention、IO 和父恢复引用验收；原有限保留与增量成本义务不变，见 [统一维护](unified-maintenance.md)。
 
 统一服务的 OS 激活 socket 由原 footprint 负责位置以观察模式只做 lstat，`retained_socket_entries` 单列数量；不连接、不读取 socket，不授予处置权。实际 dispose 继续使用严格模式，拒绝 socket、FIFO 等 special file；未知类型和 IO 错误仍是原错误，不报零。

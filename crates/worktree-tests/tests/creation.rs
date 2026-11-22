@@ -16,7 +16,7 @@ verus! {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn cli_success_requires_an_original_success_status_and_includes_service_handoffs() {
     broadcast use vstd::string::group_string_axioms;
-    proof { reveal_strlit("created"); reveal_strlit("reconstructed"); reveal_strlit("recovered"); reveal_strlit("cleaned"); reveal_strlit("observed"); reveal_strlit("rebound"); reveal_strlit("finished"); reveal_strlit("maintained"); reveal_strlit("maintenance-requested"); reveal_strlit("maintenance-idle-exit"); reveal_strlit("imported"); reveal_strlit("migrated"); reveal_strlit("owner-deployed"); reveal_strlit("used"); reveal_strlit("failed"); reveal_strlit(""); reveal_strlit("Created"); reveal_strlit("created\0"); }
+    proof { reveal_strlit("created"); reveal_strlit("reconstructed"); reveal_strlit("recovered"); reveal_strlit("cleaned"); reveal_strlit("observed"); reveal_strlit("rebound"); reveal_strlit("finished"); reveal_strlit("maintained"); reveal_strlit("maintenance-requested"); reveal_strlit("maintenance-queue-empty"); reveal_strlit("maintenance-idle-exit"); reveal_strlit("imported"); reveal_strlit("migrated"); reveal_strlit("owner-deployed"); reveal_strlit("used"); reveal_strlit("failed"); reveal_strlit(""); reveal_strlit("Created"); reveal_strlit("created\0"); }
     expect(policy::successful_report_status(Some("created")));
     expect(policy::successful_report_status(Some("reconstructed")));
     expect(policy::successful_report_status(Some("recovered")));
@@ -26,7 +26,12 @@ fn cli_success_requires_an_original_success_status_and_includes_service_handoffs
     expect(policy::successful_report_status(Some("finished")));
     expect(policy::successful_report_status(Some("maintained")));
     expect(policy::successful_report_status(Some("maintenance-requested")));
-    expect(policy::successful_report_status(Some("maintenance-idle-exit")));
+    expect(policy::successful_report_status(Some("maintenance-queue-empty")));
+    proof {
+        assert("maintenance-idle-exit"@.len() == 21);
+        assert("maintenance-idle-exit"@[12] != "maintenance-requested"@[12]);
+    }
+    expect(!policy::successful_report_status(Some("maintenance-idle-exit")));
     expect(policy::successful_report_status(Some("imported")));
     expect(policy::successful_report_status(Some("migrated")));
     expect(policy::successful_report_status(Some("owner-deployed")));

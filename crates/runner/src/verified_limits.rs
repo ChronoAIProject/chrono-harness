@@ -9,6 +9,12 @@ use vstd::prelude::*;
 pub mod maintenance_signal;
 
 #[cfg(verus_keep_ghost)]
+#[path = "ownership.rs"]
+pub mod ownership;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::ownership;
+
+#[cfg(verus_keep_ghost)]
 #[path = "artifact_disposal.rs"]
 #[rustfmt::skip]
 pub mod artifact_disposal;

@@ -643,12 +643,12 @@ UID 的 0／u32::MAX、命名成功、直接匹配／不匹配，以及空串／
 `Policy::validate` 直接消费同源 Verus `validate_policy`：先核原目录的相对路径，成功后
 才核原 socket 的相对路径，再判断完整字段。任一路径失败都保留该次原状态与完整错误，
 不调用后续阶段。字段要求精确 schema、目录和 socket 均以 `.chrono-harness/state/`
-开头、目录以 `/` 结尾而 socket 不以 `/` 结尾、timer 非零、idle 不是 `Some(0)`。
+开头、目录以 `/` 结尾而 socket 不以 `/` 结尾。
 保持原合同：目录可以就是 state 根或保留重复末尾 `/`；这里不新增规范拼写限制。
 
 独立 Verus 预期同时作为普通 Rust 测试运行，核路径检查原顺序、首错优先于字段错误、
 完整路径及空串／Unicode／NUL／换行错误，精确 schema 的大小写与换行差异，目录／socket
-前后缀，`None`、0、1 和 `u64::MAX` 的计时边界。沿用 `verify.runner-limits`、
+前后缀。沿用 `verify.runner-limits`、
 `verify.runner-limits-tests` 和原未过滤 runner／worktree 行为入口，不增加证明参数或预算。
 
 相对路径的词法判法继续由现役 `relative_path`／`verified_paths` 拥有。目录适配只把

@@ -35,25 +35,21 @@ pub fn valid_maintenance_location(path: &str, directory: bool) -> (valid: bool)
 }
 
 #[verifier::inline]
-pub open spec fn maintenance_policy_fields(schema: &str, directory: &str, socket: &str,
-    idle: Option<u64>, timer: u64) -> bool
+pub open spec fn maintenance_policy_fields(schema: &str, directory: &str, socket: &str) -> bool
 {
-    schema@ == "chrono-unified-maintenance/v1"@
+    schema@ == "chrono-unified-maintenance/v2"@
         && maintenance_location(directory, true) && maintenance_location(socket, false)
-        && timer > 0 && idle != Some(0u64)
 }
 
-pub fn valid_maintenance_policy_fields(schema: &str, directory: &str, socket: &str,
-    idle: Option<u64>, timer: u64) -> (valid: bool)
-    ensures valid == maintenance_policy_fields(schema, directory, socket, idle, timer),
+pub fn valid_maintenance_policy_fields(schema: &str, directory: &str, socket: &str) -> (valid: bool)
+    ensures valid == maintenance_policy_fields(schema, directory, socket),
 {
-    identifiers::equal_text(schema, "chrono-unified-maintenance/v1")
+    identifiers::equal_text(schema, "chrono-unified-maintenance/v2")
         && valid_maintenance_location(directory, true) && valid_maintenance_location(socket, false)
-        && timer > 0 && idle != Some(0)
 }
 
 pub open spec fn policy_validation_result<'a, S, A, B>(source: S,
-    schema: &str, directory: &'a str, socket: &'a str, idle: Option<u64>, timer: u64,
+    schema: &str, directory: &'a str, socket: &'a str,
     directory_check: A, socket_check: B, out: (S, Result<(), String>)) -> bool
     where A: FnOnce(S, &'a str) -> (S, Result<(), String>),
         B: FnOnce(S, &'a str) -> (S, Result<(), String>),
@@ -67,7 +63,7 @@ pub open spec fn policy_validation_result<'a, S, A, B>(source: S,
                 && match socket_result {
                     Err(error) => out == (checked_socket, Err::<(), String>(error)),
                     Ok(()) => out.0 == checked_socket && if maintenance_policy_fields(
-                        schema, directory, socket, idle, timer) { out.1 == Ok::<(), String>(()) }
+                        schema, directory, socket) { out.1 == Ok::<(), String>(()) }
                         else { match out.1 {
                             Err(error) => error@ == "invalid explicit maintenance policy"@,
                             _ => false,
@@ -78,13 +74,13 @@ pub open spec fn policy_validation_result<'a, S, A, B>(source: S,
 
 /// 先核目录、再核 socket，最后判断字段；首错保留原状态和完整错误。
 pub fn validate_policy<'a, S, A, B>(source: S, schema: &str, directory: &'a str,
-    socket: &'a str, idle: Option<u64>, timer: u64, directory_check: A, socket_check: B)
+    socket: &'a str, directory_check: A, socket_check: B)
     -> (out: (S, Result<(), String>))
     where A: FnOnce(S, &'a str) -> (S, Result<(), String>),
         B: FnOnce(S, &'a str) -> (S, Result<(), String>),
     requires directory_check.requires((source, directory)),
         forall|state: S| socket_check.requires((state, socket)),
-    ensures policy_validation_result(source, schema, directory, socket, idle, timer,
+    ensures policy_validation_result(source, schema, directory, socket,
         directory_check, socket_check, out),
 {
     let (state, result) = directory_check(source, directory);
@@ -103,7 +99,7 @@ pub fn validate_policy<'a, S, A, B>(source: S, schema: &str, directory: &'a str,
         Err(error) => return (state, Err(error)),
         Ok(()) => (),
     }
-    if valid_maintenance_policy_fields(schema, directory, socket, idle, timer) {
+    if valid_maintenance_policy_fields(schema, directory, socket) {
         (state, Ok(()))
     } else {
         (state, Err("invalid explicit maintenance policy".to_string()))
@@ -275,8 +271,6 @@ pub struct Policy {
     pub schema: String,
     pub state_directory: String,
     pub socket: String,
-    pub idle_seconds: Option<u64>,
-    pub timer_seconds: u64,
 }
 #[cfg(not(verus_keep_ghost))]
 impl Policy {
@@ -286,8 +280,6 @@ impl Policy {
             &self.schema,
             &self.state_directory,
             &self.socket,
-            self.idle_seconds,
-            self.timer_seconds,
             |(), path| ((), relative_path(path.trim_end_matches('/'))),
             |(), path| ((), relative_path(path)),
         )

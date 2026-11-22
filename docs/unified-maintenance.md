@@ -11,14 +11,14 @@
 | 合法 main 与另一个已登记目标；无关处置或完整 footprint IO 被阻塞 | 两者都到达原业务终点，原 argv、stdin、stdout、stderr、退出保留；维护另报 | 等待扫描、返回 busy／timeout／retry 或改写业务退出 |
 | start／reconstruct／use／check／bootstrap／finish 和 producer finish／release | 先保存现有 birth、使用、代际、终态或生产者状态；业务返回只需要自身封存 | 事件收据冒充清理完成；异步跳过必要封存或同对象保护 |
 | 无执行进程的事件 | 由 OS 已采用 socket 激活同一服务；发送者不等待启动或维护 | 自行脱离子进程、等待 ACK、丢失原恢复责任 |
-| event／timer／explicit 竞争 | 同一物理协调者只有一个实际执行者；其他显式请求准确报告已请求 | 两个实际扫描／处置者；维护锁成为业务准入锁 |
+| event／explicit 竞争 | 同一物理协调者只有一个实际执行者；其他显式请求准确报告已请求 | 两个实际扫描／处置者；维护锁成为业务准入锁 |
 | 重复／合并事件、轮次中新代际 | 下一次实际轮次读取原权威状态；已处理事件不表示对象已清 | 以事件身份替代对象代际；删除新代际／活使用方 |
-| 轮次结束后仍有 busy／保护／延迟对象 | 保留原因；等待下一事件或定时机会，正常达到 idle 退出 | 内部发布或保留对象自己制造无限空轮次 |
-| idle 决策／退出交界到达事件 | OS 仍拥有激活 socket；后续服务读取事件并恢复 | 退出 unlink 掉新事件；把无事件当业务完成 |
-| 中断／重新启动 | 原件、原账本和生产者责任仍在，启动轮次继续原恢复 | 释放未知使用方、删除未知锁、伪造原结果 |
+| 轮次结束后仍有 busy／保护／延迟对象 | 保留原因；等待下一事件或显式维护，当前队列清空即退出 | 内部发布或保留对象自己制造无限空轮次 |
+| 队列清空／退出交界到达事件 | OS 仍拥有激活 socket；后续服务读取事件并恢复 | 退出 unlink 掉新事件；把无事件当业务完成 |
+| 中断／重新启动 | 原件、原账本和生产者责任仍在，下次事件或显式维护继续原恢复 | 释放未知使用方、删除未知锁、伪造原结果 |
 | socket 缺失／满／IO 错误 | 保留原责任，单独报告 wake failed；业务原结果不变 | 声称 OS 已接受或以 wake 失败覆盖业务结果 |
 | 每个实际轮次 | 沿现有完整 JSONL 报告记录完整成员、窗口、错误、真实动作和原回执；父报告接住恢复引用 | ACK 当作完成；topN／64 KiB 抽样替代成员；报告 IO 失败被隐藏 |
-| 退出 | 所有本进程启动的工作均已同步加入；idle 不持 enrollment metadata | 后台工作未加入就退出或发布最终成功 |
+| 退出 | 所有本进程启动的工作均已同步加入；退出时释放租约 | 后台工作未加入就退出或发布最终成功 |
 | OS 保留的激活 socket 位于已登记 state | 完整 footprint 通过 lstat 测出条目并单列 socket 数；实际处置仍拒绝 special file | 每轮因自身 socket 固定失败，或观察能力反过来授予 socket 删除权 |
 
 ## 判定与登记
@@ -69,15 +69,15 @@
 这项修复不采用旧政策，不补写缺失来源，不把原维护失败改成成功；新增 IO 仅发生于清理失败的
 地址，实际成本由本轮原报告观察。
 
-Rust 行为预期归现有 worktree-tests 与 runner-tests；所有具体外部执行边界用既有 Rust mock，不真实调用 OS 命令、Git 或编译器。idle 退出的布尔判定放入现有 verified_lifecycle 与其独立 Verus 预期，正式入口复用 verify.worktree-lifecycle／verify.worktree-lifecycle-tests；这只证明该判定，不覆盖 IPC、IO、锁或完整进程。FILEMAP 登记每个新增源、测试、数据和依赖，成本未知。后续按固定基线与候选两端 DELTA 运行登记的 bootstrap、generation、证明、专属测试和 canonical；实际结果由各阶段原报告负责。
+Rust 行为预期归现有 worktree-tests 与 runner-tests；所有具体外部执行边界用既有 Rust mock，不真实调用 OS 命令、Git 或编译器。FILEMAP 登记每个新增源、测试、数据和依赖，成本未知。后续按固定基线与候选两端 DELTA 运行登记的 bootstrap、generation、证明、专属测试和 canonical；实际结果由各阶段原报告负责。
 
 ## 工程选择与真实采用
 
 复用 Unix datagram 和 OS socket activation：OS 持有 socket，缺席时启动维护进程；业务只发送非阻塞提示，不启动子进程，不等待回应。提示没有处置权，也不建立任务账本。负责恢复和删除的权威仍是现有 enrollment、producer 和 retention 状态。显式维护与服务使用同一内核 singleton 租约，业务不取得它。维护逐地址取得必要 metadata，仅同地址效果期间排除；完整 footprint、producer 和 retention IO 不保留 main 的排他。
 
-宿主提出 idle 300 秒、定时 3600 秒；idle=null 代表常驻。定时由服务自身的阻塞等待期限支持常驻，OS 定时在服务缺席时启动；不提高现有节点、25 ms、FD、线程、stdout、报告或其他预算。定时错过／延迟和启动原因须原样报告，不从事件 ACK 推断完成。使用 macOS launchd；Linux 通过 systemd socket activation 的 LISTEN_FDS 交接，未采用 OS 配置时 wake 可失败且保持原责任。
+宿主通过 macOS launchd 的 socket 事件激活。Linux 继续接收 systemd 交接的 LISTEN_FDS。到期只改变对象资格，下一次业务事件或显式维护才会检查。尚未采用 OS 配置时，发送方单独报告 wake-failed，保留原责任。
 
-后续真实采用必须排除旧程序、保全原状态，采用固定已交付程序、相容政策和 OS socket／timer 配置；核缺席事件启动、常驻唤醒／定时、idle 退出及再启动、单实例和未完成维护期间合法 main／linked 业务进展。调用方预先登记至少三次连续实际定时完成观察，包含错过机会、原回执、至少一个释放且到期对象的实际回收、中断恢复和保护。无合格对象时相应结论仍未建立。
+真实采用须排除旧程序，保全原状态，一起切换固定程序、v2 政策和仅含 socket 激活的 OS 配置。核对服务缺席时的激活、并发独占、队列清空退出和再次激活，以及维护期间 main／linked 业务进展。连续三次真实事件轮次须分别核原回执、已释放且到期对象的实际回收、中断恢复和保护。无合格对象时相应结论保持未知。
 
 原库存 300 地址／>64 KiB、完整 producer／retention 成员、IO／unknown、父恢复引用和有限保留成本全部保留。固定输入／范围／方法／单位／窗口比较增量 IO、FD、耗时、留存字节和实际占用；这些值目前 unknown。139、ordinary-complete 同输入 EMFILE、absent-terminal／身份与政策来源恢复等原义务各自继续，不由此机制替代，也不重置原额度。
 
@@ -85,7 +85,7 @@ Rust 行为预期归现有 worktree-tests 与 runner-tests；所有具体外部�
 
 | 负责源码／政策 | 输入与当前使用方 | 必要输出／现有能力为何不足 | 成本与判法 |
 | --- | --- | --- | --- |
-| `crates/worktree/src/automatic/service.rs` | 原协调政策、enrollment、producer、retention；显式 maintain 与 OS 服务 | 共用原轮次／恢复和独立 singleton；旧定时单次命令不具备事件驻留与 idle 退出 | 原预算不变；逐地址锁、事件／timer／退出和真实业务边界 Rust/mock；IO、FD、耗时 unknown |
+| `crates/worktree/src/automatic/service.rs` | 原协调政策、enrollment、producer、retention；显式 maintain 与 OS 服务 | 共用原轮次／恢复和独立 singleton，队列清空即退出 | 原预算不变；逐地址锁、事件／退出和真实业务边界 Rust/mock；IO、FD、耗时 unknown |
 | `crates/runner/src/maintenance_signal.rs` | 已采用维护政策与既有所有者的完成／释放；worktree、runner retention 与 producer | 非阻塞 OS 提示及独立实际收据；无需任务表、ACK 或子进程 | 一个临时 socket FD 和小政策读取；缺失／满队列／线程抑制预期未运行；成本 unknown |
 | `crates/worktree/src/automatic.rs` | 原 birth／use／finish 和身份／代际；现役生命周期调用者 | 保存原责任，移除同步 drain；必要同对象排除和原件封存保留 | 现役生命周期证明与原 Rust/mock 断言迁移；收益、成本 unknown |
 | `crates/worktree/src/start.rs` | 原报告和父消费者；start／reconstruct／producer finish 及显式维护 | 原发布完成后唤醒；竞争的 request 与实际 maintained 分开 | 不另设完成权威；原出版／恢复预期待验 |
@@ -95,15 +95,14 @@ Rust 行为预期归现有 worktree-tests 与 runner-tests；所有具体外部�
 | `crates/worktree/src/automatic/producer.rs` | 原 store、精确 handle 与显式协调来源；ci-command-result 现役消费者 | release 后提示；显式 bind 保持原实际 owner，不推断目录 | 原消费者与生产者 Rust/mock；绑定读取／报告成本 unknown |
 | `crates/worktree/src/automatic/producer/rolling.rs` | 原 fixture 终态／活能力；现役 producer finish | 持久交接后返回，独立维护保留原处置断言 | 终态、活／unknown 和诊断保护未验；不把 finish 当已退休 |
 | `crates/runner/src/retained_artifacts/retention.rs` | 原引用／释放／当前输出；现役报告和 producer | 自身必要封存后发送提示；维护内部 publication 不自唤醒 | 原节点／25 ms／FD／字节限制；普通 complete 同输入 EMFILE 仍是独立未完成义务 |
-| `crates/worktree/src/verified_lifecycle.rs` | event／timer／idle 三个实际观察；service 退出决策 | 同源 idle 判定，不从空闲推断完成 | 八种独立真值预期；证明／Rust 均未运行 |
 | `crates/worktree-tests/tests/unified_maintenance.rs` | 原 Git／业务 mock、可控真实 IO 边界、OS socket 替身 | main 与 linked 到达业务终点后才释放后台边界；原错误与 eventual 清理分别断言 | 新线程无 detachment，异常先解除屏障并 join；无观察 red／green |
 | `crates/runner-tests/tests/maintenance_signal.rs` | 受控私有 socket、原件和线程 | 缺席／满队列／收据与内部抑制，不调用 launchctl／systemctl | 复用 runner-tests 未过滤入口；未执行 |
-| `.chrono-harness/maintenance.json` | repository 提出的唯一配置；服务与唤醒调用者 | 原 state 下的 singleton、短 socket 路径和 idle／timer 参数 | 无新可变账本；配置／OS 路径相符与成本待验 |
-| `.chrono-harness/maintenance.launchd.plist` | 固定已交付程序、协调者、socket；当前用户 launchd | OS 持有 socket，缺席事件启动；原定时与优先级保留 | 不追加日志副本或新监督程序；真实采用未运行 |
+| `.chrono-harness/maintenance.json` | repository 提出的唯一配置；服务与唤醒调用者 | 原 state 下的 singleton、短 socket 路径 | 无新可变账本；配置／OS 路径相符与成本待验 |
+| `.chrono-harness/maintenance.launchd.plist` | 固定已交付程序、协调者、socket；当前用户 launchd | OS 持有 socket，缺席事件启动；保留低 IO 优先级 | 不追加日志副本或新监督程序；真实采用未运行 |
 
 上述新文件及既有消费文件由 FILEMAP 逐文件登记；项目、测试和同源证明的选择仍沿前后两端 DELTA，不用本表猜测选测。现有 Rust 标准库、libc、kernel lease 与 launchd 已足以提供执行和激活，不加依赖或工具链。旧同步轮次无法提供调用者不等待和缺席事件激活，因此差额限于执行归属、事件边界及必要消费迁移。
 
-socket 必须是协调者已登记 state 下的准确物理路径；默认 `.chrono-harness/state/maintenance.sock` 避免附加长 namespace 名，绑定仍受原 OS Unix 路径上限约束。路径太长／未采用／队列满如实 wake-failed，不放大 OS 限制或建立临时路径别名。实际 OS activation 初次启动可能来自加载、事件或 timer，产品只报 `os-activation`（已读事件时报 event）；不能凭它冒充真实 timer 来源，宿主须以原生定时证据核对。常驻期间已到期 timer 优先标记为 timer，并保留错过机会；周期按原时间基准推进，长轮次不会重设并掩盖机会。
+socket 必须是协调者已登记 state 下的准确物理路径；默认 `.chrono-harness/state/maintenance.sock` 避免附加长 namespace 名，绑定仍受原 OS Unix 路径上限约束。路径太长／未采用／队列满如实 wake-failed，不放大 OS 限制或建立临时路径别名。服务只为已收到的事件发布轮次。
 
 真实 macOS 采用发现，`launch_activate_socket("Maintenance")` 交付的 datagram
 可以绑定在 launchd 私有 `/var/run/com.apple.launchd.*/Maintenance` 地址，由 OS
@@ -112,7 +111,7 @@ macOS 现在采用该命名提供方的交付合同，核单一 Unix datagram �
 当前用户拥有的 socket；具体外部路径仍由固定 plist、launchctl 的实际配置及真实事件
 验收绑定。直接交付和 Linux 继续核地址相同。Rust 的 OS 提供方替身覆盖转发、直接
 绑定、缺失、普通文件、符号链接和 stream 描述符；不调用真实 launchctl。
-这项 IO 绑定尚未形式证明，原 idle 局部证明不扩大保证。真实服务切换与连续运行另验，
+这项 IO 绑定尚未形式证明，真实服务切换与连续运行另验，
 没有新增握手、消息队列、调度器或永久诊断进程。
 
 `maintenance_request` 的 handoff 表示既有所有者状态已经承担责任，不表示 OS 接受。发送后的实际激活收据单独出现在 stderr 或 release 返回值，`accepted:true` 只证明 OS socket 接收提示，`round_completion` 仍为 not-established。`maintain` 竞争成功仅返回 maintenance-requested、round_started=false；实际轮次才有完整清单与原报告。必要当前输出 publication 和父消费者交接继续同步；内部报告的成功不代替业务、维护或宿主持续稳定验收。
@@ -127,8 +126,7 @@ macOS 现在采用该命名提供方的交付合同，核单一 Unix datagram �
 打开所有者前的失败没有子清理回执，消费者读取并保留已发布父原件，不补造子报告。
 库存投影沿父报告传入当前 agent，继续复用现役创建者提醒判断。
 
-**程序与验证登记同步修改：**原 idle 判断移到实际 service 源，由原生命周期证明根直接编译；
-发送长度判断也由实际 maintenance_signal 源进入原 limits 根。库存的动作索引追加保留每一条
+**程序与验证登记同步修改：**发送长度判断由实际 maintenance_signal 源进入原 limits 根。库存的动作索引追加保留每一条
 匹配动作的原索引与顺序，既有两个生命周期根编译同一实现；原独立预期文件分别进入现役
 测试根。分类为 program，局部证明不覆盖 IPC、JSON、锁、IO、OS 或完整事务。
 未增加证明入口、依赖、线程、等待期限或报告预算。构建和验证总成本以本批原报告为准；
@@ -164,16 +162,6 @@ Verus 判断，原调用使用其结果。现有证明计划编译实际文件�
 
 ## 服务遇到已有显式执行者
 
-服务由 OS 激活时可能已有显式维护持有 singleton。独立预期：服务应接收并验证原激活
-socket，在既有 event／timer／idle 循环中消费提示；繁忙机会只报告尚未开始轮次，不给
-自己的 socket 重新发送提示，不扫描或处置。持有显式锁时应能正常 idle 退出；OS 继续
-持有 socket。原所有者责任保留，之后释放锁并有新事件或定时机会时，再取得原 singleton
-并展开完整权威成员。普通业务不等待这个竞争。
+服务先在内核中等待同一把排他锁，取得后才读 socket。显式维护已持锁时，到达的事件留在 OS 队列中，释放锁即可继续。业务发送方无需等待锁或回执。服务独占期间收到显式请求，会在当前轮次结束后消费该提示。每批最多合并 64 个事件，轮次只读取原权威状态。
 
-Rust 回归在私有宿主持有真实 singleton，核忙时没有新增维护报告、未处置终态输出、
-提示已消费且没有自发提示；随后释放锁并发送新事件，核实际维护回执、完整清单及输出
-回收。外部 Git 与 OS 命令仍沿原 Rust 替身；这一回归不证明真实 launchd 持续运行。
-修改前正式 core 检查已观察：服务向自己的 socket 发送提示后返回 maintenance-requested，
-未进入激活消费与 idle 路径。候选先接收并验证 socket，在原循环的实际机会取得非阻塞
-singleton；繁忙时不启动轮次、不自发提示，沿原等待和 idle 退出，后续事件或定时再尝试。
-没有新增调度器、队列、等待间隔或删除资格；候选通过与真实 OS 采用仍由各自原件负责。
+若进程在等锁时中断，未读提示仍可激活后继进程。若一批已读取的提示在轮次中断时丢失，原账本和恢复回执保留，下次事件或显式维护继续。队列清空时，服务释放租约并退出，OS 继续持有激活端点。空队列和单纯经过时间都不会开始轮次。
