@@ -15,6 +15,7 @@
     "artifacts": [
       ".chrono-harness/bin/",
       ".chrono-harness/state/",
+      ".chrono-harness/logs/",
       "crates/runner/target/",
       "crates/runner-tests/target/",
       "crates/instructions/target/",

@@ -68,8 +68,12 @@ impl Policy {
     }
 
     fn validate(&self) -> Result<(), Failure> {
+        let directory = Path::new(&self.directory);
+        let dedicated = self.directory == ".chrono-harness/logs/";
+        let state_child = self.directory.starts_with(".chrono-harness/state/")
+            && directory.components().count() >= 3;
         if self.schema != "chrono-runtime-logging/v1"
-            || !self.directory.starts_with(".chrono-harness/state/")
+            || !(dedicated || state_child)
             || !self.directory.ends_with('/')
             || !Path::new(&self.directory)
                 .components()
@@ -79,7 +83,6 @@ impl Policy {
                 .collect::<PathBuf>()
                 .to_str()
                 != Some(self.directory.trim_end_matches('/'))
-            || Path::new(&self.directory).components().count() < 3
             || self.max_bytes == 0
             || self.max_bytes > crate::rolling::MAX_RUNTIME_LOG_BYTES
             || !(1..=crate::rolling::MAX_FILES).contains(&self.max_files)

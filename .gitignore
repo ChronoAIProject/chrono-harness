@@ -4,6 +4,7 @@
 /crates/instructions-tests/target/
 /.chrono-harness/bin/
 /.chrono-harness/state/
+/.chrono-harness/logs/
 /crates/judge-ci/target/
 /crates/judge-ci-tests/target/
 /crates/ci/target/

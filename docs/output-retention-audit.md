@@ -21,7 +21,7 @@
 | 测试现场 | `state/temporary-hosts/{worktree,ci,projects,workflow-tools}/` 和各自的失败现场目录 | 每次分配的测试目录及其成员一起回收。四类临时宿主已配置成功后释放，失败或中断保留 24 小时。发行诊断作业确实读取失败现场。 |
 | 构建、验证与工具安装 | 各项目登记的 Cargo target、`state/bootstrap-*/`、`bin/` | 编译缓存可重建。核心安装报告供升级和共享启动核验。Verus 子任务的运行报告供诊断，共享启动从核心安装取得 `verus.zip`。旧验证编译件散落在 state，新配方由当次操作目录接收。 |
 | 检查、输入、缓存、指令与 PR | 检查操作目录、`state/inputs/`、`state/cache-probes/`、`state/instructions-operations/`、`state/pr-operations/` | 检查汇总、缓存恢复和 PR 调用方读取各自一次运行的输出。共享输入及历史恢复报告还有未交接的读者。 |
-| 工作树维护与运行日志 | `state/worktrees/`、`state/automatic-cleanup-v2/`、`state/logs/` | 维护程序读取当前登记和回执，诊断人员读取日志。本机已有过期维护报告仍在原址，整批定期回收尚未通过。 |
+| 工作树维护与运行日志 | `state/worktrees/`、`state/automatic-cleanup-v2/`、`logs/` | 维护程序读取当前登记和回执，诊断人员读取滚动日志。日志单份 10 MiB，最多 5 份，创建 24 小时后由写入器或定时维护清理。本机已有过期维护报告仍在原址，整批定期回收尚未通过。 |
 | 发行与交付 | `cache/release-*/`、Actions 运行工件、发布版本的固定资产 | 平台收集、安装和正式版晋升读取这些产物。公开资产已有持久地址，晋升仍读取部分临时工件。 |
 | 工作流审计 | `state/audit-workflow-cli/` 中各次 CI 下载和解包的目录 | 维护者读取固定候选的原检查结果、输出流和失败日志。旧目录还混有正在编辑的源码与补丁。 |
 
