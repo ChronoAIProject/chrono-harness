@@ -209,15 +209,17 @@ fn idle_runtime_logs_expire_at_their_creation_deadline() {
     fixture.policy(4096, 3, "info");
     let config = fixture.0.join(runtime::CONFIG_PATH);
     let mut policy: Value = serde_json::from_slice(&fs::read(&config).unwrap()).unwrap();
+    policy["directory"] = json!(".chrono-harness/logs/");
     policy["keep_seconds"] = json!(86400);
     fs::write(&config, serde_json::to_vec(&policy).unwrap()).unwrap();
-    let directory = fixture.0.join(".chrono-harness/state/logs");
+    let directory = fixture.0.join(".chrono-harness/logs");
     let current = directory.join("runtime.jsonl");
     let logger = runtime::configured_logger(&fixture.0, "fixture", io::sink())
         .unwrap()
         .unwrap();
     logger.run(|| tracing::info!(event_id = "old.entry", "first entry"));
     logger.finish().unwrap();
+    assert!(!fixture.0.join(".chrono-harness/state").exists());
     let rows = records(&directory);
     let deadline = rows[0]["deadline"].as_u64().unwrap();
     assert_eq!(rows[0]["schema"], "chrono-runtime-log-generation/v1");
@@ -385,6 +387,9 @@ fn malformed_and_escaping_policy_is_rejected_before_creating_logs() {
     let path = fixture.0.join(runtime::CONFIG_PATH);
     for directory in [
         "../outside/",
+        ".chrono-harness/",
+        ".chrono-harness/logs-backup/",
+        ".chrono-harness/logs/../logs/",
         ".chrono-harness/state/",
         ".chrono-harness/state/../outside/",
         ".chrono-harness/state/./logs/",
