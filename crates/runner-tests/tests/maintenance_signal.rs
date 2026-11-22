@@ -184,6 +184,12 @@ fn policy_case<'a>(schema: &'a str, directory: &'a str, socket: &'a str,
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn policy_checks_keep_path_order_and_the_first_complete_error() {
+    proof {
+        reveal(signal::maintenance_policy_fields);
+        reveal_strlit("bad");
+        reveal_strlit("chrono-unified-maintenance/v2");
+        assert("bad"@.len() == 3 && "chrono-unified-maintenance/v2"@.len() == 29);
+    }
     policy_case("bad", "原目录/λ\0\n", "原 socket/λ\0\n", 1,
         "原错/λ\0\n", false);
     policy_case("bad", "原目录/λ\0\n", "原 socket/λ\0\n", 2,
