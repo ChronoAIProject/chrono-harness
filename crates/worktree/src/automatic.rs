@@ -3371,18 +3371,22 @@ impl Manager {
         };
         self.check_entry(r, &entry, &head, None)?;
         let host_config = decode::<crate::Config>(&self.inputs.config_bytes)?.host_config;
-        let target_snapshot = if head == self.inputs.source_head
+        let registrations = &self.inputs.registrations;
+        let custody;
+        let target_snapshot;
+        let (target_config, target_filemap) = if head == self.inputs.source_head
             && host_config == self.inputs.registrations.entry_path()
         {
-            None
+            (registrations.config(), registrations.filemap())
+        } else if kind == "import" {
+            custody = chrono_judge_registration::read_custody_inputs(&host_config, |path| {
+                r.blob(&entry.path, &head, path)
+            })?;
+            (&custody.0, &custody.1)
         } else {
-            Some(start::registrations(r, &entry.path, &head, &host_config)?)
+            target_snapshot = start::registrations(r, &entry.path, &head, &host_config)?.0;
+            (target_snapshot.config(), target_snapshot.filemap())
         };
-        let target_registrations = target_snapshot
-            .as_ref()
-            .map_or(self.inputs.registrations.as_ref(), |(registrations, _)| {
-                registrations
-            });
         if kind != "import" {
             artifact_disposal::registered(
                 &self
@@ -3392,13 +3396,14 @@ impl Manager {
                     .iter()
                     .map(|a| a.path.clone())
                     .collect::<Vec<_>>(),
-                &[target_registrations.config()],
+                &[target_config],
             )?;
         }
         for (path, digest) in &policy_inputs {
             if digest.is_some() {
-                start::registered_policy(
-                    &target_registrations,
+                start::registered_policy_inputs(
+                    target_config,
+                    target_filemap,
                     path,
                     &self.inputs.policy.state_directory,
                 )?;

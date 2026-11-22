@@ -18,6 +18,18 @@ mod maintenance_boundaries;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_blocking_leases_omit_the_nonblocking_flag() {
+    proof {
+        assert((2i32 | 4i32) == 6i32) by (bit_vector);
+        assert((1i32 | 4i32) == 5i32) by (bit_vector);
+    }
+    expect_limit_true(policy::ownership::lease_lock_flags(2, 4, true) == 2);
+    expect_limit_true(policy::ownership::lease_lock_flags(2, 4, false) == 6);
+    expect_limit_true(policy::ownership::lease_lock_flags(1, 4, false) == 5);
+}
+
+
 // 前置条件由独立预期证明，普通 Rust 同时执行失败分支。
 fn expect_limit_true(actual: bool)
     requires actual,

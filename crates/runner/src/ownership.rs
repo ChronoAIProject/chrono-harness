@@ -1,10 +1,28 @@
 //! Stable, identity-bound kernel capabilities for an opted-in enrollment.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// The activated executor blocks in the kernel. All bounded and immediate
+/// attempts retain nonblocking flock semantics.
+pub fn lease_lock_flags(mode: i32, nonblocking: i32, wait_for_release: bool) -> (flags: i32)
+    ensures flags == (if wait_for_release { mode } else { mode | nonblocking }),
+{
+    if wait_for_release { mode } else { mode | nonblocking }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs::{self, File, OpenOptions},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Lease {
     file: File,
     path: PathBuf,
@@ -17,6 +35,7 @@ pub struct Lease {
 /// Metadata exclusion on the addressed directory itself. Removing an empty
 /// registration does not leave a separate lock file or authorize a detached
 /// waiter to publish into a replacement directory.
+#[cfg(not(verus_keep_ghost))]
 pub struct DirectoryLease {
     file: File,
     path: PathBuf,
@@ -26,6 +45,7 @@ pub struct DirectoryLease {
     #[cfg(unix)]
     _scope: Option<crate::process_fds::Scope>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl DirectoryLease {
     pub fn acquire(
         path: &Path,
@@ -134,6 +154,7 @@ impl DirectoryLease {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for DirectoryLease {
     fn drop(&mut self) {
         #[cfg(unix)]
@@ -148,6 +169,7 @@ impl Drop for DirectoryLease {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn identity(path: &Path) -> Result<String, String> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|e| format!("ownership identity {}: {e}", path.display()))?;
@@ -164,6 +186,13 @@ pub fn identity(path: &Path) -> Result<String, String> {
         Err("kernel ownership is unsupported on this platform".into())
     }
 }
+#[cfg(not(verus_keep_ghost))]
+enum LeaseWait {
+    Try(Option<Duration>),
+    Blocking,
+}
+
+#[cfg(not(verus_keep_ghost))]
 impl Lease {
     pub fn acquire(
         path: &Path,
@@ -181,6 +210,30 @@ impl Lease {
         create: bool,
         exclusive: bool,
         wait: Option<Duration>,
+        after_create: impl FnOnce(),
+    ) -> Result<Option<Self>, String> {
+        Self::open_locked(
+            path,
+            expected,
+            create,
+            exclusive,
+            LeaseWait::Try(wait),
+            after_create,
+        )
+    }
+
+    /// Wait in the kernel for the coordinator's current maintenance executor.
+    pub fn exclusive_blocking(path: &Path) -> Result<Self, String> {
+        Self::open_locked(path, None, true, true, LeaseWait::Blocking, || {})?
+            .ok_or_else(|| "blocking maintenance lease was not acquired".into())
+    }
+
+    fn open_locked(
+        path: &Path,
+        expected: Option<&str>,
+        create: bool,
+        exclusive: bool,
+        wait: LeaseWait,
         after_create: impl FnOnce(),
     ) -> Result<Option<Self>, String> {
         #[cfg(not(unix))]
@@ -235,24 +288,23 @@ impl Lease {
                 return Err("ownership lease identity changed; preserve work".into());
             }
             let began = Instant::now();
+            let mode = if exclusive {
+                libc::LOCK_EX
+            } else {
+                libc::LOCK_SH
+            };
+            let flags = lease_lock_flags(mode, libc::LOCK_NB, matches!(wait, LeaseWait::Blocking));
             loop {
-                if unsafe {
-                    libc::flock(
-                        file.as_raw_fd(),
-                        (if exclusive {
-                            libc::LOCK_EX
-                        } else {
-                            libc::LOCK_SH
-                        }) | libc::LOCK_NB,
-                    )
-                } == 0
-                {
+                if unsafe { libc::flock(file.as_raw_fd(), flags) } == 0 {
                     break;
                 }
                 let error = std::io::Error::last_os_error();
                 if error.kind() == std::io::ErrorKind::Interrupted {
                     continue;
                 }
+                let LeaseWait::Try(wait) = wait else {
+                    return Err(error.to_string());
+                };
                 if error.kind() != std::io::ErrorKind::WouldBlock {
                     return Err(error.to_string());
                 }
