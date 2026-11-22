@@ -81,6 +81,7 @@ struct Mock {
     bodies: Vec<Value>,
     upload_exit: i32,
     omit_upload: bool,
+    lookup: Option<Value>,
 }
 #[cfg(not(verus_keep_ghost))]
 impl Mock {
@@ -96,6 +97,7 @@ impl Mock {
             bodies: vec![],
             upload_exit: 0,
             omit_upload: false,
+            lookup: None,
         }
     }
     fn draft(&mut self) {
@@ -117,7 +119,8 @@ impl Mock {
     fn mutated(&self) -> bool {
         self.calls.iter().any(|args| {
             args.get(1).is_some_and(|v| v == "upload")
-                || args.get(2).is_some_and(|v| v == "POST" || v == "PATCH")
+                || (args.get(2).is_some_and(|v| v == "POST" || v == "PATCH")
+                    && args[3] != "graphql")
         })
     }
 }
@@ -182,10 +185,34 @@ impl Commands for Mock {
                 None => Ok(not_found()),
             };
         }
+        if method == "POST" && path == "graphql" {
+            assert_eq!(args.len(), 6);
+            assert_eq!(args[4], "--input");
+            let body = self.bodies.last().unwrap();
+            assert_eq!(
+                body["variables"],
+                json!({"owner":"example","repo":"product","tag":self.identity.version})
+            );
+            assert!(
+                body["query"]
+                    .as_str()
+                    .unwrap()
+                    .contains("release(tagName:$tag){databaseId}")
+            );
+            let selected = self.release.as_ref().map(|_| json!({"databaseId":7}));
+            return reply(
+                self.lookup
+                    .clone()
+                    .unwrap_or_else(|| json!({"data":{"repository":{"release":selected}}})),
+            );
+        }
+        if method == "GET" && path == "repos/example/product/releases/7" {
+            return reply(self.release.clone().expect("existing release"));
+        }
         if path.contains("/releases/tags/") {
             return match &self.release {
-                Some(v) => reply(v.clone()),
-                None => Ok(not_found()),
+                Some(v) if v["draft"] == false => reply(v.clone()),
+                _ => Ok(not_found()),
             };
         }
         if path == "repos/example/product/releases/7/assets?per_page=100" {
@@ -202,6 +229,7 @@ impl Commands for Mock {
                 body["prerelease"],
                 self.identity.channel == Channel::Preview
             );
+            assert!(self.release.is_none(), "created a second release");
             self.draft();
             return reply(self.release.clone().unwrap());
         }
@@ -234,9 +262,9 @@ fn creates_a_draft_uploads_without_clobber_and_verifies_the_public_result() {
             .iter()
             .all(|args| !args.contains(&"--clobber".into()))
     );
-    assert_eq!(mock.bodies.len(), 2);
+    assert_eq!(mock.bodies.len(), 3);
     assert_eq!(
-        mock.bodies[1]["body"],
+        mock.bodies[2]["body"],
         format!(
             "Source: {}\nLanding CI: 1234 attempt 2\nRelease run: https://github.com/example/product/actions/runs/4567/attempts/3",
             "a".repeat(40)
@@ -323,6 +351,74 @@ fn refuses_conflicting_public_or_draft_assets_sources_and_tags() {
         assert!(!mock.mutated());
     }
 }
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn resuming_a_partial_draft_checks_its_tag_before_uploading() {
+    for mut mock in [Mock::new(), stable_mock()] {
+        mock.draft();
+        mock.tag = Some("d".repeat(40));
+        let identity = mock.identity.clone();
+        let error =
+            publication::publish(&config(), &identity, &assets(), 4567, 3, &mut mock).unwrap_err();
+        assert!(
+            error.contains("release tag points at another source"),
+            "{error}"
+        );
+        assert!(!mock.mutated(), "calls={:?}", mock.calls);
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn resumes_an_existing_draft_with_no_git_tag() {
+    for mut mock in [Mock::new(), stable_mock()] {
+        mock.draft();
+        let identity = mock.identity.clone();
+        let result =
+            publication::publish(&config(), &identity, &assets(), 4567, 3, &mut mock).unwrap();
+        assert_eq!(result["release"]["id"], 7);
+        assert_eq!(result["release"]["draft"], false);
+        assert!(
+            mock.calls
+                .iter()
+                .any(|args| args[0] == "release" && args[1] == "upload")
+        );
+        assert!(
+            !mock
+                .calls
+                .iter()
+                .any(|args| args.get(2).is_some_and(|method| method == "POST")
+                    && args[3].ends_with("/releases"))
+        );
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn lookup_errors_or_changed_ids_cannot_create_or_modify_a_release() {
+    for response in [
+        json!({"errors":[{"message":"lookup failed"}],"data":{"repository":{"release":null}}}),
+        json!({"data":{"repository":null}}),
+        json!({"data":{"repository":{}}}),
+        json!({"data":{"repository":{"release":{}}}}),
+        json!({"data":{"repository":{"release":{"databaseId":0}}}}),
+    ] {
+        let mut mock = Mock::new();
+        mock.lookup = Some(response);
+        assert!(
+            publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).is_err()
+        );
+        assert!(!mock.mutated());
+    }
+    let mut mock = Mock::new();
+    mock.draft();
+    mock.release.as_mut().unwrap()["id"] = json!(8);
+    let error =
+        publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).unwrap_err();
+    assert!(error.contains("release ID differs"), "{error}");
+    assert!(!mock.mutated());
+}
+
 #[cfg(not(verus_keep_ghost))]
 #[test]
 fn failed_or_incomplete_upload_never_publishes_the_draft() {
