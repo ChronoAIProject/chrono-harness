@@ -1,35 +1,81 @@
 //! Automatic local endpoint/context production; start/reconstruct own branch birth.
+#[cfg(verus_keep_ghost)]
+use super::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{verified_identifiers::equal_text, verus};
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn full_paths_distinct(origin: &str, context: &str, manifest: &str) -> (valid: bool)
+    ensures valid == (origin@ != context@ && origin@ != manifest@ && context@ != manifest@),
+{
+    !equal_text(origin, context) && !equal_text(origin, manifest) && !equal_text(context, manifest)
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{Config, configuration, start};
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{
     decode, facts, file_identity, no_symlink_parents,
     prepared::{self, Context, InputRequest, PreparedCheck, Selection},
     sha256, units, wire,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     fs,
     io::{Read, Write},
     path::Path,
 };
+#[cfg(not(verus_keep_ghost))]
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+
+/// 完整检查登记创建原件和上下文。范围检查只登记收集清单。
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged, deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
+pub enum Policy {
+    Full(FullPolicy),
+    Scoped { collection_manifest: String },
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct Policy {
+#[cfg(not(verus_keep_ghost))]
+pub struct FullPolicy {
     pub origin_path: String,
     pub context_path: String,
     pub collection_manifest: String,
     pub roles: BTreeMap<String, String>,
 }
-pub(crate) fn validate(p: &Policy) -> Result<(), String> {
-    for path in [&p.origin_path, &p.context_path, &p.collection_manifest] {
-        units::artifact_path(path)?;
+
+#[cfg(not(verus_keep_ghost))]
+impl Policy {
+    fn collection_manifest(&self) -> &str {
+        match self {
+            Self::Full(full) => &full.collection_manifest,
+            Self::Scoped {
+                collection_manifest,
+            } => collection_manifest,
+        }
     }
-    if p.origin_path == p.context_path
-        || p.origin_path == p.collection_manifest
-        || p.context_path == p.collection_manifest
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn validate(policy: &Policy) -> Result<(), String> {
+    units::artifact_path(policy.collection_manifest())?;
+    let Policy::Full(p) = policy else {
+        return Ok(());
+    };
+    units::artifact_path(&p.origin_path)?;
+    units::artifact_path(&p.context_path)?;
+    if !full_paths_distinct(&p.origin_path, &p.context_path, &p.collection_manifest)
         || p.roles.is_empty()
         || p.roles.iter().any(|(k, v)| {
             !matches!(k.as_str(), "feature" | "integration")
@@ -41,8 +87,8 @@ pub(crate) fn validate(p: &Policy) -> Result<(), String> {
     Ok(())
 }
 /// Publish the final original producer report in the destination, then its exact association.
-pub(crate) fn publish_origin(source: &Path, report: &Value, p: &Policy) -> Result<(), String> {
-    validate(p)?;
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn publish_origin(source: &Path, report: &Value, p: &FullPolicy) -> Result<(), String> {
     let root = Path::new(
         report["destination"]
             .as_str()
@@ -73,6 +119,7 @@ pub(crate) fn publish_origin(source: &Path, report: &Value, p: &Policy) -> Resul
         false,
     )
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn publish(root: &Path, path: &str, bytes: &[u8], replace: bool) -> Result<(), String> {
     let target = no_symlink_parents(root, path)?;
     if target.exists() && !replace {
@@ -92,6 +139,7 @@ pub(crate) fn publish(root: &Path, path: &str, bytes: &[u8], replace: bool) -> R
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 fn produce(
     req: &InputRequest,
     path: &str,
@@ -213,19 +261,24 @@ fn produce(
                         .check_inputs
                         .as_ref()
                         .ok_or("local collection manifest binding missing")?
-                        .collection_manifest
-                        .clone(),
+                        .collection_manifest()
+                        .to_owned(),
                 }),
             };
             let context = if scoped {
                 None
             } else {
-                let p = r
+                let policy = r
                     .config
                     .check_inputs
                     .as_ref()
-                    .ok_or("full local check context/origin binding missing")?
-                    .clone();
+                    .ok_or("full local check context/origin binding missing")?;
+                let Policy::Full(p) = policy else {
+                    return Err(
+                        "full local check requires a registered branch origin and context".into(),
+                    );
+                };
+                let p = p.clone();
                 let origin_bytes =
                     fs::read(no_symlink_parents(root, &p.origin_path)?).map_err(|e| {
                         format!("missing full check origin receipt {}: {e}", p.origin_path)
@@ -392,6 +445,7 @@ fn produce(
         evidence,
     })
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     if args.len() != 3 || args[0] != "check-inputs" || args[1] != "--config" {
         return Err("check-inputs requires its registered worktree --config".into());

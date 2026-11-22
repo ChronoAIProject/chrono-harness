@@ -26,13 +26,7 @@
   },
   "report_directory": ".chrono-harness/state/worktrees/",
   "check_inputs": {
-    "origin_path": ".chrono-harness/state/origin.json",
-    "context_path": ".chrono-harness/state/local/context.json",
-    "collection_manifest": ".chrono-harness/state/collection/manifest.json",
-    "roles": {
-      "feature": "integration",
-      "integration": "integration"
-    }
+    "collection_manifest": ".chrono-harness/state/collection/manifest.json"
   },
   "automatic_cleanup": ".chrono-harness/cleanup.json"
 }

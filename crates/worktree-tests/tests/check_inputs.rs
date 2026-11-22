@@ -1,10 +1,44 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::policy as input_policy;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as input_policy;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn full_check_artifacts_have_separate_paths() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("bb"); reveal_strlit("ccc");
+        assert("a"@.len() != "bb"@.len());
+        assert("a"@.len() != "ccc"@.len());
+        assert("bb"@.len() != "ccc"@.len());
+    }
+    let ok = input_policy::full_paths_distinct("a", "bb", "ccc");
+    let origin_context = input_policy::full_paths_distinct("a", "a", "ccc");
+    let origin_manifest = input_policy::full_paths_distinct("a", "bb", "a");
+    let context_manifest = input_policy::full_paths_distinct("a", "bb", "bb");
+    if !ok || origin_context || origin_manifest || context_manifest { panic!(); }
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
 #[path = "../../runner-tests/tests/support/retention_state.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod retention_state;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::prepared::{self, InputRequest, PreparedCheck, Selection};
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn bind(h: &Host) {
     let git_bin = fixture_git();
     let version = Command::new(&git_bin).arg("--version").output().unwrap();
@@ -37,9 +71,11 @@ pub(super) fn bind(h: &Host) {
     .unwrap();
     h.policy(|p|{p["schema"]=value!("chrono-worktree-config/v2");p["check_inputs"]=value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"feature":"integration","integration":"integration"}});});
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn install(root: &Path) {
     install_owned(root, None);
 }
+#[cfg(not(verus_keep_ghost))]
 fn install_owned(root: &Path, owner: Option<&Host>) {
     fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
     install_readonly_file_owned(
@@ -64,9 +100,11 @@ fn install_owned(root: &Path, owner: Option<&Host>) {
         owner,
     );
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn ready_version_program(root: &Path, program: &Path, expected: &[u8]) {
     ready_version_program_owned(root, program, expected, None);
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn ready_version_program_owned(
     root: &Path,
     program: &Path,
@@ -89,9 +127,11 @@ pub(super) fn ready_version_program_owned(
         "fixture readiness {program:?}: {ready:?}"
     );
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn install_readonly_file(root: &Path, built: &Path, name: &str, version: &[u8]) {
     install_readonly_file_owned(root, built, name, version, None);
 }
+#[cfg(not(verus_keep_ghost))]
 fn install_readonly_file_owned(
     root: &Path,
     built: &Path,
@@ -114,6 +154,7 @@ fn install_readonly_file_owned(
     ready_version_program_owned(root, &installed, version, owner);
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn fixture_executable_identity_survives_neighbor_teardown() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -147,9 +188,11 @@ fn fixture_executable_identity_survives_neighbor_teardown() {
     assert_eq!(output.stdout, b"fixture\n");
     assert!(output.stderr.is_empty());
 }
+#[cfg(not(verus_keep_ghost))]
 fn inputs(root: &Path) -> (std::process::Output, Option<PreparedCheck>) {
     inputs_owned(root, None)
 }
+#[cfg(not(verus_keep_ghost))]
 fn inputs_owned(
     root: &Path,
     owner: Option<&Host>,
@@ -203,6 +246,7 @@ fn inputs_owned(
     (out, p)
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -312,6 +356,24 @@ fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
     assert_eq!(fs::read(dest.join(&parent.path)).unwrap(), output.stdout);
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
+fn scoped_checkout_starts_without_copying_a_birth_report() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = Host::new("payload");
+    bind(&h);
+    h.policy(|p| {
+        p["check_inputs"] = value!({"collection_manifest":".chrono-harness/state/collection/manifest.json"});
+    });
+    let dest = h.parent.join("scoped checkout");
+    let (exit, report, error) = h.invoke("feature", "scoped", &dest);
+    assert_eq!(exit, 0, "{error} {}", report["error"]);
+    assert!(!dest.join(".chrono-harness/state/origin.json").exists());
+    assert!(!dest.join(".chrono-harness/state/origins").exists());
+}
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -471,6 +533,7 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn local_preparation_rejects_clean_replacement_after_candidate_head_observation() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -519,6 +582,7 @@ fn local_preparation_rejects_clean_replacement_after_candidate_head_observation(
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn full_missing_origin_historical_snapshot_and_changed_branch_are_named_failures() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -564,6 +628,7 @@ fn full_missing_origin_historical_snapshot_and_changed_branch_are_named_failures
     assert!(String::from_utf8_lossy(&o.stderr).contains("original birth association"));
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn generated_full_native_short_step_preserves_exact_context_bytes() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -813,6 +878,7 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn reconstructed_destination_publishes_its_real_new_birth_association() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -854,6 +920,7 @@ fn reconstructed_destination_publishes_its_real_new_birth_association() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn published_full_report(root: &Path, directory: &str, out: &std::process::Output) -> Value {
     let path = root.join(format!("{directory}report.json"));
     let bytes = fs::read(&path).unwrap_or_else(|error| {
@@ -883,6 +950,7 @@ fn published_full_report(root: &Path, directory: &str, out: &std::process::Outpu
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn full_short_console_projects_warnings_failures_transport_and_blocked_from_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -975,6 +1043,7 @@ fn full_short_console_projects_warnings_failures_transport_and_blocked_from_orig
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writing_fails() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1063,6 +1132,7 @@ fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writin
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn local_physical_root_uses_bound_inventory_without_fetch_and_shallow_child_needs_base() {
     if !chrono_git_boundary::isolated_git() {
         return;

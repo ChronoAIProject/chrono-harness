@@ -19,6 +19,14 @@ pub use crate::maintenance::retained_reference_ancestor_required;
 pub use maintenance_verification::retained_reference_ancestor_required;
 
 #[cfg(verus_keep_ghost)]
+#[path = "check_inputs.rs"]
+mod check_inputs;
+#[cfg(verus_keep_ghost)]
+pub use check_inputs::full_paths_distinct;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::check_inputs::full_paths_distinct;
+
+#[cfg(verus_keep_ghost)]
 #[path = "start.rs"]
 mod start_verification;
 #[cfg(not(verus_keep_ghost))]
