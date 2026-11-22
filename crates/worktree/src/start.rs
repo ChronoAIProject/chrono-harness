@@ -717,7 +717,7 @@ pub(super) fn create(
             },
         )?;
     if report["status"] == success {
-        if let Some(p) = origin {
+        if let Some(crate::check_inputs::Policy::Full(p)) = origin {
             crate::check_inputs::publish_origin(&o.root, &report, &p)?;
         }
     }
