@@ -19,14 +19,11 @@ pub mod owner_publication;
 #[path = "main.rs"]
 pub mod cli;
 #[cfg(verus_keep_ghost)]
-#[path = "download.rs"]
-pub mod download;
-#[cfg(verus_keep_ghost)]
-#[path = "proved_build.rs"]
-pub mod proved_build;
-#[cfg(verus_keep_ghost)]
 #[path = "construction.rs"]
 pub mod construction;
+#[cfg(verus_keep_ghost)]
+#[path = "download.rs"]
+pub mod download;
 #[cfg(verus_keep_ghost)]
 #[path = "lifecycle.rs"]
 pub mod lifecycle;
@@ -36,6 +33,9 @@ pub mod owner;
 #[cfg(verus_keep_ghost)]
 #[path = "profile.rs"]
 pub mod profile;
+#[cfg(verus_keep_ghost)]
+#[path = "proved_build.rs"]
+pub mod proved_build;
 
 #[cfg(verus_keep_ghost)]
 #[path = "execution.rs"]
