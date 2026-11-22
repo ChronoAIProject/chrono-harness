@@ -183,6 +183,8 @@ preview 版本由计划版本核心、原 CI run／attempt 和完整源码提交
 
 发布者核对当前依赖选择的平台原报告、完整原件摘要和全部资产；公开前另核原 CI 的工作流 ID、路径、push 事件、dev 分支、完整源码、attempt 和真实成功状态。它复用受验的 `chrono-distribution assemble`，输出固定版本的 release.json、install.sh 及平台二进制；随后创建 draft，上传缺少的资产，核 GitHub 返回的 size／sha256 后公开，并重新读取 Release、资产与实际标签源码。
 
+发布者用 GitHub GraphQL 的 `release(tagName:)` 查找指定版本，草稿尚未创建 Git 标签时也能取得 Release ID。取得 ID 后通过 REST 核对同一 Release 的版本、源码、通道和资产。只有查询成功且仓库明确返回 `release: null` 时才允许新建。创建或续传草稿前先查已有 Git 标签的源码，公开前再查一次。
+
 恢复只继续同一版本、源码和资产身份：已有相同 draft 可以续传，已公开且完全一致的版本可核验复用；冲突、公开版缺资产、原 CI 不合格或上传失败均停止，不使用 clobber，也不把失败 draft 当公开交付。过程原流、请求正文与结果保留在发布作业 artifact，沿用已有有限产物保留与清理所有者。
 
 重跑前先收取原运行的最终状态、失败步骤、原日志和可取得的回执。缓存准备、原件传输、业务执行和证据上传分别核对；业务回执通过不能覆盖失败的 job，下载失败也不能说成已经运行的测试失败。确认是可恢复的外部故障后，沿固定源码的显式 `needs` 选择失败作业及受影响的后续作业，复用有效的成功原件。原生部分重跑可能给沿用结果分配新 job ID 和当前 `run_attempt`；实际生产身份仍由选中的 artifact ID、原回执和原生产 attempt 决定，不能按新 job ID 拼产物名。列举 artifact 时读取完整分页。
