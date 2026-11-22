@@ -22,6 +22,12 @@
       "tracked": false
     },
     {
+      "path": ".chrono-harness/logs/",
+      "owner": "diagnostics",
+      "kind": "runtime-logs",
+      "tracked": false
+    },
+    {
       "path": "crates/runner/target/",
       "owner": "runner",
       "kind": "cargo-output",
