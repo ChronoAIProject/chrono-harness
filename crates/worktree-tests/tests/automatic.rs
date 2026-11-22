@@ -5226,6 +5226,34 @@ fn observational_import_binds_original_inputs_without_adopting_format_or_disposa
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn import_uses_target_custody_inputs_without_reading_build_actions() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    let target = h.parent.join("inactive build producer");
+    git(
+        &h.root,
+        &["worktree", "add", "--detach", target.to_str().unwrap(), "dev"],
+    );
+    let projects_path = target.join(PROJECTS);
+    let mut projects = json(&fs::read(&projects_path).unwrap()).unwrap();
+    projects["scripts"][0]["actions"]["execute"]["nested_proof"] = value!({});
+    let bytes = serde_json::to_vec_pretty(&projects).unwrap();
+    fs::write(&projects_path, &bytes).unwrap();
+    let head = commit(&target);
+
+    let (code, report, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {error}");
+    let ledger = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap();
+    assert_eq!(ledger["entries"][0]["enrollment"]["observed_head"], head);
+    assert_eq!(fs::read(projects_path).unwrap(), bytes);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn detached_import_preserves_unresolved_index_and_reports_unfinished_work() {
     if !chrono_git_boundary::isolated_git() {
         return;
