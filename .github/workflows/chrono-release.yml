@@ -119,6 +119,7 @@ jobs:
           path: "source/.chrono-harness/cache/preview-selection/origin/platforms/linux/"
           include-hidden-files: true
           if-no-files-found: error
+          retention-days: 1
       - name: Preserve verified macos release components
         if: steps.components.outputs.macos_sha != ''
         id: upload_macos
@@ -128,6 +129,7 @@ jobs:
           path: "source/.chrono-harness/cache/preview-selection/origin/platforms/macos/"
           include-hidden-files: true
           if-no-files-found: error
+          retention-days: 1
   linux_build_runner:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_runner') }}
     needs: ["linux_release_frontend"]
@@ -223,6 +225,7 @@ jobs:
           name: "chrono-release-linux-build_runner-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_runner/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -312,6 +315,7 @@ jobs:
           name: "chrono-release-linux-build_instructions-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_instructions/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -401,6 +405,7 @@ jobs:
           name: "chrono-release-linux-build_judge_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_ci/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -490,6 +495,7 @@ jobs:
           name: "chrono-release-linux-build_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_ci/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -579,6 +585,7 @@ jobs:
           name: "chrono-release-linux-build_judge_registration-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_registration/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -668,6 +675,7 @@ jobs:
           name: "chrono-release-linux-build_judge_filemap-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_filemap/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -757,6 +765,7 @@ jobs:
           name: "chrono-release-linux-build_judge_routes-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_routes/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -846,6 +855,7 @@ jobs:
           name: "chrono-release-linux-build_judge_projects-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_projects/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -935,6 +945,7 @@ jobs:
           name: "chrono-release-linux-build_judge_cost-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cost/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1024,6 +1035,7 @@ jobs:
           name: "chrono-release-linux-build_judge_mixed-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_mixed/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1113,6 +1125,7 @@ jobs:
           name: "chrono-release-linux-build_judge_workflow-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_workflow/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1202,6 +1215,7 @@ jobs:
           name: "chrono-release-linux-build_inputs-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_inputs/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1291,6 +1305,7 @@ jobs:
           name: "chrono-release-linux-build_distribution-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_distribution/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1380,6 +1395,7 @@ jobs:
           name: "chrono-release-linux-build_worktree-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_worktree/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1469,6 +1485,7 @@ jobs:
           name: "chrono-release-linux-verify_distribution_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_distribution_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1573,6 +1590,7 @@ jobs:
           name: "chrono-release-linux-verify_worktree_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_worktree_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1662,6 +1680,7 @@ jobs:
           name: "chrono-release-linux-verify_runner_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_runner_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1751,6 +1770,7 @@ jobs:
           name: "chrono-release-linux-verify_inputs_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_inputs_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1840,6 +1860,7 @@ jobs:
           name: "chrono-release-linux-verify_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_ci_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -1929,6 +1950,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_ci_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -2018,6 +2040,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_registration_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_registration_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -2107,6 +2130,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_projects_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_projects_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -2204,6 +2228,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_workflow_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -2293,6 +2318,7 @@ jobs:
           name: "chrono-release-linux-verify_instructions_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_instructions_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -2382,6 +2408,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_filemap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_filemap_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -2471,6 +2498,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_routes_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_routes_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -2560,6 +2588,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_cost_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cost_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -2649,6 +2678,7 @@ jobs:
           name: "chrono-release-linux-verify_judge_mixed_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_mixed_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3049,6 +3079,7 @@ jobs:
           name: "chrono-release-macos-build_runner-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_runner/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3138,6 +3169,7 @@ jobs:
           name: "chrono-release-macos-build_instructions-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_instructions/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3227,6 +3259,7 @@ jobs:
           name: "chrono-release-macos-build_judge_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_ci/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3316,6 +3349,7 @@ jobs:
           name: "chrono-release-macos-build_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_ci/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3405,6 +3439,7 @@ jobs:
           name: "chrono-release-macos-build_judge_registration-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_registration/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3494,6 +3529,7 @@ jobs:
           name: "chrono-release-macos-build_judge_filemap-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_filemap/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3583,6 +3619,7 @@ jobs:
           name: "chrono-release-macos-build_judge_routes-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_routes/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3672,6 +3709,7 @@ jobs:
           name: "chrono-release-macos-build_judge_projects-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_projects/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3761,6 +3799,7 @@ jobs:
           name: "chrono-release-macos-build_judge_cost-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cost/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3850,6 +3889,7 @@ jobs:
           name: "chrono-release-macos-build_judge_mixed-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_mixed/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -3939,6 +3979,7 @@ jobs:
           name: "chrono-release-macos-build_judge_workflow-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_workflow/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4028,6 +4069,7 @@ jobs:
           name: "chrono-release-macos-build_inputs-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_inputs/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4117,6 +4159,7 @@ jobs:
           name: "chrono-release-macos-build_distribution-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_distribution/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4206,6 +4249,7 @@ jobs:
           name: "chrono-release-macos-build_worktree-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_worktree/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4295,6 +4339,7 @@ jobs:
           name: "chrono-release-macos-verify_distribution_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_distribution_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4399,6 +4444,7 @@ jobs:
           name: "chrono-release-macos-verify_worktree_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_worktree_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4488,6 +4534,7 @@ jobs:
           name: "chrono-release-macos-verify_runner_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_runner_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4577,6 +4624,7 @@ jobs:
           name: "chrono-release-macos-verify_inputs_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_inputs_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4683,6 +4731,7 @@ jobs:
           name: "chrono-release-macos-verify_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_ci_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4772,6 +4821,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_ci_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4861,6 +4911,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_registration_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_registration_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -4950,6 +5001,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_projects_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_projects_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -5047,6 +5099,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_workflow_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -5136,6 +5189,7 @@ jobs:
           name: "chrono-release-macos-verify_instructions_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_instructions_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -5225,6 +5279,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_filemap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_filemap_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -5314,6 +5369,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_routes_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_routes_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -5403,6 +5459,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_cost_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cost_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -5492,6 +5549,7 @@ jobs:
           name: "chrono-release-macos-verify_judge_mixed_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_mixed_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -5885,6 +5943,7 @@ jobs:
           name: "chrono-release-linux-verify_diagnostics_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_diagnostics_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -5974,6 +6033,7 @@ jobs:
           name: "chrono-release-macos-verify_diagnostics_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_diagnostics_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -6063,6 +6123,7 @@ jobs:
           name: "chrono-release-linux-build_cache-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_cache/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -6152,6 +6213,7 @@ jobs:
           name: "chrono-release-linux-verify_cache_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_cache_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -6241,6 +6303,7 @@ jobs:
           name: "chrono-release-macos-build_cache-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_cache/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -6330,6 +6393,7 @@ jobs:
           name: "chrono-release-macos-verify_cache_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_cache_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -6380,6 +6444,7 @@ jobs:
           name: "chrono-release-linux-verify_host_bootstrap_native_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_host_bootstrap_native_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   macos_verify_host_bootstrap_native_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_host_bootstrap_native_tests') }}
@@ -6421,6 +6486,7 @@ jobs:
           name: "chrono-release-macos-verify_host_bootstrap_native_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_host_bootstrap_native_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   linux_verify_host_bootstrap_launcher_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_host_bootstrap_launcher_tests') }}
@@ -6462,6 +6528,7 @@ jobs:
           name: "chrono-release-linux-verify_host_bootstrap_launcher_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   macos_verify_host_bootstrap_launcher_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_host_bootstrap_launcher_tests') }}
@@ -6503,6 +6570,7 @@ jobs:
           name: "chrono-release-macos-verify_host_bootstrap_launcher_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   linux_verify_pr_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_pr_tests') }}
@@ -6544,6 +6612,7 @@ jobs:
           name: "chrono-release-linux-verify_pr_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_pr_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   macos_verify_pr_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_pr_tests') }}
@@ -6585,6 +6654,7 @@ jobs:
           name: "chrono-release-macos-verify_pr_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_pr_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   linux_verify_identifiers_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_identifiers_tests') }}
@@ -6626,6 +6696,7 @@ jobs:
           name: "chrono-release-linux-verify_identifiers_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_identifiers_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   macos_verify_identifiers_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_identifiers_tests') }}
@@ -6667,6 +6738,7 @@ jobs:
           name: "chrono-release-macos-verify_identifiers_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_identifiers_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   linux_release_frontend:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && needs.select_preview.result == 'success' && needs.select_preview.outputs.selected == 'true' }}
@@ -6710,6 +6782,7 @@ jobs:
           name: "chrono-release-linux-frontend-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-frontend/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   linux_verify_host_release_native_tests:
     if: ${{ always() && !cancelled() && needs.linux_release_frontend.result == 'success' && (needs.linux_build_cache.result == 'success' || (needs.linux_build_cache.result == 'skipped' && contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_build_cache'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.linux_release_frontend.outputs.skipped || '[]'), 'linux_verify_host_release_native_tests') }}
@@ -6759,6 +6832,7 @@ jobs:
           name: "chrono-release-linux-verify_host_release_native_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_host_release_native_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   macos_release_frontend:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && needs.select_preview.result == 'success' && needs.select_preview.outputs.selected == 'true' }}
@@ -6819,6 +6893,7 @@ jobs:
           name: "chrono-release-macos-frontend-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-frontend/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   macos_verify_host_release_native_tests:
     if: ${{ always() && !cancelled() && needs.macos_release_frontend.result == 'success' && (needs.macos_build_cache.result == 'success' || (needs.macos_build_cache.result == 'skipped' && contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_build_cache'))) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' && !contains(fromJSON(needs.macos_release_frontend.outputs.skipped || '[]'), 'macos_verify_host_release_native_tests') }}
@@ -6868,6 +6943,7 @@ jobs:
           name: "chrono-release-macos-verify_host_release_native_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_host_release_native_tests/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
   publish:
     if: ${{ always() && (inputs.channel == 'stable' || needs.linux_release_frontend.result == 'success' && needs.linux_package.result == 'success' && needs.macos_package.result == 'success') && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
@@ -7100,6 +7176,7 @@ jobs:
           name: "chrono-release-linux-build_pr-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_pr/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
@@ -7189,6 +7266,7 @@ jobs:
           name: "chrono-release-macos-build_pr-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_pr/"
           if-no-files-found: error
+          retention-days: 1
           include-hidden-files: true
       - name: Preserve failed cache diagnostics
         if: ${{ failure() }}
