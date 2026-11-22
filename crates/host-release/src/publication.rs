@@ -410,6 +410,44 @@ pub(crate) fn verify_published(
     Ok(json!({"release":release,"verified_ci":ci,"assets":assets}))
 }
 
+/// REST 按标签只能可靠读取公开版本。先按待发布标签定位，再按 ID 读取同一 Release。
+#[cfg(not(verus_keep_ghost))]
+fn release_by_pending_tag(
+    config: &Config,
+    identity: &Identity,
+    commands: &mut impl Commands,
+) -> Result<Option<Value>, String> {
+    let (owner, repo) = config
+        .repository
+        .split_once('/')
+        .ok_or_else(|| error("invalid repository"))?;
+    let lookup = api(commands, "POST", "graphql".into(), Some(json!({
+        "query": "query($owner:String!,$repo:String!,$tag:String!){repository(owner:$owner,name:$repo){release(tagName:$tag){databaseId}}}",
+        "variables": {"owner":owner, "repo":repo, "tag":identity.version}
+    })), false)?.ok_or_else(|| error("missing release lookup"))?;
+    if lookup.get("errors").is_some() {
+        return Err(error("GitHub reported errors looking up the release"));
+    }
+    let selected = lookup
+        .pointer("/data/repository/release")
+        .ok_or_else(|| error("incomplete release lookup"))?;
+    if selected.is_null() {
+        return Ok(None);
+    }
+    let id = selected["databaseId"]
+        .as_u64()
+        .filter(|id| *id > 0)
+        .ok_or_else(|| error("invalid release database ID"))?;
+    let release = read_api(
+        commands,
+        format!("repos/{}/releases/{id}", config.repository),
+    )?;
+    if release["id"].as_u64() != Some(id) {
+        return Err(error("release ID differs from lookup"));
+    }
+    Ok(Some(release))
+}
+
 #[cfg(not(verus_keep_ghost))]
 pub fn publish(
     config: &Config,
@@ -450,10 +488,16 @@ pub fn publish(
         "repos/{}/releases/tags/{}",
         config.repository, identity.version
     );
-    let mut release = match api(commands, "GET", endpoint.clone(), None, true)? {
+    let existing = release_by_pending_tag(config, identity, commands)?;
+    if existing
+        .as_ref()
+        .is_none_or(|release| release["draft"] == true)
+    {
+        verify_tag(config, identity, commands, true)?;
+    }
+    let mut release = match existing {
         Some(release) => release,
         None => {
-            verify_tag(config, identity, commands, true)?;
             api(commands,"POST",format!("repos/{}/releases",config.repository),Some(json!({
                 "tag_name":identity.version,"target_commitish":identity.source_commit,
                 "name":identity.version,"body":format!("Source: {}\nLanding CI: {} attempt {}",identity.source_commit,ci["id"],ci["run_attempt"]),
