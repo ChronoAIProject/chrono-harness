@@ -16,15 +16,9 @@
 
 ## 日志和上下文
 
-本仓通过 `.chrono-harness/logging.json` 采用统一文件日志。已接入的 Rust 命令入口在业务启动前初始化 logger，记录 `cli.started` 和 `cli.finished`，包含实际生产者、PID、操作、宿主路径和返回码。info 记录正常活动，失败返回用 error。运行日志位于 `.chrono-harness/state/logs/runtime.jsonl`；直接查看可用：
+本仓的命令把结果和诊断交给调用方。检查结果通过 stdout 或 stderr 和退出码读取。运行时日志组件在本仓不创建 `state/logs/`。
 
-```sh
-tail -F .chrono-harness/state/logs/runtime.jsonl
-```
-
-本仓的 `.chrono-harness/logging.json` 将 `keep_seconds` 设为 86400 秒。采用这份配置的检出需要兼容的写入程序和维护程序。每份新日志的首行是 `chrono-runtime-log-generation/v1`，
-记录该份日志的 Unix 到期秒数。诊断事件自第二行开始。追加、容量轮转和政策改动均沿用
-原文件的期限。创建满 24 小时后，该代日志可由写入器或维护程序清理。
+其他宿主可通过 `.chrono-harness/logging.json` 启用滚动日志。配置 `keep_seconds` 后，每代日志的首行记录到期时间。后续追加和容量轮转沿用这一期限。
 
 统一维护从物理协调者及已核验的关联检出读取该配置。它用原日志锁排除并发写入，
 检查固定日志槽位，即使停止写入也回收合格的到期文件。原报告记录忙碌、回收数量、
@@ -32,7 +26,7 @@ tail -F .chrono-harness/state/logs/runtime.jsonl
 引用时，由实际使用方在到期前转交持久保管。正式检查所保留的原 stdout 和 stderr
 继续由各自的原件所有者管理。
 
-当前每份上限 10485760 字节（10 MiB），共保留 5 份，包含当前文件及 `runtime.1.jsonl` 至 `runtime.4.jsonl`。越接近 1 越新。下一条完整记录将超过上限时先轮换，删除最旧份。正文最多 50 MiB，另有一个空的 `runtime.lock`；不压缩、不按调用创建新文件、不启动清理线程或定时器。`max_files` 必须为 1 至 64，`max_bytes` 必须为 1 至 67108864，`level` 支持 trace、debug、info、warn、error。`stderr: false` 使普通入口的新增日志只写文件；已有业务输出仍走原通道。
+例如每份上限为 10485760 字节（10 MiB）并配置 5 份时，日志家族，包含当前文件及 `runtime.1.jsonl` 至 `runtime.4.jsonl`。越接近 1 越新。下一条完整记录将超过上限时先轮换，删除最旧份。正文最多 50 MiB，另有一个空的 `runtime.lock`；不压缩、不按调用创建新文件、不启动清理线程或定时器。`max_files` 必须为 1 至 64，`max_bytes` 必须为 1 至 67108864，`level` 支持 trace、debug、info、warn、error。`stderr: false` 使普通入口的新增日志只写文件；已有业务输出仍走原通道。
 
 `chrono-diagnostics::runtime` 负责配置和入口，`rolling::RollingFile` 负责受限文件写入；已有 `Logger` 继续负责记录和格式。使用 Rust 标准库文件锁和文件操作，无新增外部依赖。已有 tracing 层不提供大小与份数轮换，因此在它的 `Write` 边界补齐文件目的。每次写入持有同一个日志家族的文件锁，在锁内核大小、轮换并重新打开当前文件；各进程不会持有轮换前的旧日志句柄。初始化只核登记的 64 个有限保留位置，不扫描其他 state 文件；降低份数后回收超出的日志成员。
 
@@ -42,7 +36,7 @@ tail -F .chrono-harness/state/logs/runtime.jsonl
 
 CI 的 `chrono-log-stderr/v1` 仍要求原 stderr：检查 logger 在保留该原通道的同时写入滚动文件，沿用原请求／计划／操作上下文与真实等待行为。`stderr` 配置只控制普通入口的新增副本，不能取消已登记的判官证据通道。机器 stdout 不加入日志。滚动文件不接受不可变证据引用；报告引用的原始输出和错误继续由现有 retention 所有者回收，不能让日志轮换删除它们。
 
-**产品与宿主政策同步修改：**本次增加标准诊断库的文件目的和入口接入，同时登记日志选择、FILEMAP 输入和 Rust 回归。验证包含真实 CLI 成功／失败与超限、轮换和重启、大小边界、降低保留份数、四进程并发、路径拒绝及原始输出保持。标准检查仍按两端明确变更依赖选测，完整构建／CI／维护成本未知。
+**产品与宿主政策同步修改：**文件日志由宿主按需启用。验证包含真实 CLI 成功／失败与超限、轮换和重启、大小边界、降低保留份数、四进程并发、路径拒绝及原始输出保持。标准检查仍按两端明确变更依赖选测，完整构建／CI／维护成本未知。
 
 `Logger` 建立限定范围的 `tracing` 分发器，明确设置生产者、级别和 `Write` 目的。`Logger::stderr` 选择标准错误和 info。每个事件输出一行 UTF-8 JSON，时间为实际 UTC RFC3339。记录保留有类型字段，并合入外层 span 上下文，较近层优先。未指定 `event_id` 时使用 `tracing.external`。
 
