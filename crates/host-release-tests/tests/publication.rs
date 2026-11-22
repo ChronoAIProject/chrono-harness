@@ -33,7 +33,7 @@ use chrono_host_release::{
 #[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
 #[cfg(not(verus_keep_ghost))]
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 #[cfg(not(verus_keep_ghost))]
 fn config() -> Config {
@@ -79,7 +79,7 @@ struct Mock {
     tag: Option<String>,
     calls: Vec<Vec<String>>,
     bodies: Vec<Value>,
-    upload_exit: i32,
+    upload_exits: VecDeque<i32>,
     omit_upload: bool,
     lookup: Option<Value>,
 }
@@ -95,7 +95,7 @@ impl Mock {
             tag: None,
             calls: vec![],
             bodies: vec![],
-            upload_exit: 0,
+            upload_exits: VecDeque::new(),
             omit_upload: false,
             lookup: None,
         }
@@ -105,14 +105,23 @@ impl Mock {
             json!({"id":7,"tag_name":self.identity.version,"target_commitish":self.identity.source_commit,"prerelease":self.identity.channel == Channel::Preview,"draft":true}),
         );
     }
-    fn upload(&mut self) {
-        self.uploaded = vec![
-            json!({"name":"install.sh","size":18,"digest":format!("sha256:{}","c".repeat(64)),"state":"uploaded"}),
-        ];
+    fn upload(&mut self, name: &str) {
+        let (size, hash) = match name {
+            "install.sh" => (18, "c".repeat(64)),
+            "release.json" => (42, "d".repeat(64)),
+            _ => panic!("unexpected asset: {name}"),
+        };
+        assert!(
+            !self.uploaded.iter().any(|asset| asset["name"] == name),
+            "duplicate upload: {name}"
+        );
+        self.uploaded.push(
+            json!({"name":name,"size":size,"digest":format!("sha256:{hash}"),"state":"uploaded"}),
+        );
     }
     fn published(&mut self) {
         self.draft();
-        self.upload();
+        self.upload("install.sh");
         self.release.as_mut().unwrap()["draft"] = json!(false);
         self.tag = Some(self.identity.source_commit.clone());
     }
@@ -145,22 +154,26 @@ impl Commands for Mock {
             })
         };
         if args[0] == "release" {
+            let name = args[3]
+                .strip_prefix("/outputs/")
+                .expect("absolute asset path");
             assert_eq!(
                 args,
                 [
                     "release",
                     "upload",
                     &self.identity.version,
-                    "/outputs/install.sh",
+                    &format!("/outputs/{name}"),
                     "--repo",
                     "example/product"
                 ]
             );
-            if self.upload_exit == 0 && !self.omit_upload {
-                self.upload();
+            let exit = self.upload_exits.pop_front().unwrap_or(0);
+            if exit == 0 && !self.omit_upload {
+                self.upload(name);
             }
             return Ok(Reply {
-                exit: self.upload_exit,
+                exit,
                 stdout: vec![],
             });
         }
@@ -234,7 +247,11 @@ impl Commands for Mock {
             return reply(self.release.clone().unwrap());
         }
         if method == "PATCH" && path == "repos/example/product/releases/7" {
-            assert_eq!(self.uploaded.len(), 1);
+            assert!(
+                self.uploaded
+                    .iter()
+                    .any(|asset| asset["name"] == "install.sh")
+            );
             assert_eq!(
                 self.bodies.last().unwrap(),
                 &json!({"draft":false,
@@ -370,26 +387,46 @@ fn resuming_a_partial_draft_checks_its_tag_before_uploading() {
 
 #[cfg(not(verus_keep_ghost))]
 #[test]
-fn resumes_an_existing_draft_with_no_git_tag() {
+fn interrupted_upload_resumes_the_same_untagged_draft_and_only_adds_missing_assets() {
+    let mut files = assets();
+    files.insert(
+        "release.json".into(),
+        Asset {
+            path: "/outputs/release.json".into(),
+            sha256: "d".repeat(64),
+            size: 42,
+        },
+    );
     for mut mock in [Mock::new(), stable_mock()] {
-        mock.draft();
         let identity = mock.identity.clone();
+        mock.upload_exits.extend([0, 17]);
+        let failure =
+            publication::publish(&config(), &identity, &files, 4567, 2, &mut mock).unwrap_err();
+        assert!(
+            failure.contains("original asset upload exited 17: release.json"),
+            "{failure}"
+        );
+        let draft = mock.release.as_ref().unwrap();
+        assert_eq!(draft["draft"], true);
+        let id = draft["id"].clone();
+        assert!(mock.tag.is_none());
+        assert_eq!(mock.uploaded.len(), 1);
+        let original = mock.uploaded[0].clone();
+        assert_eq!(original["name"], "install.sh");
+
+        let retry_start = mock.calls.len();
         let result =
-            publication::publish(&config(), &identity, &assets(), 4567, 3, &mut mock).unwrap();
-        assert_eq!(result["release"]["id"], 7);
+            publication::publish(&config(), &identity, &files, 4567, 3, &mut mock).unwrap();
+        assert_eq!(result["release"]["id"], id);
         assert_eq!(result["release"]["draft"], false);
-        assert!(
-            mock.calls
-                .iter()
-                .any(|args| args[0] == "release" && args[1] == "upload")
-        );
-        assert!(
-            !mock
-                .calls
-                .iter()
-                .any(|args| args.get(2).is_some_and(|method| method == "POST")
-                    && args[3].ends_with("/releases"))
-        );
+        assert_eq!(mock.uploaded.len(), 2);
+        assert_eq!(mock.uploaded[0], original);
+        let uploads: Vec<_> = mock.calls[retry_start..]
+            .iter()
+            .filter(|args| args[0] == "release")
+            .map(|args| args[3].as_str())
+            .collect();
+        assert_eq!(uploads, ["/outputs/release.json"]);
     }
 }
 
@@ -425,7 +462,7 @@ fn failed_or_incomplete_upload_never_publishes_the_draft() {
     for incomplete in [false, true] {
         let mut mock = Mock::new();
         mock.omit_upload = incomplete;
-        mock.upload_exit = if incomplete { 0 } else { 17 };
+        mock.upload_exits.push_back(if incomplete { 0 } else { 17 });
         assert!(
             publication::publish(&config(), &identity(), &assets(), 4567, 3, &mut mock).is_err()
         );
