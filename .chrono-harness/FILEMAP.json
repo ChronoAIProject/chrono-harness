@@ -153,7 +153,7 @@
     {"path":"crates/host-bootstrap-tests/Cargo.lock","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-bootstrap-native-tests"}]},
     {"path":"crates/host-bootstrap-tests/tests/verified_bindings.rs","verification":{"role":"program","roots":[{"path":"crates/host-bootstrap-tests/tests/verified_bindings.rs","operation":"verify.bootstrap-bindings-tests"}]},"owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":"crates/runner/src/process_child.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
-    {"path":".gitignore","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":".gitignore","verification":{"role":"data","roots":[]},"owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"README.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}],"verification":{"role":"data","roots":[]}},
     {"path":"CONTRIBUTING.md","verification":{"role":"data","roots":[]},"owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":".github/pull_request_template.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
