@@ -433,6 +433,23 @@ fn automatic_preview_gates_roots_and_preserves_registered_artifact_dependencies(
         "(github.event_name != 'workflow_run' || needs.native.result != 'skipped' || needs.consumer.result != 'skipped') }}"
     ));
 
+    c["delivery"]["landing_selection"]["components"] = json!({
+        "command": ["select"], "collection": "landing", "output": "selected",
+        "platforms": {"linux": {"job":"native", "directory":"inputs/native"}},
+        "artifact_retention_days": 0
+    });
+    assert!(release::render(&serde_json::from_value(c.clone()).unwrap()).is_err());
+    c["delivery"]["landing_selection"]["components"]["artifact_retention_days"] = json!(1);
+    let rendered = release::render(&serde_json::from_value(c.clone()).unwrap()).unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&rendered).unwrap();
+    let upload = yaml["jobs"]["select_preview"]["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == "upload_linux")
+        .unwrap();
+    assert_eq!(upload["with"]["retention-days"], 1);
+
     c["delivery"]["landing_selection"]["context_path"] = json!("../context.json");
     assert!(release::render(&serde_json::from_value(c).unwrap()).is_err());
 }
@@ -553,8 +570,22 @@ fn promotion_skips_only_explicit_build_jobs_and_keeps_the_registered_commands() 
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn release_units_render_literal_edges_exact_artifact_ids_and_current_dependency_metadata() {
-    let c: release::Config = serde_json::from_value(units_config()).unwrap();
+    let mut policy = units_config();
+    policy["jobs"][0]["artifact_retention_days"] = json!(0);
+    assert!(release::render(&serde_json::from_value(policy.clone()).unwrap()).is_err());
+    policy["jobs"][0]["artifact_retention_days"] = json!(1);
+    let c: release::Config = serde_json::from_value(policy).unwrap();
     let yaml = release::render(&c).unwrap();
+    let parsed: Value = serde_yaml_ng::from_str(&yaml).unwrap();
+    for (job, days) in [("native", json!(1)), ("consumer", Value::Null)] {
+        let upload = parsed["jobs"][job]["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|step| step["id"] == "release_upload")
+            .unwrap();
+        assert_eq!(upload["with"]["retention-days"], days);
+    }
     assert!(yaml.contains("needs: [\"native\"]"));
     assert!(yaml.contains("artifact-ids: ${{ needs.native.outputs.artifact_id }}"));
     assert!(yaml.contains("path: \"inputs/native/\""));
