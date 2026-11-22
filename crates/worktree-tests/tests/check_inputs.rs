@@ -2,9 +2,9 @@
 #[cfg(verus_keep_ghost)]
 use super::policy as input_policy;
 #[cfg(not(verus_keep_ghost))]
-use chrono_worktree::verified_lifecycle as input_policy;
-#[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as input_policy;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
@@ -364,7 +364,8 @@ fn scoped_checkout_starts_without_copying_a_birth_report() {
     let h = Host::new("payload");
     bind(&h);
     h.policy(|p| {
-        p["check_inputs"] = value!({"collection_manifest":".chrono-harness/state/collection/manifest.json"});
+        p["check_inputs"] =
+            value!({"collection_manifest":".chrono-harness/state/collection/manifest.json"});
     });
     let dest = h.parent.join("scoped checkout");
     let (exit, report, error) = h.invoke("feature", "scoped", &dest);
