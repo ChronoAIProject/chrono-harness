@@ -77,6 +77,8 @@ pub struct LandingSelection {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ComponentSelection {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_retention_days: Option<u16>,
     pub command: Vec<String>,
     pub collection: String,
     pub output: String,
@@ -106,6 +108,8 @@ pub struct Job {
     pub command: Vec<String>,
     pub artifact_name: String,
     pub artifact_directory: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_retention_days: Option<u16>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub needs: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -173,6 +177,9 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
             literal(&selection.context_path)?;
             relative_path(&selection.context_path)?;
             if let Some(parts) = &selection.components {
+                if !super::startup::retention_days_valid(parts.artifact_retention_days) {
+                    return Err("invalid preview component artifact retention".into());
+                }
                 for path in [&parts.output, &parts.collection] {
                     literal(path)?;
                     relative_path(path)?;
@@ -303,6 +310,12 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
             || !artifacts.insert(&job.artifact_name)
         {
             return Err("invalid/duplicate release artifact name".into());
+        }
+        if !super::startup::retention_days_valid(job.artifact_retention_days) {
+            return Err(format!(
+                "invalid artifact retention for release job {}",
+                job.id
+            ));
         }
         if !job.artifact_directory.ends_with('/')
             || job.artifact_directory.contains(['*', '?', '[', ']', '!'])
@@ -455,9 +468,7 @@ pub fn render(c: &Config) -> Result<String, String> {
                     )),
                     super::artifact_hidden_files(true)
                 ));
-                if let Some(days) = c.cache_diagnostic_retention_days {
-                    output.push_str(&format!("          retention-days: {days}\n"));
-                }
+                output.push_str(&artifact_retention(c.cache_diagnostic_retention_days));
             }
             continue;
         }
@@ -483,7 +494,7 @@ pub fn render(c: &Config) -> Result<String, String> {
           name: {artifact}
           path: {directory}
           if-no-files-found: error
-{hidden_files}"#,
+{retention}{hidden_files}"#,
             id = job.id,
             runner = scalar(&job.runs_on),
             timeout = job.timeout_minutes,
@@ -495,12 +506,19 @@ pub fn render(c: &Config) -> Result<String, String> {
                 .collect::<Vec<_>>()
                 .join(" "),
             upload = c.upload_artifact_action,
+            retention = artifact_retention(job.artifact_retention_days),
             hidden_files = super::artifact_hidden_files(c.include_hidden_files),
             artifact = scalar(&job.artifact_name),
             directory = scalar(&job.artifact_directory),
         ));
     }
     Ok(output)
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn artifact_retention(days: Option<u16>) -> String {
+    days.map(|days| format!("          retention-days: {days}\n"))
+        .unwrap_or_default()
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -619,7 +637,8 @@ fn render_landing_selection(c: &Config, selection: &LandingSelection) -> String 
           path: {directory}
           include-hidden-files: true
           if-no-files-found: error
-"#,
+{retention}"#,
+            retention = artifact_retention(parts.artifact_retention_days),
             upload = c.upload_artifact_action,
             directory = scalar(&format!(
                 "source/{}/origin/platforms/{platform}/",
@@ -883,8 +902,9 @@ fn render_unit<'a>(
           name: {artifact}
           path: {directory}
           if-no-files-found: error
-{hidden_files}"#,
+{retention}{hidden_files}"#,
         upload = c.upload_artifact_action,
+        retention = artifact_retention(job.artifact_retention_days),
         hidden_files = super::artifact_hidden_files(c.include_hidden_files),
         directory = scalar(&job.artifact_directory)
     ));

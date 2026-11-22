@@ -23,6 +23,7 @@
         "build_runner"
       ],
       "artifact_name": "chrono-release-linux-build_runner",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_runner/",
       "needs": [
         "linux_release_frontend"
@@ -50,6 +51,7 @@
         "build_instructions"
       ],
       "artifact_name": "chrono-release-linux-build_instructions",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_instructions/",
       "needs": [
         "linux_release_frontend"
@@ -77,6 +79,7 @@
         "build_judge_ci"
       ],
       "artifact_name": "chrono-release-linux-build_judge_ci",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_ci/",
       "needs": [
         "linux_release_frontend"
@@ -104,6 +107,7 @@
         "build_ci"
       ],
       "artifact_name": "chrono-release-linux-build_ci",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_ci/",
       "needs": [
         "linux_release_frontend"
@@ -131,6 +135,7 @@
         "build_judge_registration"
       ],
       "artifact_name": "chrono-release-linux-build_judge_registration",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_registration/",
       "needs": [
         "linux_release_frontend"
@@ -158,6 +163,7 @@
         "build_judge_filemap"
       ],
       "artifact_name": "chrono-release-linux-build_judge_filemap",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_filemap/",
       "needs": [
         "linux_release_frontend"
@@ -185,6 +191,7 @@
         "build_judge_routes"
       ],
       "artifact_name": "chrono-release-linux-build_judge_routes",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_routes/",
       "needs": [
         "linux_release_frontend"
@@ -212,6 +219,7 @@
         "build_judge_projects"
       ],
       "artifact_name": "chrono-release-linux-build_judge_projects",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_projects/",
       "needs": [
         "linux_release_frontend"
@@ -239,6 +247,7 @@
         "build_judge_cost"
       ],
       "artifact_name": "chrono-release-linux-build_judge_cost",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_cost/",
       "needs": [
         "linux_release_frontend"
@@ -266,6 +275,7 @@
         "build_judge_mixed"
       ],
       "artifact_name": "chrono-release-linux-build_judge_mixed",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_mixed/",
       "needs": [
         "linux_release_frontend"
@@ -293,6 +303,7 @@
         "build_judge_workflow"
       ],
       "artifact_name": "chrono-release-linux-build_judge_workflow",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_workflow/",
       "needs": [
         "linux_release_frontend"
@@ -320,6 +331,7 @@
         "build_inputs"
       ],
       "artifact_name": "chrono-release-linux-build_inputs",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_inputs/",
       "needs": [
         "linux_release_frontend"
@@ -347,6 +359,7 @@
         "build_distribution"
       ],
       "artifact_name": "chrono-release-linux-build_distribution",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_distribution/",
       "needs": [
         "linux_release_frontend"
@@ -374,6 +387,7 @@
         "build_worktree"
       ],
       "artifact_name": "chrono-release-linux-build_worktree",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_worktree/",
       "needs": [
         "linux_release_frontend"
@@ -401,6 +415,7 @@
         "verify_distribution_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_distribution_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/",
       "needs": [
         "linux_release_frontend"
@@ -428,6 +443,7 @@
         "verify_worktree_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_worktree_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_worktree_tests/",
       "needs": [
         "linux_release_frontend",
@@ -460,6 +476,7 @@
         "verify_runner_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_runner_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_runner_tests/",
       "needs": [
         "linux_release_frontend"
@@ -487,6 +504,7 @@
         "verify_inputs_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_inputs_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/",
       "needs": [
         "linux_release_frontend"
@@ -514,6 +532,7 @@
         "verify_ci_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_ci_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_ci_tests/",
       "needs": [
         "linux_release_frontend"
@@ -541,6 +560,7 @@
         "verify_judge_ci_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_judge_ci_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/",
       "needs": [
         "linux_release_frontend"
@@ -568,6 +588,7 @@
         "verify_judge_registration_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_judge_registration_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_registration_tests/",
       "needs": [
         "linux_release_frontend"
@@ -595,6 +616,7 @@
         "verify_judge_projects_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_judge_projects_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/",
       "needs": [
         "linux_release_frontend"
@@ -622,6 +644,7 @@
         "verify_judge_workflow_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_judge_workflow_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_workflow_tests/",
       "needs": [
         "linux_release_frontend",
@@ -654,6 +677,7 @@
         "verify_instructions_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_instructions_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_instructions_tests/",
       "needs": [
         "linux_release_frontend"
@@ -681,6 +705,7 @@
         "verify_judge_filemap_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_judge_filemap_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/",
       "needs": [
         "linux_release_frontend"
@@ -708,6 +733,7 @@
         "verify_judge_routes_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_judge_routes_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_routes_tests/",
       "needs": [
         "linux_release_frontend"
@@ -735,6 +761,7 @@
         "verify_judge_cost_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_judge_cost_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/",
       "needs": [
         "linux_release_frontend"
@@ -762,6 +789,7 @@
         "verify_judge_mixed_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_judge_mixed_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/",
       "needs": [
         "linux_release_frontend"
@@ -1002,6 +1030,7 @@
         "build_runner"
       ],
       "artifact_name": "chrono-release-macos-build_runner",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_runner/",
       "needs": [
         "macos_release_frontend"
@@ -1029,6 +1058,7 @@
         "build_instructions"
       ],
       "artifact_name": "chrono-release-macos-build_instructions",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_instructions/",
       "needs": [
         "macos_release_frontend"
@@ -1056,6 +1086,7 @@
         "build_judge_ci"
       ],
       "artifact_name": "chrono-release-macos-build_judge_ci",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_ci/",
       "needs": [
         "macos_release_frontend"
@@ -1083,6 +1114,7 @@
         "build_ci"
       ],
       "artifact_name": "chrono-release-macos-build_ci",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_ci/",
       "needs": [
         "macos_release_frontend"
@@ -1110,6 +1142,7 @@
         "build_judge_registration"
       ],
       "artifact_name": "chrono-release-macos-build_judge_registration",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_registration/",
       "needs": [
         "macos_release_frontend"
@@ -1137,6 +1170,7 @@
         "build_judge_filemap"
       ],
       "artifact_name": "chrono-release-macos-build_judge_filemap",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_filemap/",
       "needs": [
         "macos_release_frontend"
@@ -1164,6 +1198,7 @@
         "build_judge_routes"
       ],
       "artifact_name": "chrono-release-macos-build_judge_routes",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_routes/",
       "needs": [
         "macos_release_frontend"
@@ -1191,6 +1226,7 @@
         "build_judge_projects"
       ],
       "artifact_name": "chrono-release-macos-build_judge_projects",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_projects/",
       "needs": [
         "macos_release_frontend"
@@ -1218,6 +1254,7 @@
         "build_judge_cost"
       ],
       "artifact_name": "chrono-release-macos-build_judge_cost",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_cost/",
       "needs": [
         "macos_release_frontend"
@@ -1245,6 +1282,7 @@
         "build_judge_mixed"
       ],
       "artifact_name": "chrono-release-macos-build_judge_mixed",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_mixed/",
       "needs": [
         "macos_release_frontend"
@@ -1272,6 +1310,7 @@
         "build_judge_workflow"
       ],
       "artifact_name": "chrono-release-macos-build_judge_workflow",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_judge_workflow/",
       "needs": [
         "macos_release_frontend"
@@ -1299,6 +1338,7 @@
         "build_inputs"
       ],
       "artifact_name": "chrono-release-macos-build_inputs",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_inputs/",
       "needs": [
         "macos_release_frontend"
@@ -1326,6 +1366,7 @@
         "build_distribution"
       ],
       "artifact_name": "chrono-release-macos-build_distribution",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_distribution/",
       "needs": [
         "macos_release_frontend"
@@ -1353,6 +1394,7 @@
         "build_worktree"
       ],
       "artifact_name": "chrono-release-macos-build_worktree",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_worktree/",
       "needs": [
         "macos_release_frontend"
@@ -1380,6 +1422,7 @@
         "verify_distribution_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_distribution_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1407,6 +1450,7 @@
         "verify_worktree_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_worktree_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_worktree_tests/",
       "needs": [
         "macos_release_frontend",
@@ -1439,6 +1483,7 @@
         "verify_runner_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_runner_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_runner_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1466,6 +1511,7 @@
         "verify_inputs_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_inputs_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1493,6 +1539,7 @@
         "verify_ci_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_ci_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_ci_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1520,6 +1567,7 @@
         "verify_judge_ci_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_judge_ci_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1547,6 +1595,7 @@
         "verify_judge_registration_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_judge_registration_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_registration_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1574,6 +1623,7 @@
         "verify_judge_projects_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_judge_projects_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1601,6 +1651,7 @@
         "verify_judge_workflow_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_judge_workflow_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_workflow_tests/",
       "needs": [
         "macos_release_frontend",
@@ -1633,6 +1684,7 @@
         "verify_instructions_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_instructions_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_instructions_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1660,6 +1712,7 @@
         "verify_judge_filemap_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_judge_filemap_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1687,6 +1740,7 @@
         "verify_judge_routes_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_judge_routes_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_routes_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1714,6 +1768,7 @@
         "verify_judge_cost_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_judge_cost_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1741,6 +1796,7 @@
         "verify_judge_mixed_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_judge_mixed_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/",
       "needs": [
         "macos_release_frontend"
@@ -1981,6 +2037,7 @@
         "verify_diagnostics_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_diagnostics_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/",
       "needs": [
         "linux_release_frontend"
@@ -2008,6 +2065,7 @@
         "verify_diagnostics_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_diagnostics_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_diagnostics_tests/",
       "needs": [
         "macos_release_frontend"
@@ -2035,6 +2093,7 @@
         "build_cache"
       ],
       "artifact_name": "chrono-release-linux-build_cache",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_cache/",
       "needs": [
         "linux_release_frontend"
@@ -2062,6 +2121,7 @@
         "verify_cache_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_cache_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_cache_tests/",
       "needs": [
         "linux_release_frontend"
@@ -2089,6 +2149,7 @@
         "build_cache"
       ],
       "artifact_name": "chrono-release-macos-build_cache",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_cache/",
       "needs": [
         "macos_release_frontend"
@@ -2116,6 +2177,7 @@
         "verify_cache_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_cache_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_cache_tests/",
       "needs": [
         "macos_release_frontend"
@@ -2143,6 +2205,7 @@
         "verify_host_bootstrap_native_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_host_bootstrap_native_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_native_tests/",
       "needs": [
         "linux_release_frontend"
@@ -2170,6 +2233,7 @@
         "verify_host_bootstrap_native_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_host_bootstrap_native_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_native_tests/",
       "needs": [
         "macos_release_frontend"
@@ -2197,6 +2261,7 @@
         "verify_host_bootstrap_launcher_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_host_bootstrap_launcher_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests/",
       "needs": [
         "linux_release_frontend"
@@ -2224,6 +2289,7 @@
         "verify_host_bootstrap_launcher_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_host_bootstrap_launcher_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests/",
       "needs": [
         "macos_release_frontend"
@@ -2251,6 +2317,7 @@
         "verify_pr_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_pr_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_pr_tests/",
       "needs": [
         "linux_release_frontend"
@@ -2278,6 +2345,7 @@
         "verify_pr_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_pr_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_pr_tests/",
       "needs": [
         "macos_release_frontend"
@@ -2305,6 +2373,7 @@
         "verify_identifiers_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_identifiers_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_identifiers_tests/",
       "needs": [
         "linux_release_frontend"
@@ -2332,6 +2401,7 @@
         "verify_identifiers_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_identifiers_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_identifiers_tests/",
       "needs": [
         "macos_release_frontend"
@@ -2358,6 +2428,7 @@
         "--export-frontend"
       ],
       "artifact_name": "chrono-release-linux-frontend",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-frontend/",
       "needs": [],
       "downloads": []
@@ -2378,6 +2449,7 @@
         "verify_host_release_native_tests"
       ],
       "artifact_name": "chrono-release-linux-verify_host_release_native_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_host_release_native_tests/",
       "needs": [
         "linux_release_frontend",
@@ -2409,6 +2481,7 @@
         "--export-frontend"
       ],
       "artifact_name": "chrono-release-macos-frontend",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-frontend/",
       "needs": [],
       "downloads": []
@@ -2429,6 +2502,7 @@
         "verify_host_release_native_tests"
       ],
       "artifact_name": "chrono-release-macos-verify_host_release_native_tests",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/verify_host_release_native_tests/",
       "needs": [
         "macos_release_frontend",
@@ -2564,6 +2638,7 @@
         "build_pr"
       ],
       "artifact_name": "chrono-release-linux-build_pr",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_pr/",
       "needs": [
         "linux_release_frontend"
@@ -2591,6 +2666,7 @@
         "build_pr"
       ],
       "artifact_name": "chrono-release-macos-build_pr",
+      "artifact_retention_days": 1,
       "artifact_directory": ".chrono-harness/cache/release-results/build_pr/",
       "needs": [
         "macos_release_frontend"
@@ -3574,6 +3650,7 @@
       "timeout_minutes": 5,
       "context_path": "collection/context.json",
       "components": {
+        "artifact_retention_days": 1,
         "collection": ".chrono-harness/cache/preview-landing",
         "output": ".chrono-harness/cache/preview-selection",
         "command": ["/bin/bash", ".chrono-harness/release/native.sh", ".", ".chrono-harness/ci/bootstrap-release-frontend.json", ".chrono-harness/cache/preview-selection", "--select-preview", ".chrono-harness/release/delivery.json", ".chrono-harness/cache/preview-landing"],
