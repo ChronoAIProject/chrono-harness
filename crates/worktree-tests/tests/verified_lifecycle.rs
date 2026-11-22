@@ -13,6 +13,10 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 
 #[cfg(verus_keep_ghost)]
+#[path = "check_inputs.rs"]
+mod local_input_boundaries;
+
+#[cfg(verus_keep_ghost)]
 #[path = "automatic.rs"]
 mod automatic_boundaries;
 
