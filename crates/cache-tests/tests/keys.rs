@@ -1286,46 +1286,10 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn verus_archive_cache_binds_download_and_checksum_without_compiler_inputs() {
-    let (root, mut config) = host_cache_fixture(&["check.detect"]);
-    let host = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let path = ".chrono-harness/ci/verus-macos-arm64.sha256";
-    fs::copy(host.join(path), root.path().join(path)).unwrap();
-    config["inputs"]["verus.checksum"] = json!({"kind":"file","path":path,"presence":"present"});
-    let first =
-        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"].clone();
-    assert!(first.is_object(), "missing Verus archive cache");
-    assert_eq!(first["restore_keys"], json!([]));
-
-    config["inputs"]["rustc.file"] = json!({"kind":"literal","value":"another compiler"});
-    assert_eq!(
-        first,
-        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]
-    );
-    let projects = root.path().join(".chrono-harness/projects.json");
-    let mut changed: Value = serde_json::from_slice(&fs::read(&projects).unwrap()).unwrap();
-    changed["status"] = json!("unrelated metadata");
-    fs::write(&projects, serde_json::to_vec(&changed).unwrap()).unwrap();
-    assert_eq!(
-        first,
-        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]
-    );
-    changed["scripts"][0]["actions"]["verus-download"]["argv"]
-        .as_array_mut()
-        .unwrap()
-        .push(json!("different download identity"));
-    fs::write(&projects, serde_json::to_vec(&changed).unwrap()).unwrap();
-    assert_ne!(
-        first["key"],
-        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]["key"]
-    );
-
-    fs::copy(host.join(".chrono-harness/projects.json"), &projects).unwrap();
-    fs::write(root.path().join(path), b"different checksum declaration\n").unwrap();
-    assert_ne!(
-        first["key"],
-        plan(root.path(), &config, "check.detect").unwrap()["caches"]["verus.archive"]["key"]
-    );
+fn detector_does_not_cache_the_external_verus_installation() {
+    let (root, config) = host_cache_fixture(&["check.detect"]);
+    let detector = plan(root.path(), &config, "check.detect").unwrap();
+    assert!(detector["caches"].get("verus.archive").is_none());
 }
 
 #[test]

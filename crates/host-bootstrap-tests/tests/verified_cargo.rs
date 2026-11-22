@@ -15,6 +15,10 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
+#[cfg(verus_keep_ghost)]
+#[path = "proved_build.rs"]
+mod build_tests;
+
 verus! {
 
 fn expect(value: bool)

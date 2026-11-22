@@ -866,16 +866,6 @@
       "path": ".chrono-harness/git/macos-27.json",
       "pointer": "/tools/0"
     },
-    "verus.download": {
-      "kind": "json-value",
-      "path": ".chrono-harness/projects.json",
-      "pointer": "/scripts/0/actions/verus-download"
-    },
-    "verus.checksum": {
-      "kind": "file",
-      "path": ".chrono-harness/ci/verus-macos-arm64.sha256",
-      "presence": "present"
-    },
     "worktree-tests.core.producer": {
       "kind": "json-value",
       "path": ".chrono-harness/projects.json",
@@ -1349,10 +1339,6 @@
     "cache-tests.target": {
       "owner": "cache-tests",
       "path": "crates/cache-tests/target/"
-    },
-    "verus.archive": {
-      "owner": "repository",
-      "path": ".chrono-harness/cache/bootstrap-owner-tooling/verus/"
     },
     "pr.target": {
       "owner": "pr",
@@ -6323,23 +6309,6 @@
       ],
       "restore": "compatible",
       "refresh_sources": true
-    },
-    "verus.archive": {
-      "owner": "repository",
-      "producer": "host.verus-download",
-      "consumers": [
-        "check.detect"
-      ],
-      "artifacts": [
-        "verus.archive"
-      ],
-      "compatibility_inputs": [
-        "verus.download"
-      ],
-      "source_inputs": [
-        "verus.checksum"
-      ],
-      "restore": "exact"
     },
     "release.linux.release.pr": {
       "owner": "pr",
