@@ -5236,7 +5236,13 @@ fn import_uses_target_custody_inputs_without_reading_build_actions() {
     let target = h.parent.join("inactive build producer");
     git(
         &h.root,
-        &["worktree", "add", "--detach", target.to_str().unwrap(), "dev"],
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            target.to_str().unwrap(),
+            "dev",
+        ],
     );
     let projects_path = target.join(PROJECTS);
     let mut projects = json(&fs::read(&projects_path).unwrap()).unwrap();
