@@ -16,6 +16,15 @@ use identifiers::equal_text;
 pub mod owner_publication;
 
 #[cfg(verus_keep_ghost)]
+#[path = "main.rs"]
+pub mod cli;
+#[cfg(verus_keep_ghost)]
+#[path = "download.rs"]
+pub mod download;
+#[cfg(verus_keep_ghost)]
+#[path = "proved_build.rs"]
+pub mod proved_build;
+#[cfg(verus_keep_ghost)]
 #[path = "construction.rs"]
 pub mod construction;
 #[cfg(verus_keep_ghost)]

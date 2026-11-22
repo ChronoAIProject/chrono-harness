@@ -1,11 +1,29 @@
 //! 固定归档的本地复用；摘要来自现役声明，网络与进程仍用已有工具。
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// 调用方分别检查声明路径和解析后的物理路径。
+pub fn shared_location_valid(absolute: bool, in_checkout: bool) -> (valid: bool)
+    ensures valid == (absolute && !in_checkout),
+{
+    absolute && !in_checkout
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     bindings::{self, Environment},
     construction::BuildFailure,
     profile, verified_bindings as policy,
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::file_identity;
+#[cfg(not(verus_keep_ghost))]
 use serde::Serialize;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs, io,
     os::unix::process::ExitStatusExt,
@@ -13,12 +31,42 @@ use std::{
 };
 
 #[derive(Debug, Serialize)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Archive {
     pub status: &'static str,
     pub path: String,
     pub sha256: String,
 }
 
+/// 在宿主配方替换 HOME 之前选定共享安装根，并传给后续子进程。
+#[cfg(not(verus_keep_ghost))]
+pub fn inherited_environment() -> Environment {
+    use std::ffi::OsStr;
+    let mut env: Environment = std::env::vars_os().collect();
+    let selected = env
+        .get(OsStr::new("CHRONO_TOOLCHAIN_CACHE"))
+        .filter(|path| !path.is_empty());
+    if selected.is_none() {
+        let cache = env
+            .get(OsStr::new("XDG_CACHE_HOME"))
+            .filter(|path| !path.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| {
+                env.get(OsStr::new("HOME"))
+                    .filter(|path| !path.is_empty())
+                    .map(|home| Path::new(home).join(".cache"))
+            });
+        if let Some(cache) = cache {
+            env.insert(
+                "CHRONO_TOOLCHAIN_CACHE".into(),
+                cache.join("chrono-harness/toolchains").into(),
+            );
+        }
+    }
+    env
+}
+
+#[cfg(not(verus_keep_ghost))]
 pub fn installation(
     root: &Path,
     checksum: &str,
@@ -39,18 +87,19 @@ pub fn installation(
             .get(OsStr::new("CHRONO_TOOLCHAIN_CACHE"))
             .ok_or("missing shared toolchain directory")?,
     );
-    if !storage.is_absolute() || storage.starts_with(root) {
+    if !shared_location_valid(storage.is_absolute(), storage.starts_with(root)) {
         return Err("toolchain directory must be outside the checkout".into());
     }
     fs::create_dir_all(&storage).map_err(|e| e.to_string())?;
     let storage = storage.canonicalize().map_err(|e| e.to_string())?;
-    if storage.starts_with(root) {
+    if !shared_location_valid(storage.is_absolute(), storage.starts_with(root)) {
         return Err("shared toolchain directory resolves inside checkout".into());
     }
     let directory = chrono_harness::no_symlink_parents(&storage, &format!("verus/{digest}"))?;
     Ok((directory, digest.to_owned()))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn prepare(
     root: &Path,
     checksum: &str,
@@ -135,6 +184,7 @@ pub fn prepare(
 }
 
 /// 完成解包后才发布整个目录。相同版本的并发启动共用一份已发布安装。
+#[cfg(not(verus_keep_ghost))]
 pub fn extract(
     root: &Path,
     checksum: &str,
@@ -198,15 +248,9 @@ pub fn extract(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn validate_installation(directory: &Path) -> Result<(), String> {
-    for member in [
-        "cargo-verus",
-        "verus",
-        "rust_verify",
-        "z3",
-        "libvstd.rlib",
-        "vstd.vir",
-    ] {
+    for member in crate::proved_build::toolchain_members() {
         if !chrono_harness::no_symlink_parents(directory, member)?.is_file() {
             return Err(format!("incomplete shared Verus installation: {member}"));
         }

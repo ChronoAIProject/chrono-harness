@@ -1,15 +1,33 @@
 //! 本宿主原生 bootstrap 入口；原操作、两流和所有者阶段均由实际生产者发布。
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// download 和 extract 把宿主放在第二个参数。只接受对应命令的完整参数表。
+pub fn archive_command(argc: usize, download: bool, extract: bool) -> (recognized: bool)
+    ensures recognized == ((argc == 6 && download) || (argc == 4 && extract)),
+{
+    (argc == 6 && download) || (argc == 4 && extract)
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::{
     bindings,
     construction::{BuildFailure, Construction},
     download, lifecycle, owner, profile, proved_build, shared,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::json;
+#[cfg(not(verus_keep_ghost))]
 use std::{path::Path, process::ExitCode};
 
+#[cfg(not(verus_keep_ghost))]
 fn bootstrap(host: &str, config: &str, stage_only: bool) -> Result<(), BuildFailure> {
     let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
-    let environment = std::env::vars_os().collect();
+    let environment = download::inherited_environment();
     let native = bindings::native_platform()?;
     let loaded = profile::Loaded::read(&root, config, &native, &environment)?;
     if stage_only {
@@ -77,6 +95,7 @@ fn bootstrap(host: &str, config: &str, stage_only: bool) -> Result<(), BuildFail
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn run() -> Result<(), BuildFailure> {
     let arguments: Vec<String> = std::env::args_os()
         .skip(1)
@@ -86,7 +105,7 @@ fn run() -> Result<(), BuildFailure> {
                 .map_err(|_| BuildFailure::from("non UTF-8 bootstrap argument"))
         })
         .collect::<Result<_, _>>()?;
-    let environment = std::env::vars_os().collect();
+    let environment = download::inherited_environment();
     let native = bindings::native_platform()?;
     match arguments.as_slice() {
         [command] if command == "--version" => {
@@ -138,6 +157,7 @@ fn run() -> Result<(), BuildFailure> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn execute() -> u8 {
     match run() {
         Ok(()) => 0,
@@ -153,6 +173,7 @@ fn execute() -> u8 {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
     let (host, operation) = match arguments.as_slice() {
@@ -164,6 +185,15 @@ fn main() -> ExitCode {
             if matches!(
                 operation.to_str(),
                 Some("construct-owner-stage" | "compile")
+            ) =>
+        {
+            (Some(host), operation.to_str().unwrap())
+        }
+        [operation, host, ..]
+            if archive_command(
+                arguments.len(),
+                operation.to_str() == Some("download"),
+                operation.to_str() == Some("extract"),
             ) =>
         {
             (Some(host), operation.to_str().unwrap())

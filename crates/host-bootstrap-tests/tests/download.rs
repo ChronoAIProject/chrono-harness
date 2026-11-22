@@ -1,4 +1,38 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+#[cfg(verus_keep_ghost)]
+use super::{policy::download as archive, tar_fixture};
+#[cfg(not(verus_keep_ghost))]
+use chrono_host_bootstrap::download as archive;
+
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_external_absolute_storage_is_eligible() {
+    let valid = archive::shared_location_valid(true, false);
+    let local = archive::shared_location_valid(true, true);
+    let relative = archive::shared_location_valid(false, false);
+    let both = archive::shared_location_valid(false, true);
+    assert(valid && !local && !relative && !both);
+    #[cfg(not(verus_keep_ghost))]
+    assert!(valid && !local && !relative && !both);
+}
+#[cfg(verus_keep_ghost)]
+fn mock_tar_requires_the_registered_extraction_arguments() {
+    let valid = tar_fixture::valid_tar_command(7, true, true);
+    let extra = tar_fixture::valid_tar_command(8, true, true);
+    let missing_root = tar_fixture::valid_tar_command(7, false, true);
+    let options = tar_fixture::valid_tar_command(7, true, false);
+    assert(valid && !extra && !missing_root && !options);
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     os::unix::fs::symlink,
@@ -6,13 +40,20 @@ use std::{
     process::{Command, Output},
 };
 
+#[cfg(not(verus_keep_ghost))]
 const ARCHIVE: &str = "package.zip";
+#[cfg(not(verus_keep_ghost))]
 const CHECKSUM: &str = ".chrono-harness/ci/package.sha256";
+#[cfg(not(verus_keep_ghost))]
 const HEADERS: &str = ".chrono-harness/state/download.headers";
+#[cfg(not(verus_keep_ghost))]
 const TEMPORARIES: &str = ".chrono-harness/cache/bootstrap-owner-tooling/tmp";
+#[cfg(not(verus_keep_ghost))]
 const BODY: &[u8] = b"verified archive\x00\xff\n";
 
+#[cfg(not(verus_keep_ghost))]
 struct Fixture(tempfile::TempDir, tempfile::TempDir);
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Fixture {
     fn drop(&mut self) {
         if std::thread::panicking() {
@@ -21,6 +62,7 @@ impl Drop for Fixture {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Fixture {
     fn new() -> Self {
         let fixture = Self(tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
@@ -82,6 +124,7 @@ impl Fixture {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn concurrent_preparation_publishes_only_verified_archives() {
     let fixture = Fixture::new();
     let (first, second) = std::thread::scope(|scope| {
@@ -105,6 +148,7 @@ fn concurrent_preparation_publishes_only_verified_archives() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn verified_cache_never_starts_the_downloader() {
     let fixture = Fixture::new();
     fs::write(fixture.archive(), BODY).unwrap();
@@ -117,6 +161,7 @@ fn verified_cache_never_starts_the_downloader() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn missing_or_corrupt_archive_is_verified_before_replacement_then_reused() {
     for old in [None, Some(b"partial archive".as_slice())] {
         let fixture = Fixture::new();
@@ -144,6 +189,7 @@ fn missing_or_corrupt_archive_is_verified_before_replacement_then_reused() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn download_failure_keeps_original_exit_headers_and_previous_archive() {
     let fixture = Fixture::new();
     fs::write(fixture.archive(), b"previous archive").unwrap();
@@ -165,6 +211,7 @@ fn download_failure_keeps_original_exit_headers_and_previous_archive() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn wrong_download_content_is_rejected_without_publishing_or_overwriting() {
     for old in [None, Some(b"previous archive".as_slice())] {
         let fixture = Fixture::new();
@@ -181,6 +228,7 @@ fn wrong_download_content_is_rejected_without_publishing_or_overwriting() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn invalid_declarations_and_symlinks_fail_before_download() {
     let hash = chrono_harness::sha256(BODY);
     for checksum in [
@@ -216,6 +264,7 @@ fn invalid_declarations_and_symlinks_fail_before_download() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn two_checkouts_use_one_install_after_an_interrupted_extraction() {
     let first = Fixture::new();
     let second = Fixture::new();

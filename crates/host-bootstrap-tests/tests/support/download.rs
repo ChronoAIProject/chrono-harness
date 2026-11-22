@@ -1,6 +1,22 @@
 //! 下载器外部接口 fixture；不访问网络，原退出和响应头由生产 CLI 消费。
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn valid_tar_command(argc: usize, has_destination: bool, strip_single_root: bool) -> (valid: bool)
+    ensures valid == (argc == 7 && has_destination && strip_single_root),
+{
+    argc == 7 && has_destination && strip_single_root
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use std::{env, fs, process::ExitCode};
 
+#[cfg(not(verus_keep_ghost))]
 fn run() -> Result<u8, String> {
     let args: Vec<String> = env::args().skip(1).collect();
     let selected = |flag| -> Result<&str, String> {
@@ -14,7 +30,12 @@ fn run() -> Result<u8, String> {
     };
     if args.first().is_some_and(|arg| arg == "-xf") {
         let destination = std::path::Path::new(selected("-C")?);
-        if args.len() != 7 || args[4..] != ["--strip-components", "1", "--no-same-owner"] {
+        if !valid_tar_command(
+            args.len(),
+            args.get(2).is_some_and(|arg| arg == "-C"),
+            args.get(4..)
+                .is_some_and(|tail| tail == ["--strip-components", "1", "--no-same-owner"]),
+        ) {
             return Err("unexpected tar arguments".into());
         }
         for member in [
@@ -46,6 +67,7 @@ fn run() -> Result<u8, String> {
     }
     Ok(code)
 }
+#[cfg(not(verus_keep_ghost))]
 fn main() -> ExitCode {
     match run() {
         Ok(code) => ExitCode::from(code),

@@ -22,6 +22,13 @@ mod stage_tests;
 #[path = "original.rs"]
 mod original_tests;
 
+#[cfg(verus_keep_ghost)]
+#[path = "support/download.rs"]
+mod tar_fixture;
+#[cfg(verus_keep_ghost)]
+#[path = "download.rs"]
+mod download_tests;
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]

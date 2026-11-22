@@ -1,13 +1,38 @@
 //! 正式构建消费官方 Cargo-Verus 的原输出、编译器 checksum 和原库字节。
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// 证明编译读取并校验的完整安装成员。下载器验收同一组文件。
+pub fn toolchain_members() -> (files: [&'static str; 6])
+    ensures
+        files[0]@ == "cargo-verus"@,
+        files[1]@ == "verus"@,
+        files[2]@ == "rust_verify"@,
+        files[3]@ == "z3"@,
+        files[4]@ == "libvstd.rlib"@,
+        files[5]@ == "vstd.vir"@,
+{
+    ["cargo-verus", "verus", "rust_verify", "z3", "libvstd.rlib", "vstd.vir"]
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{bindings::Environment, construction::BuildFailure, execution, profile};
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{file_identity, retained_artifacts::retention, verified_verifier as verifier};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
 };
+#[cfg(not(verus_keep_ghost))]
 use verifier::{
     OutputContract,
     cargo::{self, Artifact, BuildTargets, Cargo, Identity, Record, Recovery, TargetIdentity},
@@ -16,6 +41,7 @@ use verifier::{
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Library {
     pub manifest: String,
     pub source: String,
@@ -25,6 +51,7 @@ pub struct Library {
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Binary {
     pub source: String,
     pub target: String,
@@ -34,6 +61,7 @@ pub struct Binary {
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Config {
     pub schema: String,
     pub owner: String,
@@ -51,6 +79,7 @@ pub struct Config {
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Proof {
     schema: String,
     inputs: String,
@@ -63,6 +92,7 @@ struct Proof {
 }
 
 #[derive(Serialize)]
+#[cfg(not(verus_keep_ghost))]
 struct Admission {
     schema: &'static str,
     proof_cache: Identity,
@@ -71,6 +101,7 @@ struct Admission {
     proof_reused: bool,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn bounded(path: &Path) -> Result<Vec<u8>, String> {
     let metadata = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     if !cargo::bounded_original(metadata.file_type().is_file(), metadata.len()) {
@@ -94,6 +125,7 @@ fn bounded(path: &Path) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn identity(path: &Path) -> Result<Identity, String> {
     let (sha256, length) = file_identity(path)?;
     Ok(Identity {
@@ -103,6 +135,7 @@ fn identity(path: &Path) -> Result<Identity, String> {
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn preserve_if_present(source: &Path, destination: &Path) -> Result<(), String> {
     match fs::symlink_metadata(source) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -111,6 +144,7 @@ fn preserve_if_present(source: &Path, destination: &Path) -> Result<(), String> 
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn persist(path: &Path, value: &impl Serialize) -> Result<(), String> {
     let parent = path.parent().ok_or("missing proof parent")?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -120,6 +154,7 @@ fn persist(path: &Path, value: &impl Serialize) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn records(raw: &[u8]) -> Result<Vec<Record>, String> {
     serde_json::Deserializer::from_slice(raw)
         .into_iter::<Record>()
@@ -127,6 +162,7 @@ fn records(raw: &[u8]) -> Result<Vec<Record>, String> {
         .map_err(|e| format!("E_VERUS_BUILD: complete Cargo stdout rejected: {e}"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn selected(artifact: &Artifact, manifest: &Path, source: &Path, name: &str, kind: &str) -> bool {
     cargo::artifact_selected(
         artifact,
@@ -137,6 +173,7 @@ fn selected(artifact: &Artifact, manifest: &Path, source: &Path, name: &str, kin
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn library_paths(
     root: &Path,
     config: &Config,
@@ -165,6 +202,7 @@ fn library_paths(
     ))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn bind_dependency(
     manifest: &Path,
     dependency: &Path,
@@ -212,6 +250,7 @@ fn bind_dependency(
     Ok(raw)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn stream_matches(root: &Path, stream: &execution::Stream, bytes: &[u8]) -> Result<(), String> {
     if !cargo::content_matches(
         &chrono_harness::sha256(bytes),
@@ -226,6 +265,7 @@ fn stream_matches(root: &Path, stream: &execution::Stream, bytes: &[u8]) -> Resu
 }
 
 /// 官方构建进程仍由既有 runner 执行；这里不实现编译器 wrapper。
+#[cfg(not(verus_keep_ghost))]
 pub fn build(
     root: &Path,
     declaration: &str,
@@ -236,6 +276,7 @@ pub fn build(
     build_attempt(root, declaration, inherited, stdout, stderr, true)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn build_attempt(
     root: &Path,
     declaration: &str,
@@ -321,6 +362,7 @@ fn build_attempt(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn run_attempt(
     root: &Path,
     declaration: &str,
@@ -406,14 +448,7 @@ fn run_attempt(
     );
     environment.insert("RUSTC_BOOTSTRAP".into(), "1".into());
     let mut tools = BTreeMap::new();
-    for name in [
-        "cargo-verus",
-        "verus",
-        "rust_verify",
-        "z3",
-        "libvstd.rlib",
-        "vstd.vir",
-    ] {
+    for name in toolchain_members() {
         let file = verus.join(name);
         tools.insert(file.clone(), file_identity(&file)?);
     }
@@ -672,6 +707,7 @@ fn run_attempt(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn validate_prior(
     root: &Path,
     config: &Config,
@@ -741,6 +777,7 @@ fn validate_prior(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn bind_final_binary(
     root: &Path,
     config: &Config,

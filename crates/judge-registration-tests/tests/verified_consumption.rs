@@ -7,6 +7,10 @@ use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[cfg(verus_keep_ghost)]
+#[path = "consumption.rs"]
+mod consumption_tests;
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]

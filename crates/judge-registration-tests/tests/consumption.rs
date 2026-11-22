@@ -1,23 +1,64 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+fn startup_data_cases() -> (cases: [(&'static str, &'static str); 6])
+    ensures
+        cases[0].0@ == "uninstalled"@, cases[0].1@ == "not installed"@,
+        cases[1].0@ == "producer"@, cases[1].1@ == "declared producer operation"@,
+        cases[2].0@ == "consumer"@, cases[2].1@ == "preparation operation"@,
+        cases[3].0@ == "unregistered-consumer"@, cases[3].1@ == "operation"@,
+        cases[4].0@ == "no-preparation"@, cases[4].1@ == "preparation consumer"@,
+        cases[5].0@ == "undeclared"@, cases[5].1@ == "declared producer claim"@,
+{
+    [
+        ("uninstalled", "not installed"),
+        ("producer", "declared producer operation"),
+        ("consumer", "preparation operation"),
+        ("unregistered-consumer", "operation"),
+        ("no-preparation", "preparation consumer"),
+        ("undeclared", "declared producer claim"),
+    ]
+}
+}
+
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_registration::consumption::{self, Endpoint};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::Path,
 };
 
+#[cfg(not(verus_keep_ghost))]
 const UNITS: &str = ".chrono-harness/ci/units.json";
+#[cfg(not(verus_keep_ghost))]
 const STARTUP: &str = ".chrono-harness/ci/bootstrap-shared.json";
+#[cfg(not(verus_keep_ghost))]
 const CORE: &str = ".chrono-harness/ci/bootstrap-core.json";
+#[cfg(not(verus_keep_ghost))]
 const PREPARATION: &str = ".chrono-harness/ci/bootstrap-unit.json";
+#[cfg(not(verus_keep_ghost))]
 const CACHE: &str = ".chrono-harness/ci/bootstrap-cache.json";
+#[cfg(not(verus_keep_ghost))]
 const CHECK: &str = ".chrono-harness/ci/check.json";
+#[cfg(not(verus_keep_ghost))]
 const FM: &str = ".chrono-harness/FILEMAP.json";
+#[cfg(not(verus_keep_ghost))]
 const PROJECTS: &str = ".chrono-harness/projects.json";
+#[cfg(not(verus_keep_ghost))]
 const POLICY: &str = ".chrono-harness/git/macos-27.json";
 
+#[cfg(not(verus_keep_ghost))]
 fn host() -> Endpoint {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let read = |path: &str| -> Value {
@@ -36,9 +77,11 @@ fn host() -> Endpoint {
         unavailable: BTreeMap::new(),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn paths(paths: &[&str]) -> BTreeSet<String> {
     paths.iter().map(|s| s.to_string()).collect()
 }
+#[cfg(not(verus_keep_ghost))]
 fn action<'a>(s: &'a mut Endpoint, op: &str) -> &'a mut Value {
     s.projects
         .as_object_mut()
@@ -52,6 +95,7 @@ fn action<'a>(s: &'a mut Endpoint, op: &str) -> &'a mut Value {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registered_startup_chain_requires_declared_mock_evidence() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -95,6 +139,7 @@ fn registered_startup_chain_requires_declared_mock_evidence() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn startup_commands_preserve_registered_arguments() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -120,18 +165,12 @@ fn startup_commands_preserve_registered_arguments() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn startup_data_requires_installed_output_and_selected_producer_and_consumer() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    for defect in [
-        "uninstalled",
-        "producer",
-        "consumer",
-        "unregistered-consumer",
-        "no-preparation",
-        "undeclared",
-    ] {
+    for (defect, expected) in startup_data_cases() {
         let old = host();
         let mut s = host();
         // 通用数据传输合同使用独立 fixture。现役 Verus 由各 runner 的共享安装提供。
@@ -166,20 +205,12 @@ fn startup_data_requires_installed_output_and_selected_producer_and_consumer() {
         }
         let error = consumption::validate_delta(Some(&old), &s, &paths(&[CHECK]), &BTreeSet::new())
             .unwrap_err();
-        let expected = match defect {
-            "uninstalled" => "not installed",
-            "undeclared" => "declared producer claim",
-            "producer" => "declared producer operation",
-            "consumer" => "preparation operation",
-            "unregistered-consumer" => "operation",
-            "no-preparation" => "preparation consumer",
-            _ => unreachable!(),
-        };
         assert!(error.contains(expected), "{defect}: {error}");
     }
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -285,6 +316,7 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn preparation_requires_registered_invocation_and_early_verification() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -340,6 +372,7 @@ fn preparation_requires_registered_invocation_and_early_verification() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn both_endpoints_select_removed_inputs_and_old_owners_without_global_rejudgment() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -401,6 +434,7 @@ fn both_endpoints_select_removed_inputs_and_old_owners_without_global_rejudgment
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retired_contract_and_unknown_versions_fail_while_legacy_consumers_keep_meaning() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -454,6 +488,7 @@ fn retired_contract_and_unknown_versions_fail_while_legacy_consumers_keep_meanin
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn scoped_adapter_reads_fixed_native_git_endpoints_and_retains_original_failure() {
     if !chrono_git_boundary::isolated_git() {
         return;

@@ -1,13 +1,48 @@
 //! 正式生产者的命令边界验收；外部编译器全部由 Rust mock 提供。
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+#[cfg(verus_keep_ghost)]
+#[path = "../../host-bootstrap/src/proved_build.rs"]
+mod build;
+
+verus! {
+fn fixture_members() -> (members: [&'static str; 6])
+    ensures
+        members[0]@ == "cargo-verus"@, members[1]@ == "verus"@,
+        members[2]@ == "rust_verify"@, members[3]@ == "z3"@,
+        members[4]@ == "libvstd.rlib"@, members[5]@ == "vstd.vir"@,
+{
+    ["cargo-verus", "verus", "rust_verify", "z3", "libvstd.rlib", "vstd.vir"]
+}
+
+#[cfg(verus_keep_ghost)]
+fn fixture_matches_required_installation() {
+    let expected = fixture_members();
+    let actual = build::toolchain_members();
+    assert forall|i: int| 0 <= i < 6 implies actual[i]@ == expected[i]@ by {
+        assert(i == 0 || i == 1 || i == 2 || i == 3 || i == 4 || i == 5);
+    }
+}
+}
+
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod isolated_capability;
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_bootstrap::{bindings::Environment, proved_build};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 struct Fixture {
     _temp: tempfile::TempDir,
     root: PathBuf,
@@ -15,16 +50,19 @@ struct Fixture {
     config: Value,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn write(path: &Path, bytes: &[u8]) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, bytes).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn escape(path: &Path) -> String {
     path.to_str().unwrap().replace(' ', "\\ ")
 }
 
 // 外部 Rust 1.95 接口样本，独立写出多目标、phony 和 checksum 全文。
+#[cfg(not(verus_keep_ghost))]
 fn dependency(path: &Path, outputs: &[PathBuf], inputs: &[PathBuf]) {
     let list = inputs
         .iter()
@@ -49,6 +87,7 @@ fn dependency(path: &Path, outputs: &[PathBuf], inputs: &[PathBuf]) {
     write(path, raw.as_bytes());
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Fixture {
     fn new() -> Self {
         let temp = tempfile::Builder::new()
@@ -76,14 +115,7 @@ impl Fixture {
         );
         write(&root.join(".chrono-harness/projects.json"), &serde_json::to_vec(&json!({"projects":[{"id":"identity","actions":{
             "recover":{"operation":"recover.fixture-proof","tool":"cargo","argv":["clean","--package","identity","--manifest-path","app/Cargo.toml","--target-dir","app/target"]}}}],"scripts":[]})).unwrap());
-        for name in [
-            "cargo-verus",
-            "verus",
-            "rust_verify",
-            "z3",
-            "libvstd.rlib",
-            "vstd.vir",
-        ] {
+        for name in fixture_members() {
             let destination = storage
                 .join("verus")
                 .join(&digest)
@@ -251,6 +283,7 @@ impl Fixture {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cold_and_warm_builds_bind_the_same_proof_and_library_without_a_new_report() {
     let f = Fixture::new();
     f.plan(&f.records(false), 0, json!([]));
@@ -277,6 +310,7 @@ fn cold_and_warm_builds_bind_the_same_proof_and_library_without_a_new_report() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unrelated_cached_outputs_do_not_consume_the_binary_dependency_bound() {
     let f = Fixture::new();
     let deps = f.root.join("app/target/debug/deps");
@@ -297,6 +331,7 @@ fn unrelated_cached_outputs_do_not_consume_the_binary_dependency_bound() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn selected_binary_dependency_candidates_keep_the_original_bound() {
     let f = Fixture::new();
     let deps = f.root.join("app/target/debug/deps");
@@ -311,6 +346,7 @@ fn selected_binary_dependency_candidates_keep_the_original_bound() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unrelated_operation_registration_does_not_invalidate_the_library_proof() {
     let f = Fixture::new();
     f.plan(&f.records(false), 0, json!([]));
@@ -331,6 +367,7 @@ fn unrelated_operation_registration_does_not_invalidate_the_library_proof() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn missing_truncated_unknown_duplicate_or_failed_output_never_publishes_a_proof() {
     for variant in 0..6 {
         let f = Fixture::new();
@@ -365,6 +402,7 @@ fn missing_truncated_unknown_duplicate_or_failed_output_never_publishes_a_proof(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn source_library_and_final_link_drift_each_reject_independently() {
     for path in [
         "library/src/lib.rs",
@@ -384,6 +422,7 @@ fn source_library_and_final_link_drift_each_reject_independently() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_or_corrupt_retained_proof_rebuilds_through_the_registered_owner() {
     for retained in [None, Some(b"{invalid}".as_slice())] {
         let f = Fixture::new();
@@ -402,6 +441,7 @@ fn absent_or_corrupt_retained_proof_rebuilds_through_the_registered_owner() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_or_ineffective_recovery_preserves_the_failure_and_never_loops() {
     for (exit, remains_fresh) in [(9, false), (0, true)] {
         let f = Fixture::new();
@@ -416,6 +456,7 @@ fn failed_or_ineffective_recovery_preserves_the_failure_and_never_loops() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retained_recovery_originals_publish_a_consumer_that_can_be_released() {
     if !isolated_capability::isolated_capability_test(
         "retained_recovery_originals_publish_a_consumer_that_can_be_released",
@@ -531,6 +572,7 @@ fn retained_recovery_originals_publish_a_consumer_that_can_be_released() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn missing_or_corrupt_fresh_dependency_metadata_recovers_once() {
     for corrupt in [false, true] {
         let f = Fixture::new();
@@ -574,6 +616,7 @@ fn missing_or_corrupt_fresh_dependency_metadata_recovers_once() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn an_original_that_cannot_be_retained_stops_before_cache_cleanup() {
     for path in [
         "app/target/.chrono-verus-proof.json",
@@ -590,6 +633,7 @@ fn an_original_that_cannot_be_retained_stops_before_cache_cleanup() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn invalid_original_records_cannot_trigger_cache_recovery() {
     for variant in 0..3 {
         let f = Fixture::new();
