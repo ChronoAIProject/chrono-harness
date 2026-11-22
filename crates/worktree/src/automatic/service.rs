@@ -878,6 +878,33 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
     }
 }
 
+/// Inspect the OS-owned queue without taking a hint away from a competing
+/// executor or a replacement process. Only a real event may wait for the lease.
+#[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
+fn event_pending(socket: &UnixDatagram) -> Result<bool, String> {
+    let mut byte = 0u8;
+    loop {
+        let count = unsafe {
+            libc::recv(
+                socket.as_raw_fd(),
+                (&mut byte as *mut u8).cast(),
+                1,
+                libc::MSG_PEEK | libc::MSG_DONTWAIT,
+            )
+        };
+        if count >= 0 {
+            return Ok(true);
+        }
+        let error = std::io::Error::last_os_error();
+        match error.kind() {
+            std::io::ErrorKind::Interrupted => continue,
+            std::io::ErrorKind::WouldBlock => return Ok(false),
+            _ => return Err(error.to_string()),
+        }
+    }
+}
+
 #[cfg(unix)]
 #[cfg(not(verus_keep_ghost))]
 fn run_service(
@@ -889,12 +916,26 @@ fn run_service(
     let (policy, _) = signal::adopted(&root)?.ok_or("maintenance service policy is not adopted")?;
     let socket = activate()?;
     validate_activation(&socket, &policy.socket_path(&root)?, named_activation)?;
+    if event_pending(&socket)? {
+        run_queued_events(root, config_path, &policy, &socket)?;
+    }
+    Ok(value!({"status":"maintenance-idle-exit","owned_work_joined":true}))
+}
+
+#[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
+fn run_queued_events(
+    root: &Path,
+    config_path: &str,
+    policy: &ServicePolicy,
+    socket: &UnixDatagram,
+) -> Result<(), String> {
     // Only the activated worker waits. Leave hints queued while an explicit
     // round owns the lease, including if this process is interrupted waiting.
     let path = singleton_path(root, &policy.state_directory)?;
     observe_boundary("service-before-lease", &path);
     let executor = Lease::exclusive_blocking(&path)?;
-    serve(&socket, || {
+    serve(socket, || {
         let report = round(root, config_path, "event", Some(&executor), None)?;
         // Each round already has its own retained original. Do not accumulate reports.
         eprintln!(
@@ -911,8 +952,7 @@ fn run_service(
             ));
         }
         Ok(())
-    })?;
-    Ok(value!({"status":"maintenance-idle-exit","owned_work_joined":true}))
+    })
 }
 
 /// launchd may forward a named socket from a private address. Its returned

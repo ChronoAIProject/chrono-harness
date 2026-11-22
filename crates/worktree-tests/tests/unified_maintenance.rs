@@ -596,6 +596,30 @@ fn empty_activation_exits_and_a_later_event_survives_an_interrupted_round() {
     assert_eq!(recovered, 1);
 }
 
+#[test]
+#[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
+fn empty_service_activation_never_opens_the_executor_lease() {
+    let directory = tempfile::tempdir_in("/tmp").unwrap();
+    let root = fs::canonicalize(directory.path()).unwrap();
+    let state = root.join(".chrono-harness/state");
+    fs::create_dir_all(&state).unwrap();
+    let policy = chrono_harness::maintenance_signal::Policy {
+        schema: "chrono-unified-maintenance/v2".into(),
+        state_directory: ".chrono-harness/state/owner/".into(),
+        socket: ".chrono-harness/state/s".into(),
+    };
+    fs::write(
+        root.join(chrono_harness::maintenance_signal::POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let os = UnixDatagram::bind(state.join("s")).unwrap();
+    let report = chrono_worktree::run_maintenance_service_socket(&root, POLICY, os).unwrap();
+    assert_eq!(report["status"], "maintenance-idle-exit");
+    assert!(!state.join("owner").exists());
+}
+
 // Unix socket path limits are fixed OS inputs. Use a short private fixture
 // path instead of changing any production limits or following a root alias.
 #[cfg(unix)]
