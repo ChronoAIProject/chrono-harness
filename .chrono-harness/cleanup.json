@@ -31,6 +31,10 @@
       "disposition": "evidence-retain"
     },
     {
+      "path": ".chrono-harness/logs/",
+      "disposition": "finish-dispose"
+    },
+    {
       "path": "crates/runner/target/",
       "disposition": "finish-dispose"
     },

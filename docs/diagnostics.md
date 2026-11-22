@@ -16,13 +16,13 @@
 
 ## 日志和上下文
 
-本仓通过 `.chrono-harness/logging.json` 采用统一文件日志。已接入的 Rust 命令入口在业务启动前初始化 logger，记录 `cli.started` 和 `cli.finished`，包含实际生产者、PID、操作、宿主路径和返回码。info 记录正常活动，失败返回用 error。运行日志位于 `.chrono-harness/state/logs/runtime.jsonl`；直接查看可用：
+本仓通过 `.chrono-harness/logging.json` 采用统一文件日志。已接入的 Rust 命令入口在业务启动前初始化 logger，记录 `cli.started` 和 `cli.finished`，包含实际生产者、PID、操作、宿主路径和返回码。info 记录正常活动，失败返回用 error。运行日志位于 `.chrono-harness/logs/runtime.jsonl`；直接查看可用：
 
 ```sh
-tail -F .chrono-harness/state/logs/runtime.jsonl
+tail -F .chrono-harness/logs/runtime.jsonl
 ```
 
-本仓的 `.chrono-harness/logging.json` 将 `keep_seconds` 设为 86400 秒。采用这份配置的检出需要兼容的写入程序和维护程序。每份新日志的首行是 `chrono-runtime-log-generation/v1`，
+本仓的 `.chrono-harness/logging.json` 将 `keep_seconds` 设为 86400 秒。已有安装先在原日志配置下部署支持新目录的写入程序和维护程序（提交 `fc0da90c`），再切换日志目录。旧程序读取新路径会以 `E_LOG_CONFIG` 退出。切换前让维护程序按旧配置清完过期日志，有长期用途的记录在到期前转存。每份新日志的首行是 `chrono-runtime-log-generation/v1`，
 记录该份日志的 Unix 到期秒数。诊断事件自第二行开始。追加、容量轮转和政策改动均沿用
 原文件的期限。创建满 24 小时后，该代日志可由写入器或维护程序清理。
 
@@ -34,7 +34,7 @@ tail -F .chrono-harness/state/logs/runtime.jsonl
 
 当前每份上限 10485760 字节（10 MiB），共保留 5 份，包含当前文件及 `runtime.1.jsonl` 至 `runtime.4.jsonl`。越接近 1 越新。下一条完整记录将超过上限时先轮换，删除最旧份。正文最多 50 MiB，另有一个空的 `runtime.lock`；不压缩、不按调用创建新文件、不启动清理线程或定时器。`max_files` 必须为 1 至 64，`max_bytes` 必须为 1 至 67108864，`level` 支持 trace、debug、info、warn、error。`stderr: false` 使普通入口的新增日志只写文件；已有业务输出仍走原通道。
 
-`chrono-diagnostics::runtime` 负责配置和入口，`rolling::RollingFile` 负责受限文件写入；已有 `Logger` 继续负责记录和格式。使用 Rust 标准库文件锁和文件操作，无新增外部依赖。已有 tracing 层不提供大小与份数轮换，因此在它的 `Write` 边界补齐文件目的。每次写入持有同一个日志家族的文件锁，在锁内核大小、轮换并重新打开当前文件；各进程不会持有轮换前的旧日志句柄。初始化只核登记的 64 个有限保留位置，不扫描其他 state 文件；降低份数后回收超出的日志成员。
+`chrono-diagnostics::runtime` 负责配置和入口，`rolling::RollingFile` 负责受限文件写入；已有 `Logger` 继续负责记录和格式。使用 Rust 标准库文件锁和文件操作，无新增外部依赖。已有 tracing 层不提供大小与份数轮换，因此在它的 `Write` 边界补齐文件目的。每次写入持有同一个日志家族的文件锁，在锁内核大小、轮换并重新打开当前文件；各进程不会持有轮换前的旧日志句柄。初始化只核登记的 64 个有限保留位置，不扫描其他目录；降低份数后回收超出的日志成员。
 
 日志目录专用于当前家族。目录符号链接、成员符号链接或非普通文件会被拒绝；无关文件保持原状。单条记录超限不截断，日志失败由 `finish()` 保留，入口向 stderr 尝试发布 `runtime.logging_failed` 及原生原因／相关错误。初始化失败阻止业务启动；运行中失败保留原业务输出和返回码，入口最终退出 2。应急 stderr 也不可用时，只能保留失败退出，不能声称已经写下完整记录。文件关闭不代表 fsync；突然终止、断电和任意外部修改的完整恢复不在此保证内。
 
