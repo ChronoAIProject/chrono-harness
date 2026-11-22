@@ -13,18 +13,6 @@ use vstd::vpanic as panic;
 verus! {
 fn expect(actual: bool) requires actual { if !actual { panic!(); } }
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn maintenance_pending_work_wins_every_idle_boundary() {
-    expect(!policy::maintenance_idle_exit(false, false, false));
-    expect(policy::maintenance_idle_exit(false, false, true));
-    expect(!policy::maintenance_idle_exit(false, true, false));
-    expect(!policy::maintenance_idle_exit(false, true, true));
-    expect(!policy::maintenance_idle_exit(true, false, false));
-    expect(!policy::maintenance_idle_exit(true, false, true));
-    expect(!policy::maintenance_idle_exit(true, true, false));
-    expect(!policy::maintenance_idle_exit(true, true, true));
-}
-
-#[cfg_attr(not(verus_keep_ghost), test)]
 fn maintenance_keeps_coordinator_and_invoking_roots_in_order() {
     let roots = policy::maintenance_exclusions(17u64, u64::MAX);
     expect(roots.len() == 2);
@@ -568,18 +556,6 @@ fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
     drop(holders);
 }
 
-#[cfg(unix)]
-#[cfg(not(verus_keep_ghost))]
-fn policy(idle: Option<u64>, timer: u64) -> chrono_harness::maintenance_signal::Policy {
-    chrono_harness::maintenance_signal::Policy {
-        schema: "chrono-unified-maintenance/v1".into(),
-        state_directory: ".chrono-harness/state/maintenance/".into(),
-        socket: ".chrono-harness/state/maintenance/wake.sock".into(),
-        idle_seconds: idle,
-        timer_seconds: timer,
-    }
-}
-
 #[test]
 #[cfg(unix)]
 #[cfg(not(verus_keep_ghost))]
@@ -587,100 +563,37 @@ fn merged_events_and_new_events_during_a_round_are_observed_without_empty_retry(
     let (executor, sender) = UnixDatagram::pair().unwrap();
     sender.send(b"first").unwrap();
     sender.send(b"duplicate").unwrap();
-    let mut rounds = Vec::new();
-    chrono_worktree::serve_maintenance_socket(
-        &executor,
-        &policy(Some(1), 3600),
-        |trigger, missed| {
-            rounds.push((trigger.to_owned(), missed));
-            if rounds.len() == 1 {
-                sender.send(b"new-generation-during-round").unwrap();
-            }
-            Ok(())
-        },
-    )
+    let mut rounds = 0;
+    chrono_worktree::serve_maintenance_socket(&executor, || {
+        rounds += 1;
+        if rounds == 1 {
+            sender.send(b"new-generation-during-round").unwrap();
+        }
+        Ok(())
+    })
     .unwrap();
-    assert_eq!(rounds, vec![("event".into(), 0), ("event".into(), 0)]);
+    assert_eq!(rounds, 2);
 }
 
 #[test]
 #[cfg(unix)]
 #[cfg(not(verus_keep_ghost))]
-fn resident_service_handles_timer_and_preserves_original_round_failure() {
-    let (executor, _sender) = UnixDatagram::pair().unwrap();
-    let mut rounds = Vec::new();
-    let result = chrono_worktree::serve_maintenance_socket(
-        &executor,
-        &policy(None, 1),
-        |trigger, missed| {
-            rounds.push((trigger.to_owned(), missed));
-            if trigger == "timer" {
-                return Err("original timer IO failure".into());
-            }
-            Ok(())
-        },
-    );
-    assert_eq!(result.unwrap_err(), "original timer IO failure");
-    assert_eq!(
-        rounds,
-        vec![("os-activation".into(), 0), ("timer".into(), 0)]
-    );
-}
-
-#[test]
-#[cfg(unix)]
-#[cfg(not(verus_keep_ghost))]
-fn long_rounds_do_not_hide_missed_resident_timer_opportunities() {
-    let (executor, _sender) = UnixDatagram::pair().unwrap();
-    let (_io_owner, unfinished_io) = mpsc::channel::<()>();
-    let mut timers = Vec::new();
-    let result = chrono_worktree::serve_maintenance_socket(
-        &executor,
-        &policy(None, 1),
-        |trigger, missed| {
-            if trigger == "timer" {
-                timers.push(missed);
-                if timers.len() == 1 {
-                    assert_eq!(
-                        unfinished_io.recv_timeout(Duration::from_millis(2100)),
-                        Err(mpsc::RecvTimeoutError::Timeout)
-                    );
-                } else {
-                    return Err("joined observation finished".into());
-                }
-            }
-            Ok(())
-        },
-    );
-    assert_eq!(result.unwrap_err(), "joined observation finished");
-    assert_eq!(timers.len(), 2);
-    assert!(
-        timers[1] >= 1,
-        "the original cadence must expose missed opportunities"
-    );
-}
-
-#[test]
-#[cfg(unix)]
-#[cfg(not(verus_keep_ghost))]
-fn idle_exit_leaves_os_owned_socket_usable_for_later_activation() {
+fn empty_activation_exits_and_a_later_event_survives_an_interrupted_round() {
     let (executor, sender) = UnixDatagram::pair().unwrap();
-    let mut first = Vec::new();
-    chrono_worktree::serve_maintenance_socket(&executor, &policy(Some(1), 3600), |trigger, _| {
-        first.push(trigger.to_owned());
+    chrono_worktree::serve_maintenance_socket(&executor, || panic!("empty round")).unwrap();
+    sender.send(b"first").unwrap();
+    let failure = chrono_worktree::serve_maintenance_socket(&executor, || {
+        sender.send(b"new-work").unwrap();
+        Err("original IO failure".into())
+    });
+    assert_eq!(failure.unwrap_err(), "original IO failure");
+    let mut recovered = 0;
+    chrono_worktree::serve_maintenance_socket(&executor, || {
+        recovered += 1;
         Ok(())
     })
     .unwrap();
-    sender.send(b"event-after-exit").unwrap();
-    let mut later = Vec::new();
-    chrono_worktree::serve_maintenance_socket(&executor, &policy(Some(1), 3600), |trigger, _| {
-        later.push(trigger.to_owned());
-        Ok(())
-    })
-    .unwrap();
-    assert_eq!(first, ["os-activation"]);
-    assert_eq!(later, ["event"]);
-    // Product socket custody only. Actual launchd/systemd activation is a host obligation.
+    assert_eq!(recovered, 1);
 }
 
 // Unix socket path limits are fixed OS inputs. Use a short private fixture
@@ -702,11 +615,9 @@ fn socket_host(mode: &str) -> Host {
 #[cfg(not(verus_keep_ghost))]
 fn adopt_activation(h: &Host) -> std::path::PathBuf {
     let policy = chrono_harness::maintenance_signal::Policy {
-        schema: "chrono-unified-maintenance/v1".into(),
+        schema: "chrono-unified-maintenance/v2".into(),
         state_directory: ".chrono-harness/state/automatic-cleanup/".into(),
         socket: ".chrono-harness/state/s".into(),
-        idle_seconds: Some(1),
-        timer_seconds: 3600,
     };
     let path = chrono_harness::maintenance_signal::POLICY_PATH;
     fs::write(h.root.join(path), serde_json::to_vec(&policy).unwrap()).unwrap();
@@ -775,19 +686,20 @@ fn linked_business_and_its_nested_runner_send_retention_hints_to_the_coordinator
 #[test]
 #[cfg(unix)]
 #[cfg(not(verus_keep_ghost))]
-fn explicit_competitor_requests_the_resident_executor_without_a_parallel_round() {
+fn explicit_competitor_requests_the_active_executor_without_a_parallel_round() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
     let h = socket_host("noop");
     let path = adopt_activation(&h);
-    let os = UnixDatagram::bind(path).unwrap();
+    let os = UnixDatagram::bind(&path).unwrap();
     os.set_nonblocking(true).unwrap();
     let target = h.parent.join("singleton-disposition");
     assert_eq!(h.invoke("feature", "singleton-disposition", &target).0, 0);
     assert_eq!(h.auto("finish", &["--path", target.to_str().unwrap()]).0, 0);
     let mut bytes = [0; 64];
     while os.recv(&mut bytes).is_ok() {} // Drain this finite setup batch before the tested round.
+    chrono_harness::maintenance_signal::send(&path, b"first-round").unwrap();
     let root = h.root.clone();
     let inherited_socket = os.try_clone().unwrap();
     let (entered, ready) = mpsc::sync_channel(0);
@@ -859,7 +771,7 @@ fn explicit_competitor_requests_the_resident_executor_without_a_parallel_round()
 #[test]
 #[cfg(unix)]
 #[cfg(not(verus_keep_ghost))]
-fn activated_service_drains_busy_hints_without_resignalling_and_recovers_on_later_event() {
+fn activated_service_observes_work_after_the_explicit_owner_releases_the_lease() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
@@ -883,37 +795,36 @@ fn activated_service_drains_busy_hints_without_resignalling_and_recovers_on_late
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect();
-    let busy =
-        chrono_worktree::run_maintenance_service_socket(&h.root, POLICY, os.try_clone().unwrap())
-            .unwrap();
-    let mut bytes = [0; 64];
-    let unread = os.recv(&mut bytes);
+    let root = h.root.clone();
+    let inherited_socket = os.try_clone().unwrap();
+    let (entering, ready) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        chrono_worktree::with_maintenance_observer(
+            move |kind, _| {
+                if kind == "service-before-lease" {
+                    entering.send(()).unwrap();
+                }
+            },
+            || chrono_worktree::run_maintenance_service_socket(&root, POLICY, inherited_socket),
+        )
+    });
+    let entered = ready.recv_timeout(Duration::from_secs(5));
+    let retained = target.join("output λ/data").exists();
+    let still_exclusive = explicit.stable();
     let after: std::collections::BTreeSet<_> = fs::read_dir(&report_directory)
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect();
-    assert_eq!(busy["status"], "maintenance-idle-exit", "{busy}");
-    assert_eq!(busy["owned_work_joined"], true);
-    assert_eq!(
-        unread.unwrap_err().kind(),
-        std::io::ErrorKind::WouldBlock,
-        "a busy activation must consume existing hints without creating its own"
-    );
-    assert_eq!(before, after, "a competing service must not start a round");
-    assert!(
-        target.join("output λ/data").exists(),
-        "the current executor still excludes disposal"
-    );
-    explicit.stable().unwrap();
     drop(explicit);
-    chrono_harness::maintenance_signal::send(&path, b"later-work").unwrap();
-    let recovered =
-        chrono_worktree::run_maintenance_service_socket(&h.root, POLICY, os.try_clone().unwrap())
-            .unwrap();
+    let recovered = worker.join().unwrap().unwrap();
+    entered.unwrap();
+    still_exclusive.unwrap();
+    assert_eq!(before, after);
+    assert!(retained, "the explicit executor excludes disposal");
     assert_eq!(recovered["status"], "maintenance-idle-exit");
     assert!(
         !target.join("output λ/data").exists(),
-        "later event must recover authoritative pending work"
+        "queued event must recover pending work without another wake"
     );
     let rounds: Vec<Value> = fs::read_dir(&report_directory)
         .unwrap()

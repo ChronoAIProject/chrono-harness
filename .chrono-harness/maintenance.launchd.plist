@@ -25,10 +25,6 @@
             <integer>384</integer>
         </dict>
     </dict>
-    <key>StartInterval</key>
-    <integer>3600</integer>
-    <key>RunAtLoad</key>
-    <true/>
     <key>ProcessType</key>
     <string>Background</string>
     <key>LowPriorityIO</key>

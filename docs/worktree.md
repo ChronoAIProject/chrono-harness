@@ -494,7 +494,7 @@ cleanup 把明确生成目录处置与有限时 Git 检出移除分开。删任�
 
 ## 按需采用自动生命周期清理
 
-源码在原 v1／v2 工作树配置增加 `automatic_cleanup`，值为 `.chrono-harness/` 下已跟踪、FILEMAP 登记的政策路径。省略仍走明确维护。产品提供每个物理协调者的统一维护进程，宿主通过下文登记的 OS socket 激活和定时监督采用；不扫描兄弟目录或推断语言。主宿主调用登记 `.chrono-harness/bin/chrono-worktree`，使用新配置前先部署兼容候选工具。
+源码在原 v1／v2 工作树配置增加 `automatic_cleanup`，值为 `.chrono-harness/` 下已跟踪、FILEMAP 登记的政策路径。省略仍走明确维护。产品提供每个物理协调者的统一维护进程，宿主通过下文登记的 OS socket 激活采用；不扫描兄弟目录或推断语言。主宿主调用登记 `.chrono-harness/bin/chrono-worktree`，使用新配置前先部署兼容候选工具。
 
 本仓选 `.chrono-harness/cleanup.json`，其 v2 保留这些 v1 字段：
 
@@ -538,11 +538,11 @@ chrono-worktree migrate --path /exact/enrolled-worktree
 
 采用仅更新当前绑定和一次缓存代际，不切换分支、不写 index／源码／ref，也不声明任务完成或清理资格。只换分支不追加政策迁移历史，重复采用不增加代际；政策同时变化时沿现有政策回执保留旧新输入。升级前须排除旧所有者和全部实际使用方，正式部署理解 `checkout_branch` 的工具后再采用，不能让旧二进制读取已采用的新状态。创建／续接新任务仍由调用方保证最新 dev 和原检查义务；完整语义读写范围、index／ref 冲突协调和分项交接尚未实现。
 
-### 本宿主的持续滚动维护
+### 本宿主的事件驱动维护
 
 本机磁盘上的多个工作树会不断产生编译缓存、检查报告和测试现场。只在调用方记得执行
 `finish` 时清理，不能及时处理已释放内容。因此，本宿主用 macOS 原生 `launchd`
-每 3600 秒在进程缺席时启动 `chrono-worktree maintenance-service`，登录时也启动；OS 持有 `Maintenance` datagram socket，缺席时到达的事件仍可启动同一服务。服务运行时通过原生阻塞等待处理事件和 3600 秒定时，默认空闲 300 秒退出；`maintenance.json` 的 `idle_seconds:null` 选择常驻。模板唯一来源是
+持有 `Maintenance` datagram socket。事件到达时，launchd 启动 `chrono-worktree maintenance-service`。服务取得本协调者的独占租约，处理积压事件并在队列清空后退出。模板唯一来源是
 [maintenance.launchd.plist](../.chrono-harness/maintenance.launchd.plist)，由 repository 所有者维护，
 FILEMAP 将其登记为宿主数据；同一执行者复用原维护轮次、生产者和保留所有者；不另建清理账本。
 
@@ -550,7 +550,7 @@ FILEMAP 将其登记为宿主数据；同一执行者复用原维护轮次、生
 | --- | --- |
 | 输入和使用方 | 模板、物理 Git main 的绝对路径、明确选择的兼容程序绝对路径及已提交政策；当前用户的 launchd 消费实例化后的 plist |
 | 正式维护入口 | 模板调用所选 `chrono-worktree maintenance-service --host-root MAIN`；只处理该协调者声明的登记和生产者 |
-| 触发和并发 | 登录／加载、OS socket 事件及每 3600 秒；原生 singleton 租约使显式维护、服务和定时只产生一个实际执行者。普通业务不取得此租约。休眠或正在运行会推迟维护，不承诺 3600 秒内清完 |
+| 触发和并发 | OS socket 事件或显式维护。服务在内核中等待当前执行者释放租约，普通业务只作非阻塞交接。到期对象在下一次维护时核验。 |
 | 回收条件 | 继续使用各目标自己的年龄、产物时机和有限保留政策；活租约、未知使用方、源码、未保全提交及必要原件不因调度而释放 |
 | 输出和失败 | 原 stdout／stderr／退出码及逐项回执由现有生命周期报告保留；launchd 的退出码不是逐项清理结果。控制台流丢到 `/dev/null`，不增加无限增长的日志副本 |
 | 资源与成本 | 后台、低优先级 IO、nice 10；一轮的工作树遍历和实际回收成本仍由原维护入口承担，总成本未知。报告内部的单轮预算不等于整个 maintain 已有时间上限 |
@@ -594,7 +594,7 @@ launchctl print "gui/$maintenance_uid/org.chrono-harness.maintenance"
 数组元素先删除、再在同一位置插入；macOS 的 `plutil -replace` 对数组下标会插入新元素，
 不能用来替换这里的两个占位值。每一步失败就停止并保留实际结果，不继续后续步骤。
 模板通过 `plutil -lint`，只证明 plist
-可解析；实际采用还须核 `launchctl print` 的程序、参数、socket 地址、间隔与运行身份，并收取由调度
+可解析；实际采用还须核 `launchctl print` 的程序、参数、socket 地址、运行身份及定时触发器已移除，并收取由调度
 实际启动的维护报告。读取该报告的 `drain`、`cleanup_failures`、`producer_drains` 和
 `output_retention`，分别核对已删除路径、仍受保护内容及未完成工作。源模板不证明任务
 已经加载；进程退出 0 也不能代替逐项效果核验。原失败仍由原所有者恢复，不按失败自动
@@ -891,7 +891,7 @@ enrollment 所有者，存为单个 `adopted_policy`，不把整个迁移报告�
 确已缺失时记录 `declaration-unavailable` 和未尝试动作；存在但不可读、损坏或被替换的
 声明仍走原失败路径。该观察不授予删除权限，也不把非原子库存称为完整剩余量。
 上述行为仍须通过候选检查、部署和真实到期验收；不证明全链回收。
-这项修复只解除政策迁移链的运行时引用；birth、其他原件、登记本身、真实迁移、定时采用
+这项修复只解除政策迁移链的运行时引用；birth、其他原件、登记本身、真实迁移、事件服务采用
 与全链进度仍有各自义务。旧链损坏回归显式建立尚未转换的登记，不把历史副本当成
 新路径的运行权威；当前绑定回归直接破坏其真实输入。实际结果由正式检查原件负责，
 IO、构建和保留的净成本未知。
@@ -930,7 +930,7 @@ enrollment 的临时原件集合只消费普通清理的最后一次尝试和仍
 失去全部根后沿正式维护入口回收正文和元数据。候选同源证明只覆盖上述选择谓词；行为回归
 核匹配锁恢复、当前原件损坏拒绝、已交接祖先退出、独立读取者和未知结果保护。
 此修复不保证最后一次尝试、年龄退役链、登记本身或全仓输出均已具有最终退休进度；
-真实部署、持续定时回收及完整有限窗口目标仍须分别验收。
+真实部署、连续事件回收及完整有限窗口目标仍须分别验收。
 
 ### finish 终态事实的持久交接
 
@@ -1204,13 +1204,13 @@ bootstrap fixture 保管者消费该声明，核真实生产路径、物理身�
 
 **产品与宿主采用政策同时修改。** 当前合同以[独立预期与采用边界](unified-maintenance.md)为准；旧的普通入口同步清理和禁止 daemon 的要求已迁移。源码、生成投影、验证通过、OS 实例已采用和真实持续回收分别验收，本次源码准备不表示后四者完成。
 
-普通 start／reconstruct／use／check／bootstrap／finish 不调用清理轮次。原所有者先保存 birth、使用和代际／终态或生产者责任，必要的同对象租约、原件发布和封存仍同步完成。原命令 argv、stdin、stdout／stderr、退出和失败保留；维护繁忙、IO 慢或局部失败不成为业务准入条件。wake-failed 保持原责任，后续定时轮次恢复，不替业务编造成功，也不处置原件。
+普通 start／reconstruct／use／check／bootstrap／finish 不调用清理轮次。原所有者先保存 birth、使用和代际／终态或生产者责任，必要的同对象租约、原件发布和封存仍同步完成。原命令 argv、stdin、stdout／stderr、退出和失败保留；维护繁忙、IO 慢或局部失败不成为业务准入条件。wake-failed 保持原责任，下一次事件或显式维护恢复，不替业务编造成功，也不处置原件。
 
 `maintain` 申请同一 singleton；空闲时执行一个完整轮次，繁忙时发送事件并只报告 `maintenance-requested`，不报告 maintained。`maintenance-service` 只能在物理协调者上运行，接受 OS 保管的单个 datagram socket；macOS 用 `launch_activate_socket` 的 Maintenance 名，Linux 用 systemd 的 LISTEN_PID／LISTEN_FDS=1。程序不自行脱离后台，不启动清理子进程，原轮次产生的任务沿现有阻塞等待全部加入后才发布结果。
 
-每个实际轮次分别发布完整 JSONL 库存和原维护报告；事件收据没有轮次完成含义。OS 激活本身无法区分加载与定时，所以无待收事件的初始轮次如实标记 os-activation，驻留期间期限标记 timer；宿主须另核 OS 的实际定时启动来源。保留、busy 或过期未释放对象不会制造即时重试，轮次中的报告／引用释放也不唤醒自身。idle 期间不持任何 enrollment metadata；逐对象处置重新核原租约、身份、已提交政策、源码及独有提交保护。完整占用 IO 使用释放 metadata 后的观察副本，副本不授予处置权。
+每个实际轮次分别发布完整 JSONL 库存和原维护报告；事件收据没有轮次完成含义。服务只在读到一批事件后开始轮次，报告记为 event。空队列激活直接退出。保留、busy 或过期未释放对象不会制造即时重试，轮次中的报告／引用释放也不唤醒自身。逐对象处置重新核原租约、身份、已提交政策、源码及独有提交保护。完整占用 IO 使用释放 metadata 后的观察副本，副本不授予处置权。
 
-采用前按固定已交付版本实例化模板，先核目标 socket 不被未知使用方拥有，创建已登记 state 父目录；OS 创建和持有 socket，程序不删除或偷占旧 socket。StartInterval 与 maintenance.json 的 timer_seconds 同为 3600，idle_seconds 为 300；采用源变更时生成指南并排除旧程序后一起切换。停止服务时先禁止新激活、等待当前轮次和原结果，再卸载 OS socket；不能仅按 idle 或年龄删除 socket／锁。真实验证必须包含缺席事件激活、常驻事件和定时、idle 退出与再启动、单实例及未结束维护中的合法 main／linked 业务进展。
+采用前按固定已交付版本实例化模板，先核目标 socket 不被未知使用方拥有，创建已登记 state 父目录；OS 创建和持有 socket，程序不删除或偷占旧 socket。旧版 v1 政策包含 timer_seconds 和 idle_seconds。迁移时将发送者和执行者一起换为支持 v2 的版本，并采用仅含 Sockets 激活的模板。先前的清理账本、租约和失败原件继续供恢复使用。停止服务时先禁止新激活、等待当前轮次和原结果，再卸载 OS socket；不能仅按 idle 或年龄删除 socket／锁。真实验证必须包含缺席事件激活、轮次中到达的新事件、空队列退出与再启动、单实例及未结束维护中的合法 main／linked 业务进展。
 
 retention 的完成和实际引用释放发送提示；维护线程的 RoundGuard 只抑制自身的发布提示。普通保留生产者 handle 用 bind_maintenance_owner 显式绑定已登记的物理 owner 后，release 也发送提示；原低层无宿主 handle 不猜 root，显式调用方必须绑定或由其原宿主完成交接。ci-command-result 的现役生产者已同步绑定；未知存储继续保护。
 

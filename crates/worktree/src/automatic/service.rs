@@ -5,13 +5,6 @@ use chrono_harness::verus;
 use vstd::prelude::*;
 
 verus! {
-/// Pending events and due timers take precedence over an idle observation.
-pub fn maintenance_idle_exit(event_pending: bool, timer_due: bool, idle_due: bool) -> (exit: bool)
-    ensures exit == (!event_pending && !timer_due && idle_due),
-{
-    !event_pending && !timer_due && idle_due
-}
-
 /// Preserve both actual roots, including their order and a repeated root.
 pub fn maintenance_exclusions<P>(coordinator: P, invoking: P) -> (excluded: Vec<P>)
     ensures excluded@ == seq![coordinator, invoking],
@@ -252,8 +245,6 @@ use std::os::{
     fd::{AsRawFd, FromRawFd},
     unix::net::UnixDatagram,
 };
-#[cfg(not(verus_keep_ghost))]
-use std::time::{Duration, Instant};
 
 #[cfg(not(verus_keep_ghost))]
 pub(super) fn handoff(inputs: &PolicyInputs, reason: &str) -> Value {
@@ -290,10 +281,10 @@ fn service_policy(r: &mut Runner, inputs: &PolicyInputs) -> Result<Option<Servic
 
 /// Singleton is independent of enrollment metadata and is never acquired by business.
 #[cfg(not(verus_keep_ghost))]
-fn singleton(root: &Path, directory: &str) -> Result<Option<Lease>, String> {
+fn singleton_path(root: &Path, directory: &str) -> Result<PathBuf, String> {
     let directory = no_symlink_parents(root, directory.trim_end_matches('/'))?;
     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-    Lease::acquire(&directory.join("maintenance.lease"), None, true, true, None)
+    Ok(directory.join("maintenance.lease"))
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -303,7 +294,7 @@ pub(super) fn maintain(
     trigger: &str,
     consumer: Option<&str>,
 ) -> Result<Value, String> {
-    round(root, config_path, trigger, None, None, consumer)
+    round(root, config_path, trigger, None, consumer)
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -312,7 +303,6 @@ fn round(
     config_path: &str,
     trigger: &str,
     held: Option<&Lease>,
-    missed: Option<u64>,
     consumer: Option<&str>,
 ) -> Result<Value, String> {
     let _internal = RoundGuard::enter();
@@ -337,11 +327,17 @@ fn round(
                     return Err("maintenance service must run at the physical coordinator".into());
                 }
                 held.stable()?;
+                let expected = singleton_path(root, &inputs.policy.state_directory)?;
+                if policy.is_none() || chrono_harness::ownership::identity(&expected)? != held.id()
+                {
+                    return Err("activated lease differs from the adopted coordinator".into());
+                }
             } else {
-                *executor.borrow_mut() = singleton(
+                let path = singleton_path(
                     &inputs.policy.coordinator_root,
                     &inputs.policy.state_directory,
                 )?;
+                *executor.borrow_mut() = Lease::acquire(&path, None, true, true, None)?;
             }
             Ok((inputs.policy.coordinator_root.clone(), inputs))
         },
@@ -349,7 +345,6 @@ fn round(
             inputs.report_source(report);
             report["invoking_root"] = value!(root);
             report["maintenance_trigger"] = value!(trigger);
-            report["missed_timer_opportunities"] = value!(missed);
             if held.is_none() && executor.borrow().is_none() {
                 // Do not claim a round or wait for the current executor.
                 // Suppression applies only to actual rounds, not this external hint.
@@ -819,10 +814,8 @@ fn activated_socket() -> Result<UnixDatagram, String> {
 #[cfg(not(verus_keep_ghost))]
 pub fn serve(
     socket: &UnixDatagram,
-    policy: &ServicePolicy,
-    mut execute: impl FnMut(&str, u64) -> Result<(), String>,
+    mut execute: impl FnMut() -> Result<(), String>,
 ) -> Result<(), String> {
-    policy.validate()?;
     socket.set_nonblocking(true).map_err(|e| e.to_string())?;
     let descriptor = socket.as_raw_fd();
     let flags = unsafe { libc::fcntl(descriptor, libc::F_GETFD) };
@@ -831,91 +824,23 @@ pub fn serve(
     {
         return Err(std::io::Error::last_os_error().to_string());
     }
-    let period = Duration::from_secs(policy.timer_seconds);
-    let mut next_timer = Instant::now().checked_add(period).ok_or("timer overflow")?;
-    let mut last_work = Instant::now();
-    let mut first = true;
+    let mut bytes = [0u8; 64];
     loop {
-        let mut messages = 0u64;
-        let mut bytes = [0u8; 64];
-        // Coalesce a finite batch so concurrent publishers cannot indefinitely
-        // postpone the actual round. Remaining hints stay in the OS queue; the
-        // round still reads ALL authoritative members, independent of hints.
-        for _ in 0..64 {
+        // Bound each batch so sustained senders cannot starve the actual round.
+        let mut received = 0;
+        while received < 64 {
             match socket.recv(&mut bytes) {
-                Ok(_) => messages += 1,
+                Ok(_) => received += 1,
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(error) => return Err(error.to_string()),
             }
         }
-        let now = Instant::now();
-        let timer_due = now >= next_timer;
-        if first || messages != 0 || timer_due {
-            let missed = if timer_due {
-                now.duration_since(next_timer).as_secs() / policy.timer_seconds
-            } else {
-                0
-            };
-            let trigger = if timer_due {
-                "timer"
-            } else if messages != 0 {
-                "event"
-            } else {
-                "os-activation"
-            };
-            // Advance from the original cadence before execution. Long rounds
-            // cannot erase timer opportunities that occur while they are running.
-            if timer_due {
-                let periods = missed.checked_add(1).ok_or("timer opportunity overflow")?;
-                let seconds = periods
-                    .checked_mul(policy.timer_seconds)
-                    .ok_or("timer overflow")?;
-                next_timer = next_timer
-                    .checked_add(Duration::from_secs(seconds))
-                    .ok_or("timer overflow")?;
-            }
-            // Failed rounds retain originals but do not generate immediate retry loops.
-            execute(trigger, missed)?;
-            first = false;
-            last_work = Instant::now();
-            continue;
-        }
-        let idle = policy
-            .idle_seconds
-            .map(|seconds| {
-                last_work
-                    .checked_add(Duration::from_secs(seconds))
-                    .ok_or("idle deadline overflow")
-            })
-            .transpose()?;
-        if maintenance_idle_exit(
-            messages != 0,
-            timer_due,
-            idle.is_some_and(|deadline| now >= deadline),
-        ) {
-            // OS still owns the socket. A racing/new datagram remains activatable.
+        if received == 0 {
+            // A racing datagram stays on the OS-owned socket for the next activation.
             return Ok(());
         }
-        let deadline = idle.map_or(next_timer, |idle| idle.min(next_timer));
-        let timeout = deadline
-            .saturating_duration_since(now)
-            .as_millis()
-            .min(i32::MAX as u128) as i32;
-        let mut fd = libc::pollfd {
-            fd: descriptor,
-            events: libc::POLLIN,
-            revents: 0,
-        };
-        let ready = unsafe { libc::poll(&mut fd, 1, timeout.max(1)) };
-        if ready < 0 {
-            let error = std::io::Error::last_os_error();
-            if error.kind() != std::io::ErrorKind::Interrupted {
-                return Err(error.to_string());
-            }
-        } else if fd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0 {
-            return Err("maintenance activation socket lost".into());
-        }
+        execute()?;
     }
 }
 
@@ -964,34 +889,27 @@ fn run_service(
     let (policy, _) = signal::adopted(&root)?.ok_or("maintenance service policy is not adopted")?;
     let socket = activate()?;
     validate_activation(&socket, &policy.socket_path(&root)?, named_activation)?;
-    let mut executor = None;
-    serve(&socket, &policy, |trigger, missed| {
-        if executor.is_none() {
-            executor = singleton(&root, &policy.state_directory)?;
-        }
-        let Some(executor) = executor.as_ref() else {
-            // Consume activation hints through the existing finite batch and
-            // native wait. Durable owner state and the next event/timer retain
-            // responsibility; sending to this socket would reactivate us.
-            eprintln!("maintenance executor busy; no round started; existing owner state retained");
-            return Ok(());
-        };
-        let report = round(
-            &root,
-            &config_path,
-            trigger,
-            Some(executor),
-            Some(missed),
-            None,
-        )?;
+    // Only the activated worker waits. Leave hints queued while an explicit
+    // round owns the lease, including if this process is interrupted waiting.
+    let path = singleton_path(root, &policy.state_directory)?;
+    observe_boundary("service-before-lease", &path);
+    let executor = Lease::exclusive_blocking(&path)?;
+    serve(&socket, || {
+        let report = round(root, config_path, "event", Some(&executor), None)?;
         // Each round already has its own retained original. Do not accumulate reports.
         eprintln!(
             "{}",
             serde_json::to_string(&value!({"schema":"chrono-maintenance-round-reference/v1",
             "source_root":root,"report_path":report["report_path"],"status":report["status"],
-            "trigger":trigger,"missed_timer_opportunities":missed}))
+            "trigger":"event"}))
             .map_err(|e| e.to_string())?
         );
+        if report["status"] != "maintained" {
+            return Err(format!(
+                "maintenance round {} failed: {}",
+                report["report_path"], report["error"]
+            ));
+        }
         Ok(())
     })?;
     Ok(value!({"status":"maintenance-idle-exit","owned_work_joined":true}))
