@@ -919,7 +919,7 @@ fn run_service(
     if event_pending(&socket)? {
         run_queued_events(root, config_path, &policy, &socket)?;
     }
-    Ok(value!({"status":"maintenance-idle-exit","owned_work_joined":true}))
+    Ok(value!({"status":"maintenance-queue-empty","owned_work_joined":true}))
 }
 
 #[cfg(unix)]

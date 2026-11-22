@@ -329,6 +329,24 @@ fn host() -> (tempfile::TempDir, std::path::PathBuf) {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn adoption_rejects_old_schema_and_each_retired_scheduling_field() {
+    let (host, _) = host();
+    let path = host.path().join(signal::POLICY_PATH);
+    let current: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    for (field, value) in [
+        ("schema", serde_json::json!("chrono-unified-maintenance/v1")),
+        ("timer_seconds", serde_json::json!(3600)),
+        ("idle_seconds", serde_json::Value::Null),
+    ] {
+        let mut rejected = current.clone();
+        rejected[field] = value;
+        fs::write(&path, serde_json::to_vec(&rejected).unwrap()).unwrap();
+        assert!(signal::adopted(host.path()).is_err(), "{field}");
+    }
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_executor_accepts_an_os_queued_hint_without_a_response() {
     let (host, path) = host();
     let os = UnixDatagram::bind(path).unwrap();

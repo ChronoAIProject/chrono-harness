@@ -616,7 +616,7 @@ fn empty_service_activation_never_opens_the_executor_lease() {
     .unwrap();
     let os = UnixDatagram::bind(state.join("s")).unwrap();
     let report = chrono_worktree::run_maintenance_service_socket(&root, POLICY, os).unwrap();
-    assert_eq!(report["status"], "maintenance-idle-exit");
+    assert_eq!(report["status"], "maintenance-queue-empty");
     assert!(!state.join("owner").exists());
 }
 
@@ -764,7 +764,7 @@ fn explicit_competitor_requests_the_active_executor_without_a_parallel_round() {
     assert_eq!(report["round_started"], false);
     assert_eq!(report["maintenance_request"]["accepted"], true);
     assert!(report.get("complete_inventory").is_none());
-    assert_eq!(first.unwrap()["status"], "maintenance-idle-exit");
+    assert_eq!(first.unwrap()["status"], "maintenance-queue-empty");
     assert_eq!(
         os.recv(&mut bytes).unwrap_err().kind(),
         std::io::ErrorKind::WouldBlock
@@ -845,7 +845,7 @@ fn activated_service_observes_work_after_the_explicit_owner_releases_the_lease()
     still_exclusive.unwrap();
     assert_eq!(before, after);
     assert!(retained, "the explicit executor excludes disposal");
-    assert_eq!(recovered["status"], "maintenance-idle-exit");
+    assert_eq!(recovered["status"], "maintenance-queue-empty");
     assert!(
         !target.join("output λ/data").exists(),
         "queued event must recover pending work without another wake"

@@ -1208,9 +1208,9 @@ bootstrap fixture 保管者消费该声明，核真实生产路径、物理身�
 
 `maintain` 申请同一 singleton；空闲时执行一个完整轮次，繁忙时发送事件并只报告 `maintenance-requested`，不报告 maintained。`maintenance-service` 只能在物理协调者上运行，接受 OS 保管的单个 datagram socket；macOS 用 `launch_activate_socket` 的 Maintenance 名，Linux 用 systemd 的 LISTEN_PID／LISTEN_FDS=1。程序不自行脱离后台，不启动清理子进程，原轮次产生的任务沿现有阻塞等待全部加入后才发布结果。
 
-每个实际轮次分别发布完整 JSONL 库存和原维护报告；事件收据没有轮次完成含义。服务只在读到一批事件后开始轮次，报告记为 event。空队列激活直接退出。保留、busy 或过期未释放对象不会制造即时重试，轮次中的报告／引用释放也不唤醒自身。逐对象处置重新核原租约、身份、已提交政策、源码及独有提交保护。完整占用 IO 使用释放 metadata 后的观察副本，副本不授予处置权。
+每个实际轮次分别发布完整 JSONL 库存和原维护报告；事件收据没有轮次完成含义。服务只在读到一批事件后开始轮次，报告记为 event。空队列激活直接返回 `maintenance-queue-empty`。保留、busy 或过期未释放对象不会制造即时重试，轮次中的报告／引用释放也不唤醒自身。逐对象处置重新核原租约、身份、已提交政策、源码及独有提交保护。完整占用 IO 使用释放 metadata 后的观察副本，副本不授予处置权。
 
-采用前按固定已交付版本实例化模板，先核目标 socket 不被未知使用方拥有，创建已登记 state 父目录；OS 创建和持有 socket，程序不删除或偷占旧 socket。旧版 v1 政策包含 timer_seconds 和 idle_seconds。迁移时将发送者和执行者一起换为支持 v2 的版本，并采用仅含 Sockets 激活的模板。先前的清理账本、租约和失败原件继续供恢复使用。停止服务时先禁止新激活、等待当前轮次和原结果，再卸载 OS socket；不能仅按 idle 或年龄删除 socket／锁。真实验证必须包含缺席事件激活、轮次中到达的新事件、空队列退出与再启动、单实例及未结束维护中的合法 main／linked 业务进展。
+采用前按固定已交付版本实例化模板，先核目标 socket 不被未知使用方拥有，创建已登记 state 父目录；OS 创建和持有 socket，程序不删除或偷占旧 socket。v2 只接受 schema、state_directory 和 socket 三个字段。v1 政策、timer_seconds 和 idle_seconds 都会被拒绝。迁移时将发送者和执行者一起换为支持 v2 的版本，并采用仅含 Sockets 激活的模板。先前的清理账本、租约和失败原件继续供恢复使用。停止服务时先禁止新激活、等待当前轮次和原结果，再卸载 OS socket；不能仅按 idle 或年龄删除 socket／锁。真实验证必须包含缺席事件激活、轮次中到达的新事件、空队列退出与再启动、单实例及未结束维护中的合法 main／linked 业务进展。
 
 retention 的完成和实际引用释放发送提示；维护线程的 RoundGuard 只抑制自身的发布提示。普通保留生产者 handle 用 bind_maintenance_owner 显式绑定已登记的物理 owner 后，release 也发送提示；原低层无宿主 handle 不猜 root，显式调用方必须绑定或由其原宿主完成交接。ci-command-result 的现役生产者已同步绑定；未知存储继续保护。
 

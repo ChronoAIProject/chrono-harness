@@ -21,7 +21,7 @@ pub fn successful_report_status(status: Option<&str>) -> (successful: bool)
                 || text@ == "finished"@
                 || text@ == "maintained"@
                 || text@ == "maintenance-requested"@
-                || text@ == "maintenance-idle-exit"@
+                || text@ == "maintenance-queue-empty"@
                 || text@ == "imported"@
                 || text@ == "migrated"@
                 || text@ == "owner-deployed"@
@@ -39,7 +39,7 @@ pub fn successful_report_status(status: Option<&str>) -> (successful: bool)
             || equal_text(text, "finished")
             || equal_text(text, "maintained")
             || equal_text(text, "maintenance-requested")
-            || equal_text(text, "maintenance-idle-exit")
+            || equal_text(text, "maintenance-queue-empty")
             || equal_text(text, "imported")
             || equal_text(text, "migrated")
             || equal_text(text, "owner-deployed")
