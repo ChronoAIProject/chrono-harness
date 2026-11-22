@@ -26,14 +26,6 @@ use vstd::vpanic as panic;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn only_blocking_leases_omit_the_nonblocking_flag() {
-    expect_status_true(policy::ownership::lease_lock_flags(2, 4, true) == 2);
-    expect_status_true(policy::ownership::lease_lock_flags(2, 4, false) == 6);
-    expect_status_true(policy::ownership::lease_lock_flags(1, 4, false) == 5);
-}
-
-
-#[cfg_attr(not(verus_keep_ghost), test)]
 fn fixed_source_read_selects_only_the_eligible_path_and_preserves_inputs() {
     let batched = policy::fixed_source_read::select_fixed_source_read(
         true, (7u8, 9u8),

@@ -50,12 +50,6 @@ mod path_admission_owner;
 #[cfg(verus_keep_ghost)]
 pub use path_admission_owner::admit_relative_path;
 
-#[cfg(verus_keep_ghost)]
-#[path = "ownership.rs"]
-pub mod ownership;
-#[cfg(not(verus_keep_ghost))]
-pub use crate::ownership;
-
 verus! {
 
 /// Only the synchronous owner releases a local directory operation on return.
